@@ -1,9 +1,9 @@
 export interface UploadSessionResult {
   sessionUrl: string;
   expiresAt: Date;
+  httpMethod?: "PUT" | "POST";
   headers?: Record<string, string>;
 }
-
 export interface QuotaResult {
   totalBytes: number;
   usedBytes: number;

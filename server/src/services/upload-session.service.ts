@@ -144,7 +144,15 @@ export class UploadSessionService {
       })
       .where(eq(uploadChunks.id, chunk.id));
 
-    return { uploadUrl: sessionRes.sessionUrl };
+    const chunkRange = `bytes ${chunk.byteStart}-${chunk.byteEnd - 1}/${session.totalSize}`;
+    return {
+      uploadUrl: sessionRes.sessionUrl,
+      httpMethod: sessionRes.httpMethod || "PUT",
+      headers: {
+        ...sessionRes.headers,
+        "Content-Range": chunkRange,
+      },
+    };
   }
 
   static async markChunkCompleted(

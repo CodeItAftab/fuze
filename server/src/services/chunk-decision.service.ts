@@ -1,6 +1,6 @@
 export interface StorageProviderQuota {
   providerIdentityId: string;
-  provider: "google_drive" | "dropbox" | "one_drive" | "pcloud";
+  provider: "google_drive" | "dropbox" | "one_drive" | "pcloud" | "box";
   freeBytes: number;
 }
 
@@ -9,7 +9,7 @@ export interface ChunkPlanItem {
   byteStart: number;
   byteEnd: number;
   size: number;
-  provider: "google_drive" | "dropbox" | "one_drive" | "pcloud";
+  provider: "google_drive" | "dropbox" | "one_drive" | "pcloud" | "box";
   providerIdentityId: string;
 }
 
@@ -18,6 +18,15 @@ export interface DecisionResult {
   chunks: ChunkPlanItem[];
   error?: string;
 }
+
+// Provider-specific single-file limits on free tier
+const PROVIDER_MAX_FILE_LIMITS: Record<string, number> = {
+  box: 250 * 1024 * 1024, // Box Free has a 250 MB per-file limit
+  google_drive: 5 * 1024 * 1024 * 1024 * 1024, // 5 TB
+  one_drive: 250 * 1024 * 1024 * 1024, // 250 GB
+  dropbox: 2 * 1024 * 1024 * 1024 * 1024, // 2 TB
+  pcloud: 10 * 1024 * 1024 * 1024, // 10 GB
+};
 
 export class ChunkDecisionService {
   static plan(
@@ -33,10 +42,16 @@ export class ChunkDecisionService {
     }
 
     // Sort providers by descending free space
-    const sorted = [...providers].sort((a, b) => b.freeBytes - a.freeBytes);
+    const sorted = [...providers]
+      .map((p) => ({ ...p }))
+      .sort((a, b) => b.freeBytes - a.freeBytes);
 
-    // Rule 1: Does the file fit entirely in ANY single provider?
-    const singleFit = sorted.find((p) => p.freeBytes >= fileSize);
+    // Rule 1: Does the file fit entirely in ANY single provider (respecting their max file size limit)?
+    const singleFit = sorted.find((p) => {
+      const maxAllowed = PROVIDER_MAX_FILE_LIMITS[p.provider] ?? Infinity;
+      return p.freeBytes >= fileSize && fileSize <= maxAllowed;
+    });
+
     if (singleFit) {
       return {
         strategy: "whole",
@@ -75,18 +90,26 @@ export class ChunkDecisionService {
       if (remainingBytes <= 0) break;
       if (p.freeBytes <= 0) continue;
 
-      const takeBytes = Math.min(remainingBytes, p.freeBytes);
-      chunks.push({
-        index: chunkIndex++,
-        byteStart: currentByte,
-        byteEnd: currentByte + takeBytes,
-        size: takeBytes,
-        provider: p.provider,
-        providerIdentityId: p.providerIdentityId,
-      });
+      // If allocating to Box, cap chunk slices to 64 MB so it safely stays under Box's 250 MB ceiling
+      const maxSlice = p.provider === "box" ? 64 * 1024 * 1024 : Infinity;
 
-      currentByte += takeBytes;
-      remainingBytes -= takeBytes;
+      while (remainingBytes > 0 && p.freeBytes > 0) {
+        const takeBytes = Math.min(remainingBytes, p.freeBytes, maxSlice);
+        if (takeBytes <= 0) break;
+
+        chunks.push({
+          index: chunkIndex++,
+          byteStart: currentByte,
+          byteEnd: currentByte + takeBytes,
+          size: takeBytes,
+          provider: p.provider,
+          providerIdentityId: p.providerIdentityId,
+        });
+
+        currentByte += takeBytes;
+        remainingBytes -= takeBytes;
+        p.freeBytes -= takeBytes;
+      }
     }
 
     return {

@@ -24,8 +24,6 @@ export class GoogleDriveAdapter implements StorageAdapter {
     accessToken: string;
   }): Promise<UploadSessionResult> {
     const origin = process.env.CLIENT_ORIGIN || "http://localhost:3000";
-
-    // Initiate Google Drive Resumable Session with CORS Origin header
     const response = await fetch(
       "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable",
       {
@@ -35,35 +33,33 @@ export class GoogleDriveAdapter implements StorageAdapter {
           "Content-Type": "application/json; charset=UTF-8",
           "X-Upload-Content-Type": params.mimeType,
           "X-Upload-Content-Length": params.size.toString(),
-          Origin: origin,
+          Origin: origin, // Crucial for direct browser PUT CORS clearance
         },
         body: JSON.stringify({
           name: params.fileName,
-          description: "Fuze Distributed File Chunk",
+          description: "Fuze Distributed File",
         }),
       },
     );
-
     if (!response.ok) {
       const err = await response.text();
       throw new Error(
-        `Google Drive upload session creation failed: ${response.status} - ${err}`,
+        `Google Drive upload session failed: ${response.status} - ${err}`,
       );
     }
-
     const sessionUrl = response.headers.get("Location");
     if (!sessionUrl) {
       throw new Error(
         "Google Drive API did not return Location header for upload session",
       );
     }
-
-    // Google Drive resumable session URIs are valid for 24 hours
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
     return {
       sessionUrl,
-      expiresAt,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      httpMethod: "PUT",
+      headers: {
+        "Content-Type": "application/octet-stream",
+      },
     };
   }
 

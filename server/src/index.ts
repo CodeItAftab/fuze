@@ -5,9 +5,13 @@ import rateLimit from "@fastify/rate-limit";
 import jwt from "@fastify/jwt";
 import websocket from "@fastify/websocket";
 import dotenv from "dotenv";
-import { authRoutes, providerRoutes, uploadRoutes, fileRoutes } from "./routes";
+
+// Routes
+import { authRoutes } from "./routes/auth.routes.js";
+import { uploadRoutes } from "./routes/uploads.routes.js";
+import { fileRoutes } from "./routes/files.routes.js";
+import { providerRoutes } from "./routes/providers.routes.js";
 import { websocketRoutes } from "./websocket/sync.js";
-import { scheduleCleanupJobs } from "./workers/session-cleanup.worker.js";
 
 dotenv.config();
 
@@ -51,29 +55,24 @@ async function main() {
   // 5. WebSocket Engine
   await app.register(websocket);
 
-  // 6. Routes
+  // 6. Mount Routes
   await app.register(websocketRoutes);
   await app.register(authRoutes, { prefix: "/auth" });
   await app.register(uploadRoutes, { prefix: "/uploads" });
   await app.register(fileRoutes, { prefix: "/files" });
   await app.register(providerRoutes, { prefix: "/providers" });
 
-  // 7. Healthcheck
+  // 7. Fast Healthcheck
   app.get("/health", async () => ({
     status: "ok",
-    service: "fuze-server",
+    service: "fuze-api",
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
   }));
 
-  // Background Schedulers
-  scheduleCleanupJobs().catch((err) =>
-    app.log.error(err, "Failed to schedule cleanup jobs"),
-  );
-
   const port = Number(process.env.PORT) || 4000;
   await app.listen({ port, host: "0.0.0.0" });
-  console.log(`🚀 Fuze Production Server listening on http://0.0.0.0:${port}`);
+  console.log(`🚀 Fuze API Server running at http://0.0.0.0:${port}`);
 }
 
 main().catch((err) => {

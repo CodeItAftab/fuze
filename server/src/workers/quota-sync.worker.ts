@@ -48,3 +48,9 @@ export const quotaWorker = new Worker(
   },
   { connection: redis },
 );
+
+export async function scheduleQuotaSyncJobs() {
+  await quotaQueue.upsertJobScheduler("hourly-quota-sync", {
+    every: 60 * 60 * 1000, // Sync quotas every hour
+  });
+}

@@ -49,17 +49,19 @@ export class OneDriveAdapter implements StorageAdapter {
         }),
       },
     );
-
     if (!res.ok) {
       throw new Error(`OneDrive upload session failed: ${res.status}`);
     }
-
     const data = (await res.json()) as OneDriveSessionResponse;
     return {
       sessionUrl: data.uploadUrl,
       expiresAt: new Date(
         data.expirationDateTime || Date.now() + 48 * 3600 * 1000,
       ),
+      httpMethod: "PUT",
+      headers: {
+        "Content-Type": "application/octet-stream",
+      },
     };
   }
 

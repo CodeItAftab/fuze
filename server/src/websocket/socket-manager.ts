@@ -1,12 +1,17 @@
 import { WebSocket } from "ws";
 
+export type SyncEventType =
+  | "FILE_CREATED"
+  | "FILE_DELETED"
+  | "FILE_RENAMED"
+  | "QUOTA_UPDATED"
+  | "UPLOAD_PROGRESS"
+  | "PROVIDER_CONNECTED"
+  | "PROVIDER_DISCONNECTED"
+  | "PROVIDER_CLEANUP_PROGRESS";
+
 export interface SyncEvent {
-  type:
-    | "FILE_CREATED"
-    | "FILE_DELETED"
-    | "FILE_RENAMED"
-    | "QUOTA_UPDATED"
-    | "UPLOAD_PROGRESS";
+  type: SyncEventType;
   payload: any;
 }
 
