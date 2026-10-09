@@ -160,7 +160,7 @@ export const uploadChunks = pgTable(
     byteStart: bigint("byte_start", { mode: "number" }).notNull(),
     byteEnd: bigint("byte_end", { mode: "number" }).notNull(),
     providerIdentityId: uuid("provider_identity_id")
-      .references(() => providerIdentities.id)
+      .references(() => providerIdentities.id, { onDelete: "cascade" })
       .notNull(),
     providerSessionUrl: text("provider_session_url"),
     providerSessionExpiresAt: timestamp("provider_session_expires_at", {

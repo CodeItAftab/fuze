@@ -15,6 +15,7 @@ export interface StorageAdapter {
     mimeType: string;
     size: number;
     accessToken: string;
+    origin?: string;
   }): Promise<UploadSessionResult>;
 
   getDownloadUrl(params: {

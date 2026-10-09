@@ -22,8 +22,9 @@ export class GoogleDriveAdapter implements StorageAdapter {
     mimeType: string;
     size: number;
     accessToken: string;
+    origin?: string;
   }): Promise<UploadSessionResult> {
-    const origin = process.env.CLIENT_ORIGIN || "http://localhost:3000";
+    const origin = params.origin || process.env.CLIENT_ORIGIN || "http://localhost:3000";
     const response = await fetch(
       "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable",
       {

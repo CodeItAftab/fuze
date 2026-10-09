@@ -78,7 +78,11 @@ export class UploadSessionService {
     };
   }
 
-  static async getChunkUploadUrl(sessionId: string, chunkIndex: number) {
+  static async getChunkUploadUrl(
+    sessionId: string,
+    chunkIndex: number,
+    clientOrigin?: string,
+  ) {
     const [chunk] = await db
       .select()
       .from(uploadChunks)
@@ -98,16 +102,6 @@ export class UploadSessionService {
 
     if (!session) throw new Error("Upload session not found");
 
-    // Return cached provider URL if not expired
-    const now = new Date();
-    if (
-      chunk.providerSessionUrl &&
-      chunk.providerSessionExpiresAt &&
-      chunk.providerSessionExpiresAt > now
-    ) {
-      return { uploadUrl: chunk.providerSessionUrl };
-    }
-
     // 1. Fetch provider identity to know WHICH cloud provider this chunk belongs to
     const [identity] = await db
       .select({ provider: providerIdentities.provider })
@@ -121,18 +115,21 @@ export class UploadSessionService {
       chunk.providerIdentityId,
     );
 
-    // 3. Dynamically resolve adapter (Google Drive, OneDrive, Dropbox, or pCloud)
+    // 3. Dynamically resolve adapter (Google Drive, OneDrive, Dropbox, or Box)
     const adapter = getStorageAdapter(identity.provider);
     const chunkName =
       session.strategy === "whole"
         ? session.fileName
         : `${session.fileName}.part${chunk.chunkIndex}`;
 
+    const chunkSize = chunk.byteEnd - chunk.byteStart;
+
     const sessionRes = await adapter.createResumableUploadSession({
       fileName: chunkName,
       mimeType: session.mimeType,
-      size: chunk.byteEnd - chunk.byteStart,
+      size: chunkSize,
       accessToken,
+      origin: clientOrigin,
     });
 
     // 4. Cache provider URL in DB
@@ -144,14 +141,20 @@ export class UploadSessionService {
       })
       .where(eq(uploadChunks.id, chunk.id));
 
-    const chunkRange = `bytes ${chunk.byteStart}-${chunk.byteEnd - 1}/${session.totalSize}`;
+    const headers: Record<string, string> = {
+      ...(sessionRes.headers || {}),
+    };
+
+    if (identity.provider !== "dropbox") {
+      // Chunk byte range relative to this provider's session file
+      const chunkRange = `bytes 0-${chunkSize - 1}/${chunkSize}`;
+      headers["Content-Range"] = chunkRange;
+    }
+
     return {
       uploadUrl: sessionRes.sessionUrl,
       httpMethod: sessionRes.httpMethod || "PUT",
-      headers: {
-        ...sessionRes.headers,
-        "Content-Range": chunkRange,
-      },
+      headers,
     };
   }
 
@@ -244,5 +247,95 @@ export class UploadSessionService {
     });
 
     return vfsNode;
+  }
+
+  static async abortSession(sessionId: string, userId?: string) {
+    const [session] = await db
+      .select()
+      .from(uploadSessions)
+      .where(eq(uploadSessions.id, sessionId));
+
+    if (!session) {
+      return { success: true, message: "Session already removed or does not exist." };
+    }
+
+    if (userId && session.userId !== userId) {
+      throw new Error("Unauthorized to abort this upload session");
+    }
+
+    // Never delete a session that has already completed into permanent VFS
+    if (session.status === "completed") {
+      return { success: false, message: "Session already finalized." };
+    }
+
+    // 1. Fetch all chunks associated with this upload session
+    const chunks = await db
+      .select()
+      .from(uploadChunks)
+      .where(eq(uploadChunks.uploadSessionId, sessionId));
+
+    // 2. Clean up any uploaded chunk files or active resumable sessions from cloud providers
+    for (const chunk of chunks) {
+      try {
+        const [identity] = await db
+          .select()
+          .from(providerIdentities)
+          .where(eq(providerIdentities.id, chunk.providerIdentityId));
+
+        if (!identity) continue;
+
+        const adapter = getStorageAdapter(identity.provider);
+
+        // A. If a chunk file was already uploaded to the provider, delete it
+        if (chunk.providerFileId) {
+          try {
+            const accessToken = await TokenService.getValidAccessToken(
+              chunk.providerIdentityId,
+            );
+            await adapter.deleteFile({
+              providerFileId: chunk.providerFileId,
+              accessToken,
+            });
+            console.log(
+              `[SessionAbort] 🗑️ Cleaned up chunk file [${chunk.providerFileId}] on ${identity.provider}`,
+            );
+          } catch (delErr: any) {
+            console.warn(
+              `[SessionAbort] Could not delete chunk file [${chunk.providerFileId}] on ${identity.provider}:`,
+              delErr.message,
+            );
+          }
+        }
+
+        // B. If a resumable session URL was created, cancel it
+        if (chunk.providerSessionUrl) {
+          try {
+            if (identity.provider === "google_drive" || identity.provider === "one_drive") {
+              await fetch(chunk.providerSessionUrl, {
+                method: "DELETE",
+                headers: { "Content-Length": "0" },
+              }).catch(() => {});
+            }
+          } catch {}
+        }
+      } catch (err: any) {
+        console.warn(`[SessionAbort] Error processing chunk cleanup:`, err.message);
+      }
+    }
+
+    // 3. Delete upload chunks and session from database
+    await db
+      .delete(uploadChunks)
+      .where(eq(uploadChunks.uploadSessionId, sessionId));
+
+    await db
+      .delete(uploadSessions)
+      .where(eq(uploadSessions.id, sessionId));
+
+    console.log(
+      `[SessionAbort] ✅ Successfully purged upload session [${sessionId}] (${session.fileName}) from server and cloud.`,
+    );
+
+    return { success: true };
   }
 }

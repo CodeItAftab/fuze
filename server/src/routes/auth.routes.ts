@@ -26,11 +26,9 @@ export async function authRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const parse = registerSchema.safeParse(request.body);
       if (!parse.success) {
-        return reply
-          .status(400)
-          .send({
-            error: parse.error.errors[0]?.message || "Validation error",
-          });
+        return reply.status(400).send({
+          error: parse.error.errors[0]?.message || "Validation error",
+        });
       }
 
       const { name, email, password } = parse.data;
@@ -193,4 +191,75 @@ export async function authRoutes(fastify: FastifyInstance) {
       return reply.status(401).send({ error: "Invalid token" });
     }
   });
+
+  // 5. Change Password (Authenticated)
+  fastify.post(
+    "/change-password",
+    async (
+      request: FastifyRequest<{
+        Body: { currentPassword: string; newPassword: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        return reply.status(401).send({ error: "Unauthorized" });
+      }
+      const { userId } = request.user as { userId: string };
+      const { currentPassword, newPassword } = request.body || {};
+      if (!currentPassword || !newPassword || newPassword.length < 8) {
+        return reply
+          .status(400)
+          .send({ error: "New password must be at least 8 characters long." });
+      }
+      const [user] = await db.select().from(users).where(eq(users.id, userId));
+      if (!user || !user.passwordHash) {
+        return reply.status(400).send({
+          error:
+            "Cannot change password: user does not have a local password set.",
+        });
+      }
+      // Verify current password (user.passwordHash is now guaranteed string)
+      const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!isMatch) {
+        return reply.status(400).send({ error: "Incorrect current password." });
+      }
+      // Hash and store new password
+      const newHash = await bcrypt.hash(newPassword, 12);
+      await db
+        .update(users)
+        .set({ passwordHash: newHash, updatedAt: new Date() })
+        .where(eq(users.id, userId));
+      return reply.send({
+        success: true,
+        message: "Password updated successfully.",
+      });
+    },
+  );
+
+  // 6. Update Profile Name / Info (Authenticated)
+  fastify.patch(
+    "/profile",
+    async (
+      request: FastifyRequest<{ Body: { name?: string } }>,
+      reply: FastifyReply,
+    ) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        return reply.status(401).send({ error: "Unauthorized" });
+      }
+      const { userId } = request.user as { userId: string };
+      const { name } = request.body || {};
+      if (!name || !name.trim()) {
+        return reply.status(400).send({ error: "Name cannot be empty." });
+      }
+      await db
+        .update(users)
+        .set({ name: name.trim(), updatedAt: new Date() })
+        .where(eq(users.id, userId));
+      return reply.send({ success: true, message: "Profile updated." });
+    },
+  );
 }

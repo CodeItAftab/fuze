@@ -23,6 +23,18 @@ export class VfsService {
       );
   }
 
+  static async listTrash(userId: string) {
+    return db
+      .select()
+      .from(vfsNodes)
+      .where(
+        and(
+          eq(vfsNodes.userId, userId),
+          isNotNull(vfsNodes.trashedAt),
+        ),
+      );
+  }
+
   static async createFolder(
     userId: string,
     name: string,

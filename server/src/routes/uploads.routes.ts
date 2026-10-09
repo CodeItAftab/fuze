@@ -49,9 +49,14 @@ export async function uploadRoutes(fastify: FastifyInstance) {
     ) => {
       try {
         const { sessionId, index } = request.params;
+        const clientOrigin =
+          (request.headers.origin as string) ||
+          process.env.CLIENT_ORIGIN ||
+          "http://localhost:3000";
         const res = await UploadSessionService.getChunkUploadUrl(
           sessionId,
           Number(index),
+          clientOrigin,
         );
         return reply.send(res);
       } catch (err: any) {
@@ -99,4 +104,39 @@ export async function uploadRoutes(fastify: FastifyInstance) {
       }
     },
   );
+
+  // 5. Abort / Cancel upload session and clean up partial cloud chunks
+  const handleAbort = async (
+    request: FastifyRequest<{ Params: { sessionId: string } }>,
+    reply: FastifyReply,
+  ) => {
+    let userId: string | undefined;
+    try {
+      await request.jwtVerify();
+      userId = (request.user as { userId: string }).userId;
+    } catch {
+      // Fallback for sendBeacon where cookie is signed
+      const cookieVal = request.cookies?.["fuze_session"];
+      if (cookieVal) {
+        const unsigned = request.unsignCookie(cookieVal);
+        if (unsigned.valid && unsigned.value) {
+          try {
+            const decoded = fastify.jwt.verify<{ userId: string }>(unsigned.value);
+            userId = decoded.userId;
+          } catch {}
+        }
+      }
+    }
+
+    try {
+      const { sessionId } = request.params;
+      const res = await UploadSessionService.abortSession(sessionId, userId);
+      return reply.send(res);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  };
+
+  fastify.post("/:sessionId/abort", handleAbort);
+  fastify.delete("/:sessionId", handleAbort);
 }

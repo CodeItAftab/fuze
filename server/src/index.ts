@@ -37,9 +37,9 @@ async function main() {
       "fuze_cookie_signing_secret_min_32_chars_2026",
   });
 
-  // 3. Brute-force rate limiter
+  // 3. Rate limiter with high dev allowance to prevent 429 on multi-tab/parallel chunk uploads
   await app.register(rateLimit, {
-    max: 100,
+    max: process.env.NODE_ENV === "production" ? 300 : 5000,
     timeWindow: "1 minute",
   });
 

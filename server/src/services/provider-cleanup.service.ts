@@ -55,7 +55,7 @@ export class ProviderCleanupService {
       .where(eq(fileChunks.providerIdentityId, providerIdentityId));
 
     const totalBytesOnProvider = chunksOnProvider.reduce(
-      (sum, c) => sum + (c.end - c.start),
+      (sum, c) => sum + (Number(c.end) - Number(c.start)),
       0,
     );
 

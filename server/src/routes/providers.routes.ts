@@ -1,13 +1,20 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import crypto from "node:crypto";
-import { db, providerIdentities } from "../db/index.js";
-import { eq, and } from "drizzle-orm";
+import {
+  db,
+  providerIdentities,
+  fileChunks,
+  uploadChunks,
+  vfsNodes,
+} from "../db/index.js";
+import { eq, and, sql } from "drizzle-orm";
 import { encrypt, decrypt } from "../utils/crypto.js";
 import { getStorageAdapter, SupportedProvider } from "../adapters/factory.js";
 import { socketManager } from "../websocket/socket-manager.js";
 import { ProviderCleanupService } from "../services/provider-cleanup.service.js";
 import { providerMigrationQueue } from "../workers/provider-migration.worker.js";
 import IORedis from "ioredis";
+import { TokenService } from "../services/token.service.js";
 
 const redis = new IORedis(process.env.REDIS_URL || "redis://localhost:6379");
 const COOKIE_NAME = "fuze_session";
@@ -37,8 +44,18 @@ export async function providerRoutes(fastify: FastifyInstance) {
       .from(providerIdentities)
       .where(eq(providerIdentities.userId, user.userId));
 
+    // Also calculate actual active storage used by files in Fuze VFS
+    const [vfsStats] = await db
+      .select({
+        totalSize: sql<string>`COALESCE(SUM(CASE WHEN ${vfsNodes.type} = 'file' AND ${vfsNodes.trashedAt} IS NULL THEN ${vfsNodes.size} ELSE 0 END), 0)`,
+      })
+      .from(vfsNodes)
+      .where(eq(vfsNodes.userId, user.userId));
+
+    const vfsUsedBytes = Number(vfsStats?.totalSize || 0);
     const totalPool = items.reduce((sum, p) => sum + p.quotaTotal, 0);
-    const usedPool = items.reduce((sum, p) => sum + p.quotaUsed, 0);
+    const rawUsedPool = items.reduce((sum, p) => sum + p.quotaUsed, 0);
+    const usedPool = Math.max(rawUsedPool, vfsUsedBytes);
 
     return reply.send({
       providers: items,
@@ -51,118 +68,125 @@ export async function providerRoutes(fastify: FastifyInstance) {
   });
 
   // -------------------------------------------------------------
-  // 2. OAUTH CONNECT REDIRECT (/providers/:provider/connect)
+  // 2. OAUTH CONNECT REDIRECT (/providers/:provider/connect & /providers/:provider/auth)
   // -------------------------------------------------------------
-  fastify.get(
-    "/:provider/connect",
-    async (
-      request: FastifyRequest<{ Params: { provider: string } }>,
-      reply: FastifyReply,
-    ) => {
-      let userId: string | undefined;
-      const rawCookie = request.cookies[COOKIE_NAME];
-      if (rawCookie) {
-        const unsigned = request.unsignCookie(rawCookie);
-        if (unsigned.valid && unsigned.value) {
-          try {
-            const decoded = fastify.jwt.verify<{ userId: string }>(
-              unsigned.value,
-            );
-            userId = decoded.userId;
-          } catch {}
-        }
-      }
+  const handleOAuthConnect = async (
+    request: FastifyRequest<{ Params: { provider: string } }>,
+    reply: FastifyReply,
+  ) => {
+    let userId: string | undefined;
+    const rawCookie = request.cookies[COOKIE_NAME];
+    if (rawCookie) {
+      const unsigned = request.unsignCookie(rawCookie);
+      const token = unsigned.valid && unsigned.value ? unsigned.value : rawCookie;
+      try {
+        const decoded = fastify.jwt.verify<{ userId: string }>(token);
+        userId = decoded.userId;
+      } catch {}
+    }
 
-      if (!userId) {
-        return reply
-          .status(401)
-          .send({ error: "Please log in to connect a storage provider." });
-      }
+    if (!userId) {
+      try {
+        await request.jwtVerify();
+        userId = (request.user as { userId: string })?.userId;
+      } catch {}
+    }
 
-      const { provider } = request.params;
-      const state = crypto.randomBytes(24).toString("hex");
-
-      // Store CSRF state in Redis for 10 minutes linked to user
-      await redis.set(
-        `oauth_state:${state}`,
-        JSON.stringify({ userId, provider }),
-        "EX",
-        600,
+    if (!userId) {
+      const clientOrigin = process.env.CLIENT_ORIGIN || "http://localhost:3000";
+      return reply.redirect(
+        `${clientOrigin}/login?redirect=${encodeURIComponent("/dashboard/storage")}`,
       );
+    }
 
-      let authUrl = "";
+    const { provider } = request.params;
+    const state = crypto.randomBytes(24).toString("hex");
 
-      switch (provider) {
-        case "google":
-        case "google_drive": {
-          const params = new URLSearchParams({
-            client_id: process.env.GOOGLE_CLIENT_ID || "",
-            redirect_uri:
-              process.env.GOOGLE_REDIRECT_URI ||
-              "http://localhost:4000/providers/google/callback",
-            response_type: "code",
-            scope: "https://www.googleapis.com/auth/drive.file email",
-            access_type: "offline",
-            prompt: "consent",
-            state,
-          });
-          authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
-          break;
-        }
+    // Store CSRF state in Redis for 10 minutes linked to user
+    await redis.set(
+      `oauth_state:${state}`,
+      JSON.stringify({ userId, provider }),
+      "EX",
+      600,
+    );
 
-        case "onedrive":
-        case "one_drive": {
-          const params = new URLSearchParams({
-            client_id: process.env.MICROSOFT_CLIENT_ID || "",
-            redirect_uri:
-              process.env.MICROSOFT_REDIRECT_URI ||
-              "http://localhost:4000/providers/onedrive/callback",
-            response_type: "code",
-            response_mode: "query",
-            scope: "files.readwrite offline_access user.read",
-            prompt: "consent",
-            state,
-          });
-          authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params.toString()}`;
-          break;
-        }
+    let authUrl = "";
 
-        case "dropbox": {
-          const params = new URLSearchParams({
-            client_id: process.env.DROPBOX_CLIENT_ID || "",
-            redirect_uri:
-              process.env.DROPBOX_REDIRECT_URI ||
-              "http://localhost:4000/providers/dropbox/callback",
-            response_type: "code",
-            token_access_type: "offline",
-            state,
-          });
-          authUrl = `https://www.dropbox.com/oauth2/authorize?${params.toString()}`;
-          break;
-        }
-
-        case "box": {
-          const params = new URLSearchParams({
-            client_id: process.env.BOX_CLIENT_ID || "",
-            redirect_uri:
-              process.env.BOX_REDIRECT_URI ||
-              "http://localhost:4000/providers/box/callback",
-            response_type: "code",
-            state,
-          });
-          authUrl = `https://account.box.com/api/oauth2/authorize?${params.toString()}`;
-          break;
-        }
-
-        default:
-          return reply
-            .status(400)
-            .send({ error: `Unsupported provider: ${provider}` });
+    switch (provider) {
+      case "google":
+      case "google_drive": {
+        const params = new URLSearchParams({
+          client_id: process.env.GOOGLE_CLIENT_ID || "",
+          redirect_uri:
+            process.env.GOOGLE_REDIRECT_URI ||
+            "http://localhost:4000/providers/google/callback",
+          response_type: "code",
+          scope: "https://www.googleapis.com/auth/drive.file email",
+          access_type: "offline",
+          prompt: "consent",
+          state,
+        });
+        authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+        break;
       }
 
-      return reply.redirect(authUrl);
-    },
-  );
+      case "onedrive":
+      case "one_drive": {
+        const params = new URLSearchParams({
+          client_id: process.env.MICROSOFT_CLIENT_ID || "",
+          redirect_uri:
+            process.env.MICROSOFT_REDIRECT_URI ||
+            "http://localhost:4000/providers/onedrive/callback",
+          response_type: "code",
+          response_mode: "query",
+          scope: "files.readwrite offline_access user.read",
+          prompt: "consent",
+          state,
+        });
+        authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params.toString()}`;
+        break;
+      }
+
+      case "dropbox": {
+        const params = new URLSearchParams({
+          client_id: process.env.DROPBOX_CLIENT_ID || "",
+          redirect_uri:
+            process.env.DROPBOX_REDIRECT_URI ||
+            "http://localhost:4000/providers/dropbox/callback",
+          response_type: "code",
+          token_access_type: "offline",
+          scope:
+            "account_info.read files.content.write files.content.read files.metadata.write files.metadata.read",
+          state,
+        });
+        authUrl = `https://www.dropbox.com/oauth2/authorize?${params.toString()}`;
+        break;
+      }
+
+      case "box": {
+        const params = new URLSearchParams({
+          client_id: process.env.BOX_CLIENT_ID || "",
+          redirect_uri:
+            process.env.BOX_REDIRECT_URI ||
+            "http://localhost:4000/providers/box/callback",
+          response_type: "code",
+          state,
+        });
+        authUrl = `https://account.box.com/api/oauth2/authorize?${params.toString()}`;
+        break;
+      }
+
+      default:
+        return reply
+          .status(400)
+          .send({ error: `Unsupported provider: ${provider}` });
+    }
+
+    return reply.redirect(authUrl);
+  };
+
+  fastify.get("/:provider/connect", handleOAuthConnect);
+  fastify.get("/:provider/auth", handleOAuthConnect);
 
   // -------------------------------------------------------------
   // 3. OAUTH CALLBACKS (/providers/:provider/callback)
@@ -474,7 +498,44 @@ export async function providerRoutes(fastify: FastifyInstance) {
       const { id } = request.params;
       const { action } = request.body || { action: "delete" };
 
-      // Queue asynchronous BullMQ background job
+      // 1. Check if any finalized chunks are stored on this provider
+      const chunks = await db
+        .select({ id: fileChunks.id })
+        .from(fileChunks)
+        .where(eq(fileChunks.providerIdentityId, id));
+
+      if (chunks.length === 0) {
+        // Clean up any stale in-flight upload chunks first
+        await db
+          .delete(uploadChunks)
+          .where(eq(uploadChunks.providerIdentityId, id));
+
+        // Instant disconnect for empty providers
+        await db
+          .delete(providerIdentities)
+          .where(
+            and(
+              eq(providerIdentities.id, id),
+              eq(providerIdentities.userId, user.userId),
+            ),
+          );
+
+        socketManager.broadcastToUser(user.userId, {
+          type: "PROVIDER_DISCONNECTED",
+          payload: { providerId: id },
+        });
+
+        fastify.log.info(
+          `[Providers] Provider [${id}] has 0 stored chunks. Disconnected instantly without worker.`,
+        );
+
+        return reply.send({
+          success: true,
+          message: "Provider disconnected immediately (no files stored).",
+        });
+      }
+
+      // 2. When chunks exist, queue asynchronous BullMQ background job for migration/cleanup
       const job = await providerMigrationQueue.add("disconnect-provider", {
         userId: user.userId,
         providerIdentityId: id,
@@ -534,6 +595,55 @@ export async function providerRoutes(fastify: FastifyInstance) {
         .where(eq(providerIdentities.id, id));
 
       return reply.send({ quota });
+    },
+  );
+
+  // -------------------------------------------------------------
+  // 7. SYNC ALL QUOTAS ON DEMAND (/providers/sync-quotas)
+  // -------------------------------------------------------------
+
+  fastify.post(
+    "/sync",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        return reply.status(401).send({ error: "Unauthorized" });
+      }
+
+      const { userId } = request.user as { userId: string };
+      const identities = await db
+        .select()
+        .from(providerIdentities)
+        .where(eq(providerIdentities.userId, userId));
+
+      for (const identity of identities) {
+        try {
+          const accessToken = await TokenService.getValidAccessToken(
+            identity.id,
+          );
+          const adapter = getStorageAdapter(identity.provider);
+          const quota = await adapter.fetchQuota(accessToken);
+
+          await db
+            .update(providerIdentities)
+            .set({
+              quotaTotal: quota.totalBytes,
+              quotaUsed: quota.usedBytes,
+              lastSyncedAt: new Date(),
+            })
+            .where(eq(providerIdentities.id, identity.id));
+        } catch (err: any) {
+          request.log.warn(
+            `Failed to sync quota for ${identity.provider}: ${err.message}`,
+          );
+        }
+      }
+
+      return reply.send({
+        success: true,
+        message: "All provider quotas refreshed.",
+      });
     },
   );
 }

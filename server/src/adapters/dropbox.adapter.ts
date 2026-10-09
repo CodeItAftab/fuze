@@ -31,26 +31,25 @@ export class DropboxAdapter implements StorageAdapter {
     size: number;
     accessToken: string;
   }): Promise<UploadSessionResult> {
-    const res = await fetch(
-      "https://content.dropboxapi.com/2/files/upload_session/start",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${params.accessToken}`,
-          "Dropbox-API-Arg": JSON.stringify({ close: false }),
-          "Content-Type": "application/octet-stream",
-        },
-      },
-    );
+    const cleanPath = params.fileName.startsWith("/")
+      ? params.fileName
+      : `/Fuze/${params.fileName}`;
 
-    if (!res.ok) {
-      throw new Error(`Dropbox upload session start failed: ${res.status}`);
-    }
-
-    const data = (await res.json()) as DropboxSessionResponse;
     return {
-      sessionUrl: `https://content.dropboxapi.com/2/files/upload_session/append_v2?sessionId=${data.session_id}`,
+      sessionUrl: "https://content.dropboxapi.com/2/files/upload",
       expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
+      httpMethod: "POST",
+      headers: {
+        Authorization: `Bearer ${params.accessToken}`,
+        "Dropbox-API-Arg": JSON.stringify({
+          path: cleanPath,
+          mode: "overwrite",
+          autorename: false,
+          mute: false,
+          strict_conflict: false,
+        }),
+        "Content-Type": "application/octet-stream",
+      },
     };
   }
 
@@ -58,6 +57,10 @@ export class DropboxAdapter implements StorageAdapter {
     providerFileId: string;
     accessToken: string;
   }): Promise<string> {
+    const cleanPath = params.providerFileId.startsWith("/")
+      ? params.providerFileId
+      : `/Fuze/${params.providerFileId}`;
+
     const res = await fetch(
       "https://api.dropboxapi.com/2/files/get_temporary_link",
       {
@@ -66,7 +69,7 @@ export class DropboxAdapter implements StorageAdapter {
           Authorization: `Bearer ${params.accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ path: params.providerFileId }),
+        body: JSON.stringify({ path: cleanPath }),
       },
     );
 
@@ -82,13 +85,17 @@ export class DropboxAdapter implements StorageAdapter {
     providerFileId: string;
     accessToken: string;
   }): Promise<void> {
+    const cleanPath = params.providerFileId.startsWith("/")
+      ? params.providerFileId
+      : `/Fuze/${params.providerFileId}`;
+
     await fetch("https://api.dropboxapi.com/2/files/delete_v2", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${params.accessToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ path: params.providerFileId }),
+      body: JSON.stringify({ path: cleanPath }),
     });
   }
 

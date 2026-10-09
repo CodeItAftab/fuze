@@ -24,7 +24,7 @@ const PROVIDER_MAX_FILE_LIMITS: Record<string, number> = {
   box: 250 * 1024 * 1024, // Box Free has a 250 MB per-file limit
   google_drive: 5 * 1024 * 1024 * 1024 * 1024, // 5 TB
   one_drive: 250 * 1024 * 1024 * 1024, // 250 GB
-  dropbox: 2 * 1024 * 1024 * 1024 * 1024, // 2 TB
+  dropbox: 140 * 1024 * 1024, // Dropbox direct upload endpoint has a 150 MB ceiling
   pcloud: 10 * 1024 * 1024 * 1024, // 10 GB
 };
 
@@ -90,8 +90,8 @@ export class ChunkDecisionService {
       if (remainingBytes <= 0) break;
       if (p.freeBytes <= 0) continue;
 
-      // If allocating to Box, cap chunk slices to 64 MB so it safely stays under Box's 250 MB ceiling
-      const maxSlice = p.provider === "box" ? 64 * 1024 * 1024 : Infinity;
+      // Cap chunk slices to 64 MB so they upload smoothly and reliably across all cloud endpoints
+      const maxSlice = 64 * 1024 * 1024;
 
       while (remainingBytes > 0 && p.freeBytes > 0) {
         const takeBytes = Math.min(remainingBytes, p.freeBytes, maxSlice);
