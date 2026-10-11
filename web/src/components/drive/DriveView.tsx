@@ -439,10 +439,10 @@ export function DriveView({ folderId = null }: DriveViewProps) {
           </div>
         )}
 
-        <main className="flex-1 overflow-y-auto p-6 md:p-8 w-full max-w-6xl">
-          {/* Top Integrated Header: Search Bar on left, Sort on right (Mockup Style) */}
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
-            <div className="flex items-center gap-3">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 w-full max-w-6xl">
+          {/* Top Integrated Header: Responsive search on left, sort on right */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 sm:pb-4 border-b border-slate-100 mb-5 sm:mb-6">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
               <button
                 onClick={() => setMobileSidebarOpen(true)}
                 aria-label="Open navigation menu"
@@ -451,7 +451,7 @@ export function DriveView({ folderId = null }: DriveViewProps) {
                 <Menu className="h-5 w-5" />
               </button>
 
-              <div className="flex items-center gap-2 text-slate-400 bg-slate-100/70 border border-slate-200/80 px-3 py-1.5 rounded-lg w-72 sm:w-80">
+              <div className="flex items-center gap-2 text-slate-400 bg-slate-100/70 border border-slate-200/80 px-3 py-1.5 rounded-lg flex-1 sm:max-w-xs md:max-w-sm transition-all focus-within:bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/10 min-w-0">
                 <Search className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                 <input
                   ref={searchInputRef}
@@ -459,12 +459,12 @@ export function DriveView({ folderId = null }: DriveViewProps) {
                   placeholder="Search files, folders..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full text-xs text-slate-800 placeholder-slate-400 bg-transparent focus:outline-none font-normal"
+                  className="w-full text-xs text-slate-800 placeholder-slate-400 bg-transparent focus:outline-none font-normal min-w-0"
                 />
                 {searchQuery && (
                   <button
                     onClick={() => setSearchQuery("")}
-                    className="p-0.5 text-slate-400 hover:text-slate-600 rounded transition cursor-pointer"
+                    className="p-0.5 text-slate-400 hover:text-slate-600 rounded transition cursor-pointer shrink-0"
                     aria-label="Clear search"
                   >
                     <X className="h-3 w-3" />
@@ -474,46 +474,48 @@ export function DriveView({ folderId = null }: DriveViewProps) {
             </div>
 
             {/* Sort Menu */}
-            <div className="relative" ref={sortDropdownRef}>
-              <button
-                type="button"
-                onClick={() => setShowSortDropdown(!showSortDropdown)}
-                className="text-slate-500 font-medium text-xs flex items-center gap-1.5 hover:text-slate-800 transition cursor-pointer"
-                aria-expanded={showSortDropdown}
-              >
-                <span>Sort: {currentSortLabel}</span>
-                <ChevronDown className="h-3 w-3 text-slate-400" />
-              </button>
+            <div className="flex items-center justify-end shrink-0">
+              <div className="relative" ref={sortDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowSortDropdown(!showSortDropdown)}
+                  className="text-slate-500 font-medium text-xs flex items-center gap-1.5 hover:text-slate-800 transition cursor-pointer px-2 py-1 rounded-md hover:bg-slate-100 sm:px-0 sm:py-0 sm:hover:bg-transparent"
+                  aria-expanded={showSortDropdown}
+                >
+                  <span className="truncate">Sort: {currentSortLabel}</span>
+                  <ChevronDown className="h-3 w-3 text-slate-400 shrink-0" />
+                </button>
 
-              {showSortDropdown && (
-                <div className="absolute right-0 top-full mt-2 w-44 bg-white rounded-xl shadow-xl border border-slate-200/90 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
-                  {sortOptions.map((opt) => {
-                    const isSelected =
-                      opt.field === sortBy && opt.order === sortOrder;
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => {
-                          setSortBy(opt.field);
-                          setSortOrder(opt.order);
-                          setShowSortDropdown(false);
-                        }}
-                        className={`w-full flex items-center justify-between px-3.5 py-1.5 text-xs text-left transition cursor-pointer ${
-                          isSelected
-                            ? "bg-blue-50 text-blue-700 font-semibold"
-                            : "text-slate-600 hover:bg-slate-50 font-normal"
-                        }`}
-                      >
-                        <span>{opt.label}</span>
-                        {isSelected && (
-                          <Check className="h-3 w-3 text-blue-600 shrink-0" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+                {showSortDropdown && (
+                  <div className="absolute right-0 top-full mt-2 w-44 bg-white rounded-xl shadow-xl border border-slate-200/90 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
+                    {sortOptions.map((opt) => {
+                      const isSelected =
+                        opt.field === sortBy && opt.order === sortOrder;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => {
+                            setSortBy(opt.field);
+                            setSortOrder(opt.order);
+                            setShowSortDropdown(false);
+                          }}
+                          className={`w-full flex items-center justify-between px-3.5 py-1.5 text-xs text-left transition cursor-pointer ${
+                            isSelected
+                              ? "bg-blue-50 text-blue-700 font-semibold"
+                              : "text-slate-600 hover:bg-slate-50 font-normal"
+                          }`}
+                        >
+                          <span>{opt.label}</span>
+                          {isSelected && (
+                            <Check className="h-3 w-3 text-blue-600 shrink-0" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -545,7 +547,7 @@ export function DriveView({ folderId = null }: DriveViewProps) {
             </div>
           )}
 
-          {/* Sample Folders matching the landing page mockup */}
+          {/* Folders grid matching the landing page mockup */}
           {folders.length > 0 && (
             <div className="mb-6">
               <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
@@ -608,7 +610,7 @@ export function DriveView({ folderId = null }: DriveViewProps) {
             </div>
           )}
 
-          {/* Files List matching the landing page mockup */}
+          {/* Files List matching the landing page mockup with responsive rows */}
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
               Files
@@ -629,7 +631,7 @@ export function DriveView({ folderId = null }: DriveViewProps) {
                 No files in this folder
               </div>
             ) : (
-              <div className="border border-slate-200 rounded-lg overflow-hidden divide-y divide-slate-100 bg-white">
+              <div className="border border-slate-200 rounded-lg overflow-hidden divide-y divide-slate-100 bg-white shadow-2xs">
                 {files.map((file) => (
                   <div
                     key={file.id}
@@ -641,27 +643,41 @@ export function DriveView({ folderId = null }: DriveViewProps) {
                         item: file,
                       });
                     }}
-                    className="p-3 flex items-center justify-between hover:bg-slate-50 transition text-xs"
+                    className="p-3 flex items-center justify-between hover:bg-slate-50 transition text-xs gap-3"
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
-                      {getFileIcon(file)}
-                      <span
-                        className="font-medium text-slate-800 text-xs truncate"
-                        title={file.name}
-                      >
-                        {file.name}
-                      </span>
+                      <div className="shrink-0">{getFileIcon(file)}</div>
+                      <div className="min-w-0 flex-1">
+                        <div
+                          className="font-medium text-slate-800 text-xs truncate"
+                          title={file.name}
+                        >
+                          {file.name}
+                        </div>
+                        {/* Mobile metadata subline */}
+                        <div className="flex sm:hidden items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+                          <span
+                            className={`px-1.5 py-0.2 rounded-full font-medium text-[9px] ${getProviderBadgeStyle(
+                              file.providerBadge,
+                            )}`}
+                          >
+                            {file.providerBadge || "Google Drive (Whole)"}
+                          </span>
+                          <span>•</span>
+                          <span>{(file.size / (1024 * 1024)).toFixed(1)} MB</span>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-4 shrink-0">
+                    <div className="flex items-center gap-3 sm:gap-4 shrink-0">
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${getProviderBadgeStyle(
+                        className={`hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${getProviderBadgeStyle(
                           file.providerBadge,
                         )}`}
                       >
                         {file.providerBadge || "Google Drive (Whole)"}
                       </span>
-                      <span className="text-slate-500 w-16 text-right text-xs">
+                      <span className="hidden sm:inline-block text-slate-500 w-16 text-right text-xs">
                         {(file.size / (1024 * 1024)).toFixed(1)} MB
                       </span>
                       <button
@@ -673,7 +689,8 @@ export function DriveView({ folderId = null }: DriveViewProps) {
                             item: file,
                           });
                         }}
-                        className="text-slate-400 hover:text-slate-600 p-0.5 transition cursor-pointer"
+                        aria-label="More actions"
+                        className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-100 transition cursor-pointer"
                       >
                         <MoreVertical className="h-3.5 w-3.5" />
                       </button>

@@ -94,12 +94,27 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
         }`}
       >
         <div className="space-y-4">
-          {/* Mobile Close Button */}
-          <div className="flex items-center justify-between lg:hidden mb-2">
-            <span className="font-semibold text-sm text-slate-800">Menu</span>
+          {/* App Brand Logo Header */}
+          <div className="flex items-center justify-between pb-1 border-b border-slate-200/60 lg:border-none">
+            <Link href="/dashboard" className="flex items-center gap-2.5 group">
+              <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-2xs group-hover:bg-blue-700 transition">
+                <Cloud className="h-4.5 w-4.5" />
+              </div>
+              <div className="flex flex-col">
+                <span className="font-semibold text-sm tracking-tight text-slate-900 leading-none">
+                  Fuze
+                </span>
+                <span className="text-[9px] text-blue-600 font-medium uppercase tracking-wider mt-0.5">
+                  Storage
+                </span>
+              </div>
+            </Link>
+
+            {/* Mobile Close Button */}
             <button
               onClick={closeMobile}
-              className="p-1 text-slate-400 hover:text-slate-700 rounded-lg"
+              aria-label="Close menu"
+              className="lg:hidden p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
             >
               <X className="h-4 w-4" />
             </button>
