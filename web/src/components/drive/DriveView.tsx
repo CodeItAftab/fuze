@@ -439,7 +439,7 @@ export function DriveView({ folderId = null }: DriveViewProps) {
           </div>
         )}
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 w-full max-w-6xl">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 w-full max-w-7xl">
           {/* Top Integrated Header: Responsive search on left, sort on right */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 sm:pb-4 border-b border-slate-100 mb-5 sm:mb-6">
             <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -560,11 +560,7 @@ export function DriveView({ folderId = null }: DriveViewProps) {
                     <div
                       key={folder.id}
                       onDoubleClick={() => navigateToFolder(folder.id)}
-                      onClick={() => {
-                        if (window.innerWidth < 1024) {
-                          navigateToFolder(folder.id);
-                        }
-                      }}
+                      onClick={() => navigateToFolder(folder.id)}
                       onContextMenu={(e) => {
                         e.preventDefault();
                         setContextMenu({

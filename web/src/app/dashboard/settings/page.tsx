@@ -133,27 +133,27 @@ export default function SettingsPage() {
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
       <Sidebar onNewFolderClick={() => {}} />
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white">
         <VerificationBanner />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 w-full max-w-7xl">
           {/* Header with Integrated Mobile Menu */}
-          <div className="flex items-center gap-2.5 mb-6 sm:mb-8">
+          <div className="flex items-center gap-2.5 pb-3 sm:pb-4 border-b border-slate-100 mb-5 sm:mb-6">
             <button
               onClick={() => setMobileSidebarOpen(true)}
               aria-label="Open sidebar menu"
-              className="lg:hidden p-1.5 -ml-1 text-slate-700 hover:text-slate-900 hover:bg-slate-200/60 rounded-xl transition cursor-pointer shrink-0"
+              className="lg:hidden p-1.5 -ml-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer shrink-0"
             >
               <Menu className="h-5 w-5" />
             </button>
-            <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
-              Settings
+            <h1 className="text-base sm:text-lg font-semibold text-slate-900 tracking-tight">
+              Security & Settings
             </h1>
           </div>
 
           <div className="max-w-2xl space-y-6">
             {/* Profile Section */}
-            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 sm:p-6">
-              <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 pb-2 border-b border-slate-100">
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-4 sm:p-5">
+              <h2 className="text-xs font-semibold text-slate-800 uppercase tracking-wider mb-4 pb-2 border-b border-slate-100">
                 Profile
               </h2>
 
@@ -189,12 +189,12 @@ export default function SettingsPage() {
                     <button
                       type="submit"
                       disabled={isUpdatingProfile}
-                      className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 shrink-0"
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 shrink-0"
                     >
                       {isUpdatingProfile ? (
                         <Loader2 className="h-3 w-3 animate-spin" />
                       ) : profileMsg?.type === "success" ? (
-                        <Check className="h-3.5 w-3.5 text-emerald-400" />
+                        <Check className="h-3.5 w-3.5 text-white" />
                       ) : null}
                       <span>Save</span>
                     </button>
@@ -216,14 +216,14 @@ export default function SettingsPage() {
             </div>
 
             {/* Password Section */}
-            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 sm:p-6">
-              <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 pb-2 border-b border-slate-100">
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-4 sm:p-5">
+              <h2 className="text-xs font-semibold text-slate-800 uppercase tracking-wider mb-4 pb-2 border-b border-slate-100">
                 Change Password
               </h2>
 
               <form onSubmit={handleChangePassword} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  <label className="block text-xs font-medium text-slate-700 mb-1.5">
                     Current password
                   </label>
                   <div className="relative">
@@ -233,7 +233,7 @@ export default function SettingsPage() {
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
                       placeholder="••••••••••••"
-                      className="w-full pl-3.5 pr-10 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 transition"
+                      className="w-full pl-3.5 pr-10 py-2 bg-white border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 transition"
                     />
                     <button
                       type="button"
@@ -250,7 +250,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  <label className="block text-xs font-medium text-slate-700 mb-1.5">
                     New password
                   </label>
                   <div className="relative">
@@ -260,7 +260,7 @@ export default function SettingsPage() {
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="At least 8 characters"
-                      className="w-full pl-3.5 pr-10 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 transition"
+                      className="w-full pl-3.5 pr-10 py-2 bg-white border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 transition"
                     />
                     <button
                       type="button"
@@ -277,7 +277,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  <label className="block text-xs font-medium text-slate-700 mb-1.5">
                     Confirm new password
                   </label>
                   <input
@@ -286,7 +286,7 @@ export default function SettingsPage() {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••••••"
-                    className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 transition"
+                    className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 transition"
                   />
                 </div>
 
@@ -306,7 +306,7 @@ export default function SettingsPage() {
                   <button
                     type="submit"
                     disabled={isChangingPassword}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 shadow-xs"
                   >
                     {isChangingPassword && (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -318,8 +318,8 @@ export default function SettingsPage() {
             </div>
 
             {/* Session Section */}
-            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 sm:p-6">
-              <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-4 sm:p-5">
+              <h2 className="text-xs font-semibold text-slate-800 uppercase tracking-wider mb-2">
                 Session
               </h2>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
@@ -335,7 +335,7 @@ export default function SettingsPage() {
                   onClick={() => {
                     void logout();
                   }}
-                  className="px-3.5 py-2 border border-slate-200 hover:border-rose-200 text-slate-600 hover:text-rose-600 hover:bg-rose-50/50 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+                  className="px-3.5 py-1.5 border border-slate-200 hover:border-rose-200 text-slate-600 hover:text-rose-600 hover:bg-rose-50/50 rounded-lg text-xs font-medium transition cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
                 >
                   <LogOut className="h-3.5 w-3.5" />
                   <span>Log out</span>
