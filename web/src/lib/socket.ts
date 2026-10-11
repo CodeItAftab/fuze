@@ -50,6 +50,7 @@ class WebSocketClient {
       case "FILE_CREATED":
         if (data.payload && typeof data.payload === "object") {
           store.addItem(data.payload as VfsItem);
+          void store.refreshProviders();
         }
         break;
 

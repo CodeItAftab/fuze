@@ -31,6 +31,8 @@ import {
   Menu,
   ChevronDown,
   Check,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 
 // Subtle pastel palette matching the landing page mockup
@@ -67,24 +69,27 @@ function getFolderPalette(idOrName: string) {
 
 function getProviderBadgeStyle(badge: string | null | undefined) {
   if (!badge) {
-    return "bg-amber-50 text-amber-700 border border-amber-200";
+    return "bg-slate-50 text-slate-700 border border-slate-200/80";
   }
   if (badge.includes("Google Drive")) {
-    return "bg-amber-50 text-amber-700 border border-amber-200";
+    return "bg-amber-50 text-amber-700 border border-amber-200/80";
   }
   if (badge.includes("Multi-Cloud")) {
-    return "bg-blue-50 text-blue-700 border border-blue-200";
-  }
-  if (badge.includes("pCloud")) {
-    return "bg-sky-50 text-sky-700 border border-sky-200";
-  }
-  if (badge.includes("OneDrive")) {
-    return "bg-sky-50 text-sky-700 border border-sky-200";
+    return "bg-blue-50 text-blue-700 border border-blue-200/80";
   }
   if (badge.includes("Dropbox")) {
-    return "bg-indigo-50 text-indigo-700 border border-indigo-200";
+    return "bg-indigo-50 text-indigo-700 border border-indigo-200/80";
   }
-  return "bg-slate-50 text-slate-700 border border-slate-200";
+  if (badge.includes("pCloud")) {
+    return "bg-cyan-50 text-cyan-700 border border-cyan-200/80";
+  }
+  if (badge.includes("OneDrive")) {
+    return "bg-sky-50 text-sky-700 border border-sky-200/80";
+  }
+  if (badge.includes("Box")) {
+    return "bg-emerald-50 text-emerald-700 border border-emerald-200/80";
+  }
+  return "bg-slate-50 text-slate-700 border border-slate-200/80";
 }
 
 interface DriveViewProps {
@@ -99,12 +104,38 @@ export function DriveView({ folderId = null }: DriveViewProps) {
     items,
     setItems,
     setCurrentFolder,
+    providers,
     setProviders,
+    isLoading,
     setIsLoading,
     searchQuery,
     setSearchQuery,
     setMobileSidebarOpen,
+    viewMode,
+    setViewMode,
   } = useDriveStore();
+
+  const getDisplayBadge = useCallback(
+    (file: VfsItem) => {
+      if (file.providerBadge) return file.providerBadge;
+      if (providers.length === 1) {
+        const prov = providers[0].provider;
+        const nameMap: Record<string, string> = {
+          google_drive: "Google Drive (Whole)",
+          one_drive: "OneDrive (Whole)",
+          dropbox: "Dropbox (Whole)",
+          pcloud: "pCloud (Whole)",
+          box: "Box (Whole)",
+        };
+        return nameMap[prov] || `${prov} (Whole)`;
+      }
+      if (providers.length > 1) {
+        return `Multi-Cloud (${providers.length} Providers)`;
+      }
+      return "Direct Cloud";
+    },
+    [providers],
+  );
 
   const { user } = useAuthStore();
   const [isDragging, setIsDragging] = useState(false);
@@ -440,7 +471,7 @@ export function DriveView({ folderId = null }: DriveViewProps) {
         )}
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 w-full max-w-7xl">
-          {/* Top Integrated Header: Responsive search on left, sort on right */}
+          {/* Top Integrated Header: Responsive search on left, controls on right */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 sm:pb-4 border-b border-slate-100 mb-5 sm:mb-6">
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <button
@@ -473,13 +504,44 @@ export function DriveView({ folderId = null }: DriveViewProps) {
               </div>
             </div>
 
-            {/* Sort Menu */}
-            <div className="flex items-center justify-end shrink-0">
+            {/* Header Right Controls: View Mode & Sort Dropdown */}
+            <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
+              {/* Grid / List View Toggle */}
+              <div className="flex items-center gap-0.5 bg-slate-100/80 p-0.5 rounded-lg border border-slate-200/80">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("list")}
+                  title="List view"
+                  aria-label="List view"
+                  className={`p-1.5 rounded-md transition cursor-pointer ${
+                    viewMode === "list"
+                      ? "bg-white text-blue-600 shadow-2xs font-semibold"
+                      : "text-slate-400 hover:text-slate-700"
+                  }`}
+                >
+                  <List className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("grid")}
+                  title="Grid view"
+                  aria-label="Grid view"
+                  className={`p-1.5 rounded-md transition cursor-pointer ${
+                    viewMode === "grid"
+                      ? "bg-white text-blue-600 shadow-2xs font-semibold"
+                      : "text-slate-400 hover:text-slate-700"
+                  }`}
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {/* Sort Menu */}
               <div className="relative" ref={sortDropdownRef}>
                 <button
                   type="button"
                   onClick={() => setShowSortDropdown(!showSortDropdown)}
-                  className="text-slate-500 font-medium text-xs flex items-center gap-1.5 hover:text-slate-800 transition cursor-pointer px-2 py-1 rounded-md hover:bg-slate-100 sm:px-0 sm:py-0 sm:hover:bg-transparent"
+                  className="text-slate-600 font-medium text-xs flex items-center gap-1.5 hover:text-slate-900 transition cursor-pointer px-2.5 py-1.5 rounded-lg border border-slate-200/80 bg-white hover:bg-slate-50 shadow-2xs"
                   aria-expanded={showSortDropdown}
                 >
                   <span className="truncate">Sort: {currentSortLabel}</span>
@@ -547,155 +609,262 @@ export function DriveView({ folderId = null }: DriveViewProps) {
             </div>
           )}
 
-          {/* Folders grid matching the landing page mockup */}
-          {folders.length > 0 && (
-            <div className="mb-6">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                Folders
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {folders.map((folder) => {
-                  const palette = getFolderPalette(folder.id || folder.name);
-                  return (
+          {/* Animated Skeleton Loader during folder changes */}
+          {isLoading ? (
+            <div className="space-y-6 animate-pulse">
+              <div>
+                <div className="h-3 w-16 bg-slate-200 rounded mb-2.5" />
+                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
+                  {[1, 2, 3].map((n) => (
                     <div
-                      key={folder.id}
-                      onDoubleClick={() => navigateToFolder(folder.id)}
-                      onClick={() => navigateToFolder(folder.id)}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        setContextMenu({
-                          x: e.clientX,
-                          y: e.clientY,
-                          item: folder,
-                        });
-                      }}
-                      className="border border-slate-200 rounded-lg p-3 flex items-center justify-between bg-white hover:border-slate-300 transition cursor-pointer group"
+                      key={n}
+                      className="border border-slate-200/80 rounded-xl p-3 sm:p-3.5 flex items-center gap-3 bg-white shadow-2xs"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Folder className={`h-6 w-6 shrink-0 ${palette.icon}`} />
-                        <div className="min-w-0">
-                          <div
-                            className="font-semibold text-slate-800 text-xs truncate"
-                            title={folder.name}
-                          >
-                            {folder.name}
+                      <div className="h-6 w-6 rounded-lg bg-slate-200 shrink-0" />
+                      <div className="flex-1 space-y-1.5 min-w-0">
+                        <div className="h-3 bg-slate-200 rounded w-24" />
+                        <div className="h-2 bg-slate-100 rounded w-12" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="h-3 w-12 bg-slate-200 rounded mb-2.5" />
+                <div className="border border-slate-200/80 rounded-xl divide-y divide-slate-100 bg-white shadow-2xs overflow-hidden">
+                  {[1, 2, 3, 4].map((n) => (
+                    <div
+                      key={n}
+                      className="p-3 sm:p-3.5 flex items-center justify-between gap-4"
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="h-4 w-4 bg-slate-200 rounded shrink-0" />
+                        <div className="h-3 bg-slate-200 rounded w-44" />
+                      </div>
+                      <div className="h-4 bg-slate-100 rounded-full w-24 hidden sm:block shrink-0" />
+                      <div className="h-3 bg-slate-100 rounded w-14 shrink-0" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="transition-opacity duration-200 ease-in-out animate-in fade-in">
+              {/* Folders grid */}
+              {folders.length > 0 && (
+                <div className="mb-6">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                    Folders
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
+                    {folders.map((folder) => {
+                      const palette = getFolderPalette(folder.id || folder.name);
+                      return (
+                        <div
+                          key={folder.id}
+                          onDoubleClick={() => navigateToFolder(folder.id)}
+                          onClick={() => navigateToFolder(folder.id)}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            setContextMenu({
+                              x: e.clientX,
+                              y: e.clientY,
+                              item: folder,
+                            });
+                          }}
+                          className="border border-slate-200 rounded-xl p-3 sm:p-3.5 flex items-center justify-between bg-white hover:border-slate-300 hover:shadow-2xs transition cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                            <Folder className={`h-5 w-5 sm:h-6 sm:w-6 shrink-0 ${palette.icon}`} />
+                            <div className="min-w-0">
+                              <div
+                                className="font-semibold text-slate-800 text-xs truncate"
+                                title={folder.name}
+                              >
+                                {folder.name}
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-normal">
+                                Folder
+                              </div>
+                            </div>
                           </div>
-                          <div className="text-[10px] text-slate-400 font-normal">
-                            Folder
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setContextMenu({
+                                x: e.clientX,
+                                y: e.clientY,
+                                item: folder,
+                              });
+                            }}
+                            className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 transition shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                          >
+                            <MoreVertical className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Files Section */}
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                  Files
+                </div>
+
+                {files.length === 0 && folders.length === 0 ? (
+                  <div className="text-center py-16 border border-dashed border-slate-200/90 rounded-xl bg-white p-6 shadow-2xs">
+                    <HardDrive className="h-10 w-10 text-slate-300 mx-auto mb-2" />
+                    <div className="text-xs font-semibold text-slate-700">
+                      This folder is empty
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1 max-w-xs mx-auto">
+                      Drag and drop files here or click + New Upload to store across your clouds.
+                    </p>
+                  </div>
+                ) : files.length === 0 ? (
+                  <div className="py-8 px-4 bg-white border border-dashed border-slate-200/90 rounded-xl text-center text-xs text-slate-400">
+                    No files in this folder
+                  </div>
+                ) : viewMode === "grid" ? (
+                  /* Responsive Grid View for Files */
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                    {files.map((file) => {
+                      const badge = getDisplayBadge(file);
+                      return (
+                        <div
+                          key={file.id}
+                          onDoubleClick={() => handleDownload(file)}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            setContextMenu({
+                              x: e.clientX,
+                              y: e.clientY,
+                              item: file,
+                            });
+                          }}
+                          className="border border-slate-200 rounded-xl p-3 bg-white hover:border-slate-300 hover:shadow-2xs transition cursor-pointer group flex flex-col justify-between"
+                        >
+                          <div className="h-24 bg-slate-50/80 rounded-lg flex items-center justify-center mb-2.5 relative group-hover:bg-blue-50/30 transition">
+                            <div className="scale-125">{getFileIcon(file)}</div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setContextMenu({
+                                  x: e.clientX,
+                                  y: e.clientY,
+                                  item: file,
+                                });
+                              }}
+                              className="absolute top-1.5 right-1.5 p-1 rounded-md bg-white/90 hover:bg-white text-slate-400 hover:text-slate-700 opacity-0 group-hover:opacity-100 transition shadow-2xs"
+                            >
+                              <MoreVertical className="h-3 w-3" />
+                            </button>
+                          </div>
+
+                          <div className="min-w-0">
+                            <div
+                              className="font-medium text-slate-800 text-xs truncate"
+                              title={file.name}
+                            >
+                              {file.name}
+                            </div>
+                            <div className="flex flex-col gap-1 mt-1 text-[10px] text-slate-400">
+                              <span
+                                className={`self-start px-1.5 py-0.2 rounded-full font-medium text-[9px] ${getProviderBadgeStyle(
+                                  badge,
+                                )}`}
+                              >
+                                {badge}
+                              </span>
+                              <span>{(file.size / (1024 * 1024)).toFixed(1)} MB</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  /* Structured List View for Files */
+                  <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 bg-white shadow-2xs">
+                    {files.map((file) => {
+                      const badge = getDisplayBadge(file);
+                      return (
+                        <div
+                          key={file.id}
+                          onDoubleClick={() => handleDownload(file)}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            setContextMenu({
+                              x: e.clientX,
+                              y: e.clientY,
+                              item: file,
+                            });
+                          }}
+                          className="p-3 sm:p-3.5 flex items-center justify-between hover:bg-slate-50/80 transition text-xs gap-3"
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className="shrink-0">{getFileIcon(file)}</div>
+                            <div className="min-w-0 flex-1">
+                              <div
+                                className="font-medium text-slate-800 text-xs truncate"
+                                title={file.name}
+                              >
+                                {file.name}
+                              </div>
+                              {/* Mobile metadata subline */}
+                              <div className="flex sm:hidden items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+                                <span
+                                  className={`px-1.5 py-0.2 rounded-full font-medium text-[9px] ${getProviderBadgeStyle(
+                                    badge,
+                                  )}`}
+                                >
+                                  {badge}
+                                </span>
+                                <span>•</span>
+                                <span>{(file.size / (1024 * 1024)).toFixed(1)} MB</span>
+                              </div>
+                            </div>
+                          </div>
 
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setContextMenu({
-                            x: e.clientX,
-                            y: e.clientY,
-                            item: folder,
-                          });
-                        }}
-                        className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 transition shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
-                      >
-                        <MoreVertical className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  );
-                })}
+                          <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                            <span
+                              className={`hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${getProviderBadgeStyle(
+                                badge,
+                              )}`}
+                            >
+                              {badge}
+                            </span>
+                            <span className="hidden sm:inline-block text-slate-500 w-16 text-right text-xs">
+                              {(file.size / (1024 * 1024)).toFixed(1)} MB
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setContextMenu({
+                                  x: e.clientX,
+                                  y: e.clientY,
+                                  item: file,
+                                });
+                              }}
+                              aria-label="More actions"
+                              className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-100 transition cursor-pointer"
+                            >
+                              <MoreVertical className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           )}
-
-          {/* Files List matching the landing page mockup with responsive rows */}
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
-              Files
-            </div>
-
-            {files.length === 0 && folders.length === 0 ? (
-              <div className="text-center py-16 border border-dashed border-slate-200 rounded-lg bg-white p-6">
-                <HardDrive className="h-10 w-10 text-slate-300 mx-auto mb-2" />
-                <div className="text-xs font-semibold text-slate-700">
-                  This folder is empty
-                </div>
-                <p className="text-[11px] text-slate-400 mt-1 max-w-xs mx-auto">
-                  Drag and drop files here or click + New Upload to store across your clouds.
-                </p>
-              </div>
-            ) : files.length === 0 ? (
-              <div className="py-6 px-4 bg-white border border-dashed border-slate-200 rounded-lg text-center text-xs text-slate-400">
-                No files in this folder
-              </div>
-            ) : (
-              <div className="border border-slate-200 rounded-lg overflow-hidden divide-y divide-slate-100 bg-white shadow-2xs">
-                {files.map((file) => (
-                  <div
-                    key={file.id}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      setContextMenu({
-                        x: e.clientX,
-                        y: e.clientY,
-                        item: file,
-                      });
-                    }}
-                    className="p-3 flex items-center justify-between hover:bg-slate-50 transition text-xs gap-3"
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="shrink-0">{getFileIcon(file)}</div>
-                      <div className="min-w-0 flex-1">
-                        <div
-                          className="font-medium text-slate-800 text-xs truncate"
-                          title={file.name}
-                        >
-                          {file.name}
-                        </div>
-                        {/* Mobile metadata subline */}
-                        <div className="flex sm:hidden items-center gap-2 text-[10px] text-slate-400 mt-0.5">
-                          <span
-                            className={`px-1.5 py-0.2 rounded-full font-medium text-[9px] ${getProviderBadgeStyle(
-                              file.providerBadge,
-                            )}`}
-                          >
-                            {file.providerBadge || "Google Drive (Whole)"}
-                          </span>
-                          <span>•</span>
-                          <span>{(file.size / (1024 * 1024)).toFixed(1)} MB</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-                      <span
-                        className={`hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${getProviderBadgeStyle(
-                          file.providerBadge,
-                        )}`}
-                      >
-                        {file.providerBadge || "Google Drive (Whole)"}
-                      </span>
-                      <span className="hidden sm:inline-block text-slate-500 w-16 text-right text-xs">
-                        {(file.size / (1024 * 1024)).toFixed(1)} MB
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setContextMenu({
-                            x: e.clientX,
-                            y: e.clientY,
-                            item: file,
-                          });
-                        }}
-                        aria-label="More actions"
-                        className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-100 transition cursor-pointer"
-                      >
-                        <MoreVertical className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </main>
       </div>
 

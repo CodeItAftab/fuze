@@ -104,8 +104,11 @@ export const useDriveStore = create<DriveState>((set, get) => ({
   setItems: (items) => set({ items }),
   addItem: (item) => {
     const current = get().items;
-    if (!current.some((i) => i.id === item.id)) {
+    const exists = current.some((i) => i.id === item.id);
+    if (!exists) {
       set({ items: [item, ...current] });
+    } else {
+      set({ items: current.map((i) => (i.id === item.id ? { ...i, ...item } : i)) });
     }
   },
   removeItem: (id) => set({ items: get().items.filter((i) => i.id !== id) }),

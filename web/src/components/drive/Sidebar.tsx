@@ -10,6 +10,7 @@ import {
   FolderPlus,
   Upload,
   ShieldCheck,
+  Settings,
   LogOut,
   X,
   Lock,
@@ -206,8 +207,8 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
                   : "text-slate-600 hover:bg-slate-100 font-normal"
               }`}
             >
-              <ShieldCheck className="h-4 w-4" />
-              <span>Security & Keys</span>
+              <Settings className="h-4 w-4" />
+              <span>Settings</span>
             </Link>
 
             <Link
@@ -236,7 +237,7 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
           </div>
         </div>
 
-        {/* Storage Meter Card matching mockup */}
+        {/* Multi-Color Storage Meter Card */}
         <div className="p-3 bg-white border border-slate-200/90 rounded-xl shadow-2xs">
           <div className="flex justify-between items-center font-semibold text-slate-700 mb-1.5 text-xs">
             <span>Storage Pool</span>
@@ -249,27 +250,27 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
             </span>
           </div>
 
+          {/* Segmented Multi-Color Progress Bar */}
           <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden flex mb-2">
             {providers.length > 0 && storageSummary.usedPoolBytes > 0 ? (
               providers.map((p) => {
                 if (p.quotaUsed <= 0) return null;
+                const total = Math.max(storageSummary.totalPoolBytes, 1);
                 const pct = Math.max(
-                  4,
-                  Math.round(
-                    (p.quotaUsed / Math.max(storageSummary.totalPoolBytes, 1)) * 100,
-                  ),
+                  3,
+                  Number(((p.quotaUsed / total) * 100).toFixed(1)),
                 );
                 const colorMap: Record<string, string> = {
                   google_drive: "bg-amber-500",
                   one_drive: "bg-blue-500",
                   pcloud: "bg-sky-400",
-                  dropbox: "bg-indigo-500",
+                  dropbox: "bg-indigo-600",
                   box: "bg-emerald-500",
                 };
                 return (
                   <div
                     key={p.id}
-                    className={`${colorMap[p.provider] || "bg-blue-500"} h-full`}
+                    className={`${colorMap[p.provider] || "bg-indigo-600"} h-full transition-all duration-300`}
                     style={{ width: `${pct}%` }}
                     title={`${p.provider}: ${formatBytes(p.quotaUsed)}`}
                   />
@@ -282,7 +283,36 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
             )}
           </div>
 
-          <div className="text-[10px] text-slate-500 flex justify-between items-center">
+          {/* Provider Legend Breakdown Dots */}
+          {providers.length > 0 && (
+            <div className="flex flex-wrap gap-x-2.5 gap-y-1 mb-2 pt-0.5">
+              {providers.map((p) => {
+                const labelMap: Record<string, string> = {
+                  google_drive: "Google Drive",
+                  one_drive: "OneDrive",
+                  dropbox: "Dropbox",
+                  pcloud: "pCloud",
+                  box: "Box",
+                };
+                const dotColorMap: Record<string, string> = {
+                  google_drive: "bg-amber-500",
+                  one_drive: "bg-blue-500",
+                  pcloud: "bg-sky-400",
+                  dropbox: "bg-indigo-600",
+                  box: "bg-emerald-500",
+                };
+                return (
+                  <div key={p.id} className="flex items-center gap-1 text-[9px] text-slate-500">
+                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotColorMap[p.provider] || "bg-indigo-600"}`} />
+                    <span>{labelMap[p.provider] || p.provider}</span>
+                    <span className="text-slate-400 font-mono">({formatBytes(p.quotaUsed)})</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="text-[10px] text-slate-500 flex justify-between items-center border-t border-slate-100 pt-1.5">
             <span>
               {providers.length} {providers.length === 1 ? "account" : "accounts"} linked
             </span>

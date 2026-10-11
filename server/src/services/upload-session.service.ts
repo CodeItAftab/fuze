@@ -6,7 +6,7 @@ import {
   fileChunks,
   providerIdentities,
 } from "../db/index.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { ChunkDecisionService } from "./chunk-decision.service.js";
 import { TokenService } from "./token.service.js";
 import { getStorageAdapter } from "../adapters/factory.js";
@@ -221,7 +221,7 @@ export class UploadSessionService {
       })
       .returning();
 
-    // 2. Link fileChunks to permanent VFS node
+    // 2. Link fileChunks to permanent VFS node and update provider quotaUsed
     for (const c of chunks) {
       await db.insert(fileChunks).values({
         vfsNodeId: vfsNode!.id,
@@ -232,6 +232,15 @@ export class UploadSessionService {
         chunkHash: c.chunkHash!,
         chunkIndex: c.chunkIndex,
       });
+
+      const chunkSize = c.byteEnd - c.byteStart + 1;
+      await db
+        .update(providerIdentities)
+        .set({
+          quotaUsed: sql`${providerIdentities.quotaUsed} + ${chunkSize}`,
+          lastSyncedAt: new Date(),
+        })
+        .where(eq(providerIdentities.id, c.providerIdentityId));
     }
 
     // 3. Mark upload session completed
@@ -240,13 +249,53 @@ export class UploadSessionService {
       .set({ status: "completed", merkleRoot, updatedAt: new Date() })
       .where(eq(uploadSessions.id, sessionId));
 
-    // 4. Broadcast live update to all user tabs / devices
+    // 4. Compute providerBadge for newly created file
+    const identities = await db
+      .select({ id: providerIdentities.id, provider: providerIdentities.provider })
+      .from(providerIdentities)
+      .where(
+        inArray(
+          providerIdentities.id,
+          chunks.map((c) => c.providerIdentityId),
+        ),
+      );
+    const idToProvider = new Map(identities.map((i) => [i.id, i.provider]));
+    const chunkProviders = chunks.map(
+      (c) => idToProvider.get(c.providerIdentityId) || "cloud",
+    );
+    const unique = new Set(chunkProviders);
+    let providerBadge = "Zero-Proxy Cloud";
+    if (unique.size === 1) {
+      const prov = Array.from(unique)[0];
+      const nameMap: Record<string, string> = {
+        google_drive: "Google Drive (Whole)",
+        one_drive: "OneDrive (Whole)",
+        dropbox: "Dropbox (Whole)",
+        pcloud: "pCloud (Whole)",
+        box: "Box (Whole)",
+      };
+      providerBadge = nameMap[prov] || `${prov} (Whole)`;
+    } else if (unique.size > 1) {
+      providerBadge = `Multi-Cloud (${unique.size} Providers)`;
+    }
+
+    const payload = {
+      ...vfsNode!,
+      providerBadge,
+    };
+
+    // 5. Broadcast live updates to all user tabs / devices
     socketManager.broadcastToUser(session.userId, {
       type: "FILE_CREATED",
-      payload: vfsNode,
+      payload,
     });
 
-    return vfsNode;
+    socketManager.broadcastToUser(session.userId, {
+      type: "QUOTA_UPDATED",
+      payload: {},
+    });
+
+    return payload;
   }
 
   static async abortSession(sessionId: string, userId?: string) {

@@ -1,3 +1,5 @@
+import { useDriveStore } from "@/stores/drive.store";
+
 export interface QueueItem {
   id: string;
   file: File;
@@ -493,6 +495,12 @@ export class UploadQueueManager {
       const errJson = await finalizeRes.json().catch(() => ({}));
       throw new Error(errJson.error || "Failed to finalize file upload");
     }
+
+    const finalizeData = await finalizeRes.json().catch(() => ({}));
+    if (finalizeData?.file) {
+      useDriveStore.getState().addItem(finalizeData.file);
+    }
+    void useDriveStore.getState().refreshProviders();
   }
 }
 
