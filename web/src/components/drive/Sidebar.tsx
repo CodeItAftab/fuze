@@ -124,8 +124,8 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
             </button>
           </div>
 
-          {/* New Upload Button & Dropdown */}
-          <div className="relative">
+          {/* New Upload Button & Dropdown (Hidden on mobile where FAB is used) */}
+          <div className="relative hidden lg:block">
             {user?.emailVerified === true ? (
               <button
                 onClick={() => setShowNewMenu(!showNewMenu)}

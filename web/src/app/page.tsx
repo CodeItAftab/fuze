@@ -16,6 +16,7 @@ import {
   Image as ImageIcon,
   MoreVertical,
   Check,
+  Settings,
 } from "lucide-react";
 
 interface Provider {
@@ -233,7 +234,7 @@ export default function HomePage() {
                     <Cloud className="h-4 w-4" /> Connected Clouds
                   </div>
                   <div className="flex items-center gap-2 px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-md">
-                    <ShieldCheck className="h-4 w-4" /> Security & Keys
+                    <Settings className="h-4 w-4" /> Settings
                   </div>
                 </div>
               </div>

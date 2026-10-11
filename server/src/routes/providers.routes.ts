@@ -116,6 +116,36 @@ export async function providerRoutes(fastify: FastifyInstance) {
     }
 
     const { provider } = request.params;
+
+    let canonicalProvider: SupportedProvider = "google_drive";
+    if (provider === "google" || provider === "google_drive") canonicalProvider = "google_drive";
+    else if (provider === "onedrive" || provider === "one_drive") canonicalProvider = "one_drive";
+    else if (provider === "dropbox") canonicalProvider = "dropbox";
+    else if (provider === "box") canonicalProvider = "box";
+    else if (provider === "pcloud") canonicalProvider = "pcloud";
+
+    // Enforce single-account per provider: Check if user already linked this provider
+    const [existingProvider] = await db
+      .select({ id: providerIdentities.id })
+      .from(providerIdentities)
+      .where(
+        and(
+          eq(providerIdentities.userId, userId),
+          eq(providerIdentities.provider, canonicalProvider),
+        ),
+      );
+
+    if (existingProvider) {
+      const displayName = canonicalProvider
+        .replace("_", " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+      return reply.redirect(
+        `${clientOrigin}/dashboard/storage?error=${encodeURIComponent(
+          `You already have a connected ${displayName} account. Only one account per provider is supported.`,
+        )}`,
+      );
+    }
+
     const state = crypto.randomBytes(24).toString("hex");
 
     // Store CSRF state in Redis for 10 minutes linked to user

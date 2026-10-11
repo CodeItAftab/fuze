@@ -6,7 +6,7 @@ import { useAuthStore } from "@/stores/auth.store";
 import { Sidebar } from "@/components/drive/Sidebar";
 import { VerificationBanner } from "@/components/drive/VerificationBanner";
 import { DisconnectModal } from "@/components/drive/DisconnectModal";
-import { RefreshCw, Plus, Trash2, Cloud, Menu, Lock } from "lucide-react";
+import { RefreshCw, Plus, Trash2, Cloud, Menu, Lock, Check, AlertCircle } from "lucide-react";
 
 export default function StorageProvidersPage() {
   const {
@@ -18,6 +18,7 @@ export default function StorageProvidersPage() {
   const { user } = useAuthStore();
   const isVerified = user?.emailVerified === true;
   const [isSyncing, setIsSyncing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [disconnectingProvider, setDisconnectingProvider] =
     useState<ProviderSummary | null>(null);
 
@@ -25,6 +26,15 @@ export default function StorageProvidersPage() {
 
   useEffect(() => {
     void refreshProviders();
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const err = params.get("error");
+      if (err) {
+        setErrorMessage(err);
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, "", newUrl);
+      }
+    }
   }, [refreshProviders]);
 
   const handleSyncAll = async () => {
@@ -126,6 +136,23 @@ export default function StorageProvidersPage() {
               <span>{isSyncing ? "Syncing..." : "Sync Storage Quotas"}</span>
             </button>
           </div>
+
+          {/* Error Alert Banner */}
+          {errorMessage && (
+            <div className="mb-5 p-3.5 rounded-xl bg-amber-50/90 border border-amber-200/80 text-amber-800 text-xs flex items-center justify-between shadow-2xs animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+              <button
+                onClick={() => setErrorMessage(null)}
+                className="text-amber-600 hover:text-amber-800 p-1 rounded-md hover:bg-amber-100 transition cursor-pointer"
+                title="Dismiss"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {/* Unified Pool Summary Card */}
           <div className="bg-white rounded-xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs mb-6 sm:mb-8">
@@ -282,22 +309,23 @@ export default function StorageProvidersPage() {
                     </div>
                     <p className="text-[11px] text-slate-500 leading-relaxed mb-4">
                       {cloud.connected
-                        ? `Connect another ${cloud.name} account to add more pooled storage.`
+                        ? "Account connected and actively contributing to your unified storage pool."
                         : "Connect your account to immediately expand your pooled VFS capacity."}
                     </p>
                   </div>
 
-                  {isVerified ? (
+                  {cloud.connected ? (
+                    <div className="w-full py-2 px-3 rounded-xl bg-slate-100 text-slate-500 font-medium text-xs flex items-center justify-center gap-1.5 cursor-default select-none border border-slate-200/60">
+                      <Check className="h-3.5 w-3.5 text-blue-600" />
+                      <span className="font-semibold text-slate-700">Connected</span>
+                    </div>
+                  ) : isVerified ? (
                     <a
                       href={`${apiUrl}/providers/${cloud.id}/connect`}
                       className="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition text-center cursor-pointer"
                     >
                       <Plus className="h-3.5 w-3.5" />
-                      <span>
-                        {cloud.connected
-                          ? `Add Another ${cloud.name.split(" ")[0]}`
-                          : `Connect ${cloud.name.split(" ")[0]}`}
-                      </span>
+                      <span>Connect {cloud.name.split(" ")[0]}</span>
                     </a>
                   ) : (
                     <div className="w-full py-2 px-3 rounded-xl bg-slate-100 text-slate-400 font-semibold text-xs flex items-center justify-center gap-1.5 text-center cursor-not-allowed select-none">
