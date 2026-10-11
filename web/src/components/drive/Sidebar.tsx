@@ -15,6 +15,7 @@ import {
   LogOut,
   Layers,
   X,
+  Lock,
 } from "lucide-react";
 import { useDriveStore } from "@/stores/drive.store";
 import { useAuthStore } from "@/stores/auth.store";
@@ -140,15 +141,25 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
 
         {/* New Action Dropdown (Only visible on desktop/large screens) */}
         <div className="hidden lg:block p-4 relative">
-          <button
-            onClick={() => setShowNewMenu(!showNewMenu)}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-xs font-semibold text-xs transition cursor-pointer"
-          >
-            <Plus className="h-4 w-4" />
-            <span>New Upload</span>
-          </button>
+          {user?.emailVerified === true ? (
+            <button
+              onClick={() => setShowNewMenu(!showNewMenu)}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-xs font-semibold text-xs transition cursor-pointer"
+            >
+              <Plus className="h-4 w-4" />
+              <span>New Upload</span>
+            </button>
+          ) : (
+            <div
+              title="Please verify your email address to upload files"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-slate-100 text-slate-400 rounded-xl font-semibold text-xs cursor-not-allowed select-none"
+            >
+              <Lock className="h-3.5 w-3.5" />
+              <span>Uploads Locked</span>
+            </div>
+          )}
 
-          {showNewMenu && (
+          {showNewMenu && user?.emailVerified === true && (
             <div className="absolute top-16 left-4 right-4 bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 z-50 text-xs animate-in fade-in zoom-in-95 duration-100">
               <label className="flex items-center gap-2.5 px-3.5 py-2 hover:bg-slate-50 cursor-pointer text-slate-700">
                 <Upload className="h-4 w-4 text-blue-600" />

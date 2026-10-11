@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useDriveStore, ProviderSummary } from "@/stores/drive.store";
+import { useAuthStore } from "@/stores/auth.store";
 import { Sidebar } from "@/components/drive/Sidebar";
+import { VerificationBanner } from "@/components/drive/VerificationBanner";
 import { DisconnectModal } from "@/components/drive/DisconnectModal";
-import { RefreshCw, Plus, Trash2, Cloud, Menu } from "lucide-react";
+import { RefreshCw, Plus, Trash2, Cloud, Menu, Lock } from "lucide-react";
 
 export default function StorageProvidersPage() {
   const {
@@ -13,6 +15,8 @@ export default function StorageProvidersPage() {
     refreshProviders,
     setMobileSidebarOpen,
   } = useDriveStore();
+  const { user } = useAuthStore();
+  const isVerified = user?.emailVerified === true;
   const [isSyncing, setIsSyncing] = useState(false);
   const [disconnectingProvider, setDisconnectingProvider] =
     useState<ProviderSummary | null>(null);
@@ -94,6 +98,7 @@ export default function StorageProvidersPage() {
       <Sidebar onNewFolderClick={() => {}} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <VerificationBanner />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 w-full max-w-7xl">
           {/* Header with Integrated Mobile Menu & Sync Button */}
           <div className="flex items-center justify-between gap-3 mb-6 sm:mb-8">
@@ -282,17 +287,24 @@ export default function StorageProvidersPage() {
                     </p>
                   </div>
 
-                  <a
-                    href={`${apiUrl}/providers/${cloud.id}/connect`}
-                    className="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition text-center cursor-pointer"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    <span>
-                      {cloud.connected
-                        ? `Add Another ${cloud.name.split(" ")[0]}`
-                        : `Connect ${cloud.name.split(" ")[0]}`}
-                    </span>
-                  </a>
+                  {isVerified ? (
+                    <a
+                      href={`${apiUrl}/providers/${cloud.id}/connect`}
+                      className="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition text-center cursor-pointer"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>
+                        {cloud.connected
+                          ? `Add Another ${cloud.name.split(" ")[0]}`
+                          : `Connect ${cloud.name.split(" ")[0]}`}
+                      </span>
+                    </a>
+                  ) : (
+                    <div className="w-full py-2 px-3 rounded-xl bg-slate-100 text-slate-400 font-semibold text-xs flex items-center justify-center gap-1.5 text-center cursor-not-allowed select-none">
+                      <Lock className="h-3.5 w-3.5" />
+                      <span>Verify Email to Connect</span>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

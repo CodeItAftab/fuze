@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import crypto from "node:crypto";
 import {
   db,
+  users,
   providerIdentities,
   fileChunks,
   uploadChunks,
@@ -96,6 +97,21 @@ export async function providerRoutes(fastify: FastifyInstance) {
       const clientOrigin = process.env.CLIENT_ORIGIN || "http://localhost:3000";
       return reply.redirect(
         `${clientOrigin}/login?redirect=${encodeURIComponent("/dashboard/storage")}`,
+      );
+    }
+
+    // Verify user is email verified before allowing provider linking
+    const [dbUser] = await db
+      .select({ id: users.id, emailVerified: users.emailVerified })
+      .from(users)
+      .where(eq(users.id, userId));
+
+    const clientOrigin = process.env.CLIENT_ORIGIN || "http://localhost:3000";
+    if (!dbUser || !dbUser.emailVerified) {
+      return reply.redirect(
+        `${clientOrigin}/dashboard/storage?error=${encodeURIComponent(
+          "Please verify your email address before connecting cloud storage providers.",
+        )}`,
       );
     }
 

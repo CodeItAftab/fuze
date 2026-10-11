@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useDriveStore, VfsItem } from "@/stores/drive.store";
+import { useAuthStore } from "@/stores/auth.store";
 import { uploadQueueManager } from "@/lib/upload-queue";
 import { socketClient } from "@/lib/socket";
 import { Sidebar } from "@/components/drive/Sidebar";
+import { VerificationBanner } from "@/components/drive/VerificationBanner";
 import { UploadWidget } from "@/components/upload/UploadWidget";
 import { ContextMenu } from "@/components/drive/ContextMenu";
 import { FileDetailsModal } from "@/components/drive/FileDetailsModal";
@@ -191,10 +193,15 @@ export default function DashboardPage() {
     };
   }, [apiUrl]);
 
+  const { user } = useAuthStore();
+  const isVerified = user?.emailVerified === true;
+
   // 2. Drag & Drop Support
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(true);
+    if (isVerified) {
+      setIsDragging(true);
+    }
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
@@ -205,6 +212,10 @@ export default function DashboardPage() {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
+    if (!isVerified) {
+      alert("Please verify your email address to upload files.");
+      return;
+    }
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       uploadQueueManager.addFiles(
         Array.from(e.dataTransfer.files),
@@ -215,6 +226,11 @@ export default function DashboardPage() {
 
   // Mobile file input selection
   const handleMobileFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isVerified) {
+      alert("Please verify your email address to upload files.");
+      setShowMobileActionSheet(false);
+      return;
+    }
     if (e.target.files && e.target.files.length > 0) {
       uploadQueueManager.addFiles(Array.from(e.target.files), currentFolderId);
       e.target.value = "";
@@ -388,6 +404,7 @@ export default function DashboardPage() {
       <Sidebar onNewFolderClick={() => setShowFolderModal(true)} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <VerificationBanner />
         {isDragging && (
           <div className="absolute inset-0 bg-blue-600/10 border-2 border-dashed border-blue-600 z-50 flex items-center justify-center backdrop-blur-xs pointer-events-none p-4">
             <div className="bg-white p-6 rounded-2xl shadow-xl flex items-center gap-3 text-blue-600 font-bold text-sm">

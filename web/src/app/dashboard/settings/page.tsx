@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Sidebar } from "@/components/drive/Sidebar";
+import { VerificationBanner } from "@/components/drive/VerificationBanner";
 import { useAuthStore } from "@/stores/auth.store";
 import { useDriveStore } from "@/stores/drive.store";
 import {
@@ -133,6 +134,7 @@ export default function SettingsPage() {
       <Sidebar onNewFolderClick={() => {}} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <VerificationBanner />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 w-full max-w-7xl">
           {/* Header with Integrated Mobile Menu */}
           <div className="flex items-center gap-2.5 mb-6 sm:mb-8">

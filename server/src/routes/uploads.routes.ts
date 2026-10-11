@@ -1,5 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { UploadSessionService } from "../services/upload-session.service.js";
+import { db, users } from "../db/index.js";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 const createSessionSchema = z.object({
@@ -10,7 +12,7 @@ const createSessionSchema = z.object({
 });
 
 export async function uploadRoutes(fastify: FastifyInstance) {
-  // Pre-handler hook to authenticate user
+  // Pre-handler hook to authenticate user and verify email
   fastify.addHook(
     "preHandler",
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -18,6 +20,19 @@ export async function uploadRoutes(fastify: FastifyInstance) {
         await request.jwtVerify();
       } catch {
         return reply.status(401).send({ error: "Unauthorized" });
+      }
+
+      const user = request.user as { userId: string };
+      const [dbUser] = await db
+        .select({ emailVerified: users.emailVerified })
+        .from(users)
+        .where(eq(users.id, user.userId));
+
+      if (!dbUser || !dbUser.emailVerified) {
+        return reply.status(403).send({
+          error: "Please verify your email address to upload files.",
+          unverified: true,
+        });
       }
     },
   );

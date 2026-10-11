@@ -43,6 +43,17 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
   passwordHash: text("password_hash"),
+  emailVerified: boolean("email_verified").default(false).notNull(),
+  verificationToken: text("verification_token"),
+  rawVerificationToken: text("raw_verification_token"),
+  verificationCode: text("verification_code"),
+  verificationExpiresAt: timestamp("verification_expires_at", {
+    withTimezone: true,
+  }),
+  passwordResetToken: text("password_reset_token"),
+  passwordResetExpiresAt: timestamp("password_reset_expires_at", {
+    withTimezone: true,
+  }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
