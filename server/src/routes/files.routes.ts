@@ -48,11 +48,12 @@ export async function fileRoutes(fastify: FastifyInstance) {
       reply,
     ) => {
       const user = request.user as { userId: string };
-      const items = await VfsService.listChildren(
-        user.userId,
-        request.query.parentId || null,
-      );
-      return reply.send({ items });
+      const parentId = request.query.parentId || null;
+      const [items, breadcrumbs] = await Promise.all([
+        VfsService.listChildren(user.userId, parentId),
+        VfsService.getBreadcrumbs(user.userId, parentId),
+      ]);
+      return reply.send({ items, breadcrumbs });
     },
   );
 

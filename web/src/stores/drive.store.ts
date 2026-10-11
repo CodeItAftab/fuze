@@ -11,6 +11,7 @@ export interface VfsItem {
   trashedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  providerBadge?: string | null;
 }
 
 export interface ProviderSummary {
@@ -47,6 +48,7 @@ interface DriveState {
   isMobileSidebarOpen: boolean;
 
   setCurrentFolder: (id: string | null, name?: string) => void;
+  setBreadcrumbs: (breadcrumbs: Array<{ id: string | null; name: string }>) => void;
   setItems: (items: VfsItem[]) => void;
   addItem: (item: VfsItem) => void;
   removeItem: (id: string) => void;
@@ -96,6 +98,8 @@ export const useDriveStore = create<DriveState>((set, get) => ({
       });
     }
   },
+
+  setBreadcrumbs: (breadcrumbs) => set({ breadcrumbs }),
 
   setItems: (items) => set({ items }),
   addItem: (item) => {

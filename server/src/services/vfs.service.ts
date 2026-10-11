@@ -1,5 +1,5 @@
 import { db, vfsNodes, fileChunks, providerIdentities } from "../db/index.js";
-import { eq, and, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, inArray } from "drizzle-orm";
 import { TokenService } from "./token.service.js";
 import { GoogleDriveAdapter } from "../adapters/gdrive.adapter.js";
 import { socketManager } from "../websocket/socket-manager.js";
@@ -11,7 +11,7 @@ export class VfsService {
       ? eq(vfsNodes.parentId, parentId)
       : isNull(vfsNodes.parentId);
 
-    return db
+    const nodes = await db
       .select()
       .from(vfsNodes)
       .where(
@@ -21,6 +21,86 @@ export class VfsService {
           isNull(vfsNodes.trashedAt),
         ),
       );
+
+    const fileIds = nodes.filter((n) => n.type === "file").map((n) => n.id);
+    const chunksByFile = new Map<string, Array<{ provider: string }>>();
+
+    if (fileIds.length > 0) {
+      const chunks = await db
+        .select({
+          vfsNodeId: fileChunks.vfsNodeId,
+          provider: providerIdentities.provider,
+        })
+        .from(fileChunks)
+        .innerJoin(
+          providerIdentities,
+          eq(fileChunks.providerIdentityId, providerIdentities.id),
+        )
+        .where(inArray(fileChunks.vfsNodeId, fileIds));
+
+      for (const c of chunks) {
+        if (!chunksByFile.has(c.vfsNodeId)) {
+          chunksByFile.set(c.vfsNodeId, []);
+        }
+        chunksByFile.get(c.vfsNodeId)!.push({ provider: c.provider });
+      }
+    }
+
+    const items = nodes.map((node) => {
+      if (node.type === "folder") {
+        return { ...node, providerBadge: null };
+      }
+      const chunks = chunksByFile.get(node.id) || [];
+      let providerBadge = "Zero-Proxy Cloud";
+      if (chunks.length === 1) {
+        const prov = chunks[0].provider;
+        const nameMap: Record<string, string> = {
+          google_drive: "Google Drive (Whole)",
+          one_drive: "OneDrive (Whole)",
+          dropbox: "Dropbox (Whole)",
+          pcloud: "pCloud (Whole)",
+          box: "Box (Whole)",
+        };
+        providerBadge = nameMap[prov] || `${prov} (Whole)`;
+      } else if (chunks.length > 1) {
+        const unique = new Set(chunks.map((c) => c.provider));
+        providerBadge = `Multi-Cloud (${unique.size} Providers)`;
+      }
+      return {
+        ...node,
+        providerBadge,
+      };
+    });
+
+    return items;
+  }
+
+  static async getBreadcrumbs(userId: string, folderId: string | null = null) {
+    if (!folderId) {
+      return [{ id: null, name: "My Drive" }];
+    }
+
+    const crumbs: Array<{ id: string | null; name: string }> = [];
+    let currId: string | null = folderId;
+    const visited = new Set<string>();
+
+    while (currId && !visited.has(currId)) {
+      visited.add(currId);
+      const [node] = await db
+        .select({
+          id: vfsNodes.id,
+          name: vfsNodes.name,
+          parentId: vfsNodes.parentId,
+        })
+        .from(vfsNodes)
+        .where(and(eq(vfsNodes.id, currId), eq(vfsNodes.userId, userId)));
+
+      if (!node) break;
+      crumbs.unshift({ id: node.id, name: node.name });
+      currId = node.parentId;
+    }
+
+    return [{ id: null, name: "My Drive" }, ...crumbs];
   }
 
   static async listTrash(userId: string) {
