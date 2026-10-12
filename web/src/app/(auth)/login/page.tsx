@@ -260,6 +260,7 @@ function LoginForm() {
                       <input
                         type="text"
                         required
+                        autoComplete="name"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder="Alex Morgan"
@@ -278,6 +279,7 @@ function LoginForm() {
                     <input
                       type="email"
                       required
+                      autoComplete="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="alex@example.com"
@@ -306,6 +308,7 @@ function LoginForm() {
                       type="password"
                       required
                       minLength={8}
+                      autoComplete={isRegister ? "new-password" : "current-password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
