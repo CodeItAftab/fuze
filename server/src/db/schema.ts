@@ -98,6 +98,7 @@ export const providerIdentities = pgTable("provider_identities", {
   }).notNull(),
   quotaTotal: bigint("quota_total", { mode: "number" }).default(0).notNull(),
   quotaUsed: bigint("quota_used", { mode: "number" }).default(0).notNull(),
+  isRevoked: boolean("is_revoked").default(false).notNull(),
   lastSyncedAt: timestamp("last_synced_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -143,7 +144,9 @@ export const uploadSessions = pgTable("upload_sessions", {
   userId: uuid("user_id")
     .references(() => users.id, { onDelete: "cascade" })
     .notNull(),
-  parentId: uuid("parent_id").references(() => vfsNodes.id),
+  parentId: uuid("parent_id").references(() => vfsNodes.id, {
+    onDelete: "set null",
+  }),
   fileName: text("file_name").notNull(),
   mimeType: text("mime_type").notNull(),
   totalSize: bigint("total_size", { mode: "number" }).notNull(),

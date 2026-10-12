@@ -9,7 +9,8 @@ export type SyncEventType =
   | "PROVIDER_CONNECTED"
   | "PROVIDER_DISCONNECTED"
   | "PROVIDER_CLEANUP_PROGRESS"
-  | "SESSION_REVOKED";
+  | "SESSION_REVOKED"
+  | "PROVIDER_STATUS_CHANGED";
 
 export interface SyncEvent {
   type: SyncEventType;

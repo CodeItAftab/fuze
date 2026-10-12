@@ -20,6 +20,7 @@ export interface ProviderSummary {
   accountEmail: string | null;
   quotaTotal: number;
   quotaUsed: number;
+  isRevoked?: boolean;
 }
 
 export interface StorageSummary {

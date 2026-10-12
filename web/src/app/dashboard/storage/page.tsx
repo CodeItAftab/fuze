@@ -6,7 +6,7 @@ import { useAuthStore } from "@/stores/auth.store";
 import { Sidebar } from "@/components/drive/Sidebar";
 import { VerificationBanner } from "@/components/drive/VerificationBanner";
 import { DisconnectModal } from "@/components/drive/DisconnectModal";
-import { RefreshCw, Plus, Trash2, Cloud, Menu, Lock, Check, AlertCircle } from "lucide-react";
+import { RefreshCw, Plus, Trash2, Cloud, Menu, Lock, Check, AlertCircle, AlertTriangle } from "lucide-react";
 
 export default function StorageProvidersPage() {
   const {
@@ -19,6 +19,7 @@ export default function StorageProvidersPage() {
   const isVerified = user?.emailVerified === true;
   const [isSyncing, setIsSyncing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [disconnectingProvider, setDisconnectingProvider] =
     useState<ProviderSummary | null>(null);
 
@@ -29,8 +30,16 @@ export default function StorageProvidersPage() {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const err = params.get("error");
+      const connected = params.get("connected");
       if (err) {
         setErrorMessage(err);
+      }
+      if (connected) {
+        setSuccessMessage(
+          `Successfully connected ${connected.replace("_", " ").toUpperCase()}!`,
+        );
+      }
+      if (err || connected) {
         const newUrl = window.location.pathname;
         window.history.replaceState({}, "", newUrl);
       }
@@ -39,12 +48,24 @@ export default function StorageProvidersPage() {
 
   const handleSyncAll = async () => {
     setIsSyncing(true);
+    setErrorMessage(null);
     try {
-      await fetch(`${apiUrl}/providers/sync`, {
+      const res = await fetch(`${apiUrl}/providers/sync`, {
         method: "POST",
         credentials: "include",
       });
+      const data = await res.json();
       await refreshProviders();
+      const newlyRevoked = data.results?.filter((r: any) => r.isRevoked);
+      if (newlyRevoked && newlyRevoked.length > 0) {
+        setErrorMessage(
+          `Connection check detected ${newlyRevoked.length} revoked or expired account(s): ${newlyRevoked.map((r: any) => r.provider.toUpperCase()).join(", ")}. Please reconnect them.`,
+        );
+      } else {
+        setSuccessMessage("All connected cloud storage accounts are healthy and quotas synchronized.");
+      }
+    } catch {
+      setErrorMessage("Failed to check provider health and quotas.");
     } finally {
       setIsSyncing(false);
     }
@@ -72,36 +93,44 @@ export default function StorageProvidersPage() {
         )
       : 0;
 
+  const revokedProviders = providers.filter((p) => p.isRevoked);
+
   const availableClouds = [
     {
       id: "google",
       name: "Google Drive",
       freeTier: "+15 GB Free",
       color: "border-emerald-200 bg-emerald-50/40 text-emerald-700",
-      connected: providers.some((p) => p.provider === "google_drive"),
+      connectedProvider: providers.find((p) => p.provider === "google_drive"),
     },
     {
       id: "onedrive",
       name: "Microsoft OneDrive",
       freeTier: "+5 GB Free",
       color: "border-blue-200 bg-blue-50/40 text-blue-700",
-      connected: providers.some((p) => p.provider === "one_drive"),
+      connectedProvider: providers.find((p) => p.provider === "one_drive"),
     },
     {
       id: "dropbox",
       name: "Dropbox",
       freeTier: "+2 GB Free",
       color: "border-sky-200 bg-sky-50/40 text-sky-700",
-      connected: providers.some((p) => p.provider === "dropbox"),
+      connectedProvider: providers.find((p) => p.provider === "dropbox"),
     },
     {
       id: "box",
       name: "Box",
       freeTier: "+10 GB Free",
       color: "border-indigo-200 bg-indigo-50/40 text-indigo-700",
-      connected: providers.some((p) => p.provider === "box"),
+      connectedProvider: providers.find((p) => p.provider === "box"),
     },
   ];
+
+  const providerToSlug = (provider: string) => {
+    if (provider === "google_drive") return "google";
+    if (provider === "one_drive") return "onedrive";
+    return provider; // "dropbox", "box"
+  };
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
@@ -109,7 +138,7 @@ export default function StorageProvidersPage() {
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white">
         <VerificationBanner />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 w-full max-w-7xl">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-24 sm:pb-8 w-full max-w-7xl">
           {/* Header with Integrated Mobile Menu & Sync Button */}
           <div className="flex items-center justify-between gap-3 pb-3 sm:pb-4 border-b border-slate-100 mb-5 sm:mb-6">
             <div className="flex items-center gap-2.5 shrink-0">
@@ -129,13 +158,53 @@ export default function StorageProvidersPage() {
               onClick={handleSyncAll}
               disabled={isSyncing}
               className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-lg text-xs font-medium text-slate-700 shadow-2xs transition cursor-pointer flex items-center gap-1.5 shrink-0"
+              title="Verify provider connections and synchronize quotas"
             >
               <RefreshCw
                 className={`h-3 w-3 ${isSyncing ? "animate-spin text-blue-600" : "text-slate-400"}`}
               />
-              <span>{isSyncing ? "Syncing..." : "Sync Storage Quotas"}</span>
+              <span>{isSyncing ? "Checking Health..." : "Check Status & Sync"}</span>
             </button>
           </div>
+
+          {/* Persistent Revocation Warning Banner */}
+          {revokedProviders.length > 0 && (
+            <div className="mb-5 p-4 rounded-xl bg-amber-50/95 border border-amber-300 text-amber-900 text-xs shadow-2xs animate-in fade-in">
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 rounded-lg bg-amber-100 border border-amber-200 text-amber-700 shrink-0 mt-0.5">
+                  <AlertTriangle className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-amber-950 text-xs sm:text-sm mb-1">
+                    Action Required: {revokedProviders.length} Cloud Connection{revokedProviders.length > 1 ? "s" : ""} Expired or Revoked
+                  </div>
+                  <p className="text-[11px] sm:text-xs text-amber-800 leading-relaxed mb-2.5">
+                    {revokedProviders
+                      .map(
+                        (rp) =>
+                          `${rp.provider.replace("_", " ").toUpperCase()}${
+                            rp.accountEmail ? ` (${rp.accountEmail})` : ""
+                          }`,
+                      )
+                      .join(", ")}{" "}
+                    authentication tokens have expired or were revoked. You must reconnect using the <strong>same account</strong> so your existing files remain accessible.
+                  </p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {revokedProviders.map((rp) => (
+                      <a
+                        key={rp.id}
+                        href={`${apiUrl}/providers/${providerToSlug(rp.provider)}/reconnect`}
+                        className="px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-[11px] shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                        <span>Reconnect {rp.provider.replace("_", " ")}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Error Alert Banner */}
           {errorMessage && (
@@ -147,6 +216,23 @@ export default function StorageProvidersPage() {
               <button
                 onClick={() => setErrorMessage(null)}
                 className="text-amber-600 hover:text-amber-800 p-1 rounded-md hover:bg-amber-100 transition cursor-pointer"
+                title="Dismiss"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Success Alert Banner */}
+          {successMessage && (
+            <div className="mb-5 p-3.5 rounded-xl bg-emerald-50/90 border border-emerald-200/80 text-emerald-800 text-xs flex items-center justify-between shadow-2xs animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <Check className="h-4 w-4 text-emerald-600 shrink-0" />
+                <span>{successMessage}</span>
+              </div>
+              <button
+                onClick={() => setSuccessMessage(null)}
+                className="text-emerald-600 hover:text-emerald-800 p-1 rounded-md hover:bg-emerald-100 transition cursor-pointer"
                 title="Dismiss"
               >
                 ✕
@@ -231,19 +317,42 @@ export default function StorageProvidersPage() {
                           Math.round((p.quotaUsed / p.quotaTotal) * 100),
                         )
                       : 0;
+                  const isRevoked = p.isRevoked === true;
+
                   return (
                     <div
                       key={p.id}
-                      className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs hover:border-slate-300 transition flex flex-col justify-between"
+                      className={`bg-white rounded-2xl border p-4 sm:p-5 shadow-2xs transition flex flex-col justify-between ${
+                        isRevoked
+                          ? "border-amber-300 bg-amber-50/20 ring-1 ring-amber-300/40"
+                          : "border-slate-200/90 hover:border-slate-300"
+                      }`}
                     >
-                      <div className="flex items-start justify-between gap-3 mb-4">
+                      <div className="flex items-start justify-between gap-3 mb-3">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="h-10 w-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
-                            <Cloud className="h-5 w-5 text-blue-600" />
+                          <div
+                            className={`h-10 w-10 rounded-xl border flex items-center justify-center shrink-0 ${
+                              isRevoked
+                                ? "bg-amber-100 border-amber-200 text-amber-700"
+                                : "bg-slate-50 border-slate-100 text-blue-600"
+                            }`}
+                          >
+                            {isRevoked ? (
+                              <AlertTriangle className="h-5 w-5" />
+                            ) : (
+                              <Cloud className="h-5 w-5" />
+                            )}
                           </div>
                           <div className="min-w-0">
-                            <div className="font-bold text-xs text-slate-900 capitalize">
-                              {p.provider.replace("_", " ")}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-xs text-slate-900 capitalize">
+                                {p.provider.replace("_", " ")}
+                              </span>
+                              {isRevoked && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                  Revoked
+                                </span>
+                              )}
                             </div>
                             <div className="text-[11px] text-slate-400 truncate">
                               {p.accountEmail || "Primary Account"}
@@ -251,14 +360,39 @@ export default function StorageProvidersPage() {
                           </div>
                         </div>
 
-                        <button
-                          onClick={() => setDisconnectingProvider(p)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer shrink-0"
-                          title="Disconnect Provider"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <a
+                            href={`${apiUrl}/providers/${providerToSlug(p.provider)}/reconnect`}
+                            className={`p-1.5 rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                              isRevoked
+                                ? "text-amber-700 hover:text-amber-900 hover:bg-amber-100"
+                                : "text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                            }`}
+                            title="Reconnect Account (refresh tokens)"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                          </a>
+                          <button
+                            onClick={() => setDisconnectingProvider(p)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer shrink-0"
+                            title="Disconnect Provider"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
+
+                      {isRevoked && (
+                        <div className="mb-3 p-2 rounded-lg bg-amber-100/70 border border-amber-200/80 text-[11px] text-amber-800 flex items-center justify-between gap-2">
+                          <span className="truncate">Connection revoked. Reconnect original account.</span>
+                          <a
+                            href={`${apiUrl}/providers/${providerToSlug(p.provider)}/reconnect`}
+                            className="px-2 py-1 rounded bg-amber-600 hover:bg-amber-700 text-white font-semibold text-[10px] shrink-0 transition"
+                          >
+                            Reconnect
+                          </a>
+                        </div>
+                      )}
 
                       {/* Quota metric */}
                       <div>
@@ -268,7 +402,9 @@ export default function StorageProvidersPage() {
                         </div>
                         <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-blue-600 rounded-full transition-all"
+                            className={`h-full rounded-full transition-all ${
+                              isRevoked ? "bg-amber-500" : "bg-blue-600"
+                            }`}
                             style={{ width: `${usedPct}%` }}
                           />
                         </div>
@@ -287,54 +423,85 @@ export default function StorageProvidersPage() {
             </h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 sm:gap-4">
-              {availableClouds.map((cloud) => (
-                <div
-                  key={cloud.id}
-                  className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs hover:border-slate-300 transition flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-2.5">
-                      <span className="text-xs font-bold text-slate-900">
-                        {cloud.name}
-                      </span>
-                      {cloud.connected ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/80">
-                          Connected
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          {cloud.freeTier}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-500 leading-relaxed mb-4">
-                      {cloud.connected
-                        ? "Account connected and actively contributing to your unified storage pool."
-                        : "Connect your account to immediately expand your pooled VFS capacity."}
-                    </p>
-                  </div>
+              {availableClouds.map((cloud) => {
+                const isConnected = !!cloud.connectedProvider;
+                const isRevoked = cloud.connectedProvider?.isRevoked === true;
 
-                  {cloud.connected ? (
-                    <div className="w-full py-2 px-3 rounded-xl bg-slate-100 text-slate-500 font-medium text-xs flex items-center justify-center gap-1.5 cursor-default select-none border border-slate-200/60">
-                      <Check className="h-3.5 w-3.5 text-blue-600" />
-                      <span className="font-semibold text-slate-700">Connected</span>
+                return (
+                  <div
+                    key={cloud.id}
+                    className={`bg-white rounded-2xl border p-4 sm:p-5 shadow-2xs hover:border-slate-300 transition flex flex-col justify-between ${
+                      isRevoked ? "border-amber-300 bg-amber-50/20" : "border-slate-200/90"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-2.5">
+                        <span className="text-xs font-bold text-slate-900">
+                          {cloud.name}
+                        </span>
+                        {isRevoked ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1 animate-pulse">
+                            <AlertTriangle className="h-3 w-3" />
+                            Revoked
+                          </span>
+                        ) : isConnected ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/80">
+                            Connected
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            {cloud.freeTier}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500 leading-relaxed mb-4">
+                        {isRevoked
+                          ? "Access token was revoked. Reconnect using the same account to restore access to stored chunks."
+                          : isConnected
+                          ? "Account connected and actively contributing to your unified storage pool."
+                          : "Connect your account to immediately expand your pooled VFS capacity."}
+                      </p>
                     </div>
-                  ) : isVerified ? (
-                    <a
-                      href={`${apiUrl}/providers/${cloud.id}/connect`}
-                      className="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition text-center cursor-pointer"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      <span>Connect {cloud.name.split(" ")[0]}</span>
-                    </a>
-                  ) : (
-                    <div className="w-full py-2 px-3 rounded-xl bg-slate-100 text-slate-400 font-semibold text-xs flex items-center justify-center gap-1.5 text-center cursor-not-allowed select-none">
-                      <Lock className="h-3.5 w-3.5" />
-                      <span>Verify Email to Connect</span>
-                    </div>
-                  )}
-                </div>
-              ))}
+
+                    {isRevoked ? (
+                      <a
+                        href={`${apiUrl}/providers/${cloud.id}/reconnect`}
+                        className="w-full py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition text-center cursor-pointer shadow-xs"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        <span>Reconnect {cloud.name.split(" ")[0]}</span>
+                      </a>
+                    ) : isConnected ? (
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 py-2 px-3 rounded-xl bg-slate-100 text-slate-500 font-medium text-xs flex items-center justify-center gap-1.5 cursor-default select-none border border-slate-200/60">
+                          <Check className="h-3.5 w-3.5 text-blue-600" />
+                          <span className="font-semibold text-slate-700">Connected</span>
+                        </div>
+                        <a
+                          href={`${apiUrl}/providers/${cloud.id}/reconnect`}
+                          className="py-2 px-3 rounded-xl bg-slate-50 hover:bg-blue-50 hover:text-blue-600 border border-slate-200 text-slate-700 font-semibold text-xs transition cursor-pointer text-center"
+                          title="Re-authenticate or update expired tokens"
+                        >
+                          Reconnect
+                        </a>
+                      </div>
+                    ) : isVerified ? (
+                      <a
+                        href={`${apiUrl}/providers/${cloud.id}/connect`}
+                        className="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition text-center cursor-pointer"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>Connect {cloud.name.split(" ")[0]}</span>
+                      </a>
+                    ) : (
+                      <div className="w-full py-2 px-3 rounded-xl bg-slate-100 text-slate-400 font-semibold text-xs flex items-center justify-center gap-1.5 text-center cursor-not-allowed select-none">
+                        <Lock className="h-3.5 w-3.5" />
+                        <span>Verify Email to Connect</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </main>

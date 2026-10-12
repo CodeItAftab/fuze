@@ -15,7 +15,7 @@ import { socketManager } from "../websocket/socket-manager.js";
 import { ProviderCleanupService } from "../services/provider-cleanup.service.js";
 import { providerMigrationQueue } from "../workers/provider-migration.worker.js";
 import IORedis from "ioredis";
-import { TokenService } from "../services/token.service.js";
+import { TokenService, ProviderAuthExpiredError } from "../services/token.service.js";
 
 const redis = new IORedis(process.env.REDIS_URL || "redis://localhost:6379");
 const COOKIE_NAME = "fuze_session";
@@ -40,6 +40,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
         accountEmail: providerIdentities.accountEmail,
         quotaTotal: providerIdentities.quotaTotal,
         quotaUsed: providerIdentities.quotaUsed,
+        isRevoked: providerIdentities.isRevoked,
         lastSyncedAt: providerIdentities.lastSyncedAt,
       })
       .from(providerIdentities)
@@ -76,14 +77,26 @@ export async function providerRoutes(fastify: FastifyInstance) {
     reply: FastifyReply,
   ) => {
     let userId: string | undefined;
-    const rawCookie = request.cookies[COOKIE_NAME];
-    if (rawCookie) {
-      const unsigned = request.unsignCookie(rawCookie);
-      const token = unsigned.valid && unsigned.value ? unsigned.value : rawCookie;
+
+    // Check query token fallback (useful if cross-origin cookies are restricted)
+    const queryToken = (request.query as any)?.token;
+    if (queryToken) {
       try {
-        const decoded = fastify.jwt.verify<{ userId: string }>(token);
+        const decoded = fastify.jwt.verify<{ userId: string }>(queryToken);
         userId = decoded.userId;
       } catch {}
+    }
+
+    if (!userId) {
+      const rawCookie = request.cookies[COOKIE_NAME];
+      if (rawCookie) {
+        const unsigned = request.unsignCookie(rawCookie);
+        const token = unsigned.valid && unsigned.value ? unsigned.value : rawCookie;
+        try {
+          const decoded = fastify.jwt.verify<{ userId: string }>(token);
+          userId = decoded.userId;
+        } catch {}
+      }
     }
 
     if (!userId) {
@@ -126,7 +139,10 @@ export async function providerRoutes(fastify: FastifyInstance) {
 
     // Enforce single-account per provider: Check if user already linked this provider
     const [existingProvider] = await db
-      .select({ id: providerIdentities.id })
+      .select({
+        id: providerIdentities.id,
+        accountEmail: providerIdentities.accountEmail,
+      })
       .from(providerIdentities)
       .where(
         and(
@@ -135,13 +151,18 @@ export async function providerRoutes(fastify: FastifyInstance) {
         ),
       );
 
-    if (existingProvider) {
+    const isReconnect =
+      request.url.includes("reconnect") ||
+      (request.query as any)?.reconnect === "true" ||
+      (request.query as any)?.reconnect === "1";
+
+    if (existingProvider && !isReconnect) {
       const displayName = canonicalProvider
         .replace("_", " ")
         .replace(/\b\w/g, (c) => c.toUpperCase());
       return reply.redirect(
         `${clientOrigin}/dashboard/storage?error=${encodeURIComponent(
-          `You already have a connected ${displayName} account. Only one account per provider is supported.`,
+          `You already have a connected ${displayName} account (${existingProvider.accountEmail || ""}). Click Reconnect to refresh tokens.`,
         )}`,
       );
     }
@@ -151,7 +172,13 @@ export async function providerRoutes(fastify: FastifyInstance) {
     // Store CSRF state in Redis for 10 minutes linked to user
     await redis.set(
       `oauth_state:${state}`,
-      JSON.stringify({ userId, provider }),
+      JSON.stringify({
+        userId,
+        provider,
+        returnUrl: "/dashboard/storage",
+        isReconnect,
+        existingEmail: existingProvider?.accountEmail,
+      }),
       "EX",
       600,
     );
@@ -172,6 +199,9 @@ export async function providerRoutes(fastify: FastifyInstance) {
           prompt: "consent",
           state,
         });
+        if (existingProvider?.accountEmail) {
+          params.set("login_hint", existingProvider.accountEmail);
+        }
         authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
         break;
       }
@@ -189,6 +219,9 @@ export async function providerRoutes(fastify: FastifyInstance) {
           prompt: "consent",
           state,
         });
+        if (existingProvider?.accountEmail) {
+          params.set("login_hint", existingProvider.accountEmail);
+        }
         authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params.toString()}`;
         break;
       }
@@ -205,6 +238,9 @@ export async function providerRoutes(fastify: FastifyInstance) {
             "account_info.read files.content.write files.content.read files.metadata.write files.metadata.read",
           state,
         });
+        if (existingProvider?.accountEmail) {
+          params.set("force_reapprove", "true");
+        }
         authUrl = `https://www.dropbox.com/oauth2/authorize?${params.toString()}`;
         break;
       }
@@ -218,6 +254,9 @@ export async function providerRoutes(fastify: FastifyInstance) {
           response_type: "code",
           state,
         });
+        if (existingProvider?.accountEmail) {
+          params.set("box_login", existingProvider.accountEmail);
+        }
         authUrl = `https://account.box.com/api/oauth2/authorize?${params.toString()}`;
         break;
       }
@@ -232,6 +271,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
   };
 
   fastify.get("/:provider/connect", handleOAuthConnect);
+  fastify.get("/:provider/reconnect", handleOAuthConnect);
   fastify.get("/:provider/auth", handleOAuthConnect);
 
   // -------------------------------------------------------------
@@ -252,19 +292,25 @@ export async function providerRoutes(fastify: FastifyInstance) {
 
       if (oauthError || !code || !state) {
         return reply.redirect(
-          `${clientOrigin}/dashboard?error=${encodeURIComponent(oauthError || "Auth denied")}`,
+          `${clientOrigin}/dashboard/storage?error=${encodeURIComponent(oauthError || "Authorization was denied or canceled.")}`,
         );
       }
 
       const stateDataRaw = await redis.get(`oauth_state:${state}`);
       if (!stateDataRaw) {
         return reply.redirect(
-          `${clientOrigin}/dashboard?error=Invalid_or_expired_state`,
+          `${clientOrigin}/dashboard/storage?error=${encodeURIComponent("Authorization session expired. Please try connecting again.")}`,
         );
       }
       await redis.del(`oauth_state:${state}`);
 
-      const { userId } = JSON.parse(stateDataRaw) as { userId: string };
+      const stateObj = JSON.parse(stateDataRaw) as {
+        userId: string;
+        returnUrl?: string;
+        isReconnect?: boolean;
+        existingEmail?: string;
+      };
+      const { userId } = stateObj;
 
       let accessToken = "";
       let refreshToken = "";
@@ -440,7 +486,10 @@ export async function providerRoutes(fastify: FastifyInstance) {
         const tokenExpiresAt = new Date(Date.now() + expiresIn * 1000);
 
         const [existing] = await db
-          .select({ id: providerIdentities.id })
+          .select({
+            id: providerIdentities.id,
+            accountEmail: providerIdentities.accountEmail,
+          })
           .from(providerIdentities)
           .where(
             and(
@@ -450,10 +499,26 @@ export async function providerRoutes(fastify: FastifyInstance) {
           );
 
         if (existing) {
+          const expectedEmail = existing.accountEmail || stateObj.existingEmail;
+          if (
+            expectedEmail &&
+            accountEmail &&
+            expectedEmail.trim().toLowerCase() !== accountEmail.trim().toLowerCase()
+          ) {
+            const displayName = canonicalProvider
+              .replace("_", " ")
+              .replace(/\b\w/g, (c) => c.toUpperCase());
+            return reply.redirect(
+              `${clientOrigin}/dashboard/storage?error=${encodeURIComponent(
+                `Account mismatch: This ${displayName} connection is registered to ${expectedEmail}. You authenticated with ${accountEmail}. Please reconnect with ${expectedEmail} to protect your indexed files.`,
+              )}`,
+            );
+          }
+
           await db
             .update(providerIdentities)
             .set({
-              accountEmail,
+              accountEmail: accountEmail || existing.accountEmail,
               encryptedAccessToken: encrypt(accessToken),
               encryptedRefreshToken: refreshToken
                 ? encrypt(refreshToken)
@@ -461,6 +526,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
               tokenExpiresAt,
               quotaTotal: quota.totalBytes,
               quotaUsed: quota.usedBytes,
+              isRevoked: false,
               lastSyncedAt: new Date(),
             })
             .where(eq(providerIdentities.id, existing.id));
@@ -474,21 +540,33 @@ export async function providerRoutes(fastify: FastifyInstance) {
             tokenExpiresAt,
             quotaTotal: quota.totalBytes,
             quotaUsed: quota.usedBytes,
+            isRevoked: false,
           });
         }
+
+        socketManager.broadcastToUser(userId, {
+          type: "PROVIDER_CONNECTED",
+          payload: { provider: canonicalProvider, quota, isRevoked: false },
+        });
+
+        socketManager.broadcastToUser(userId, {
+          type: "PROVIDER_STATUS_CHANGED",
+          payload: { provider: canonicalProvider, isRevoked: false },
+        });
 
         socketManager.broadcastToUser(userId, {
           type: "QUOTA_UPDATED",
           payload: { provider: canonicalProvider, quota },
         });
 
+        const targetPath = stateObj.returnUrl || "/dashboard/storage";
         return reply.redirect(
-          `${clientOrigin}/dashboard?connected=${canonicalProvider}`,
+          `${clientOrigin}${targetPath}?connected=${canonicalProvider}`,
         );
       } catch (err: any) {
         request.log.error(err, "OAuth callback failure");
         return reply.redirect(
-          `${clientOrigin}/dashboard?error=${encodeURIComponent(err.message)}`,
+          `${clientOrigin}/dashboard/storage?error=${encodeURIComponent(err.message)}`,
         );
       }
     },
@@ -597,7 +675,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
   );
 
   // -------------------------------------------------------------
-  // 6. MANUAL QUOTA SYNC (/providers/:id/sync)
+  // 6. MANUAL QUOTA SYNC & STATUS CHECK (/providers/:id/sync)
   // -------------------------------------------------------------
   fastify.post(
     "/:id/sync",
@@ -627,69 +705,103 @@ export async function providerRoutes(fastify: FastifyInstance) {
       if (!identity)
         return reply.status(404).send({ error: "Provider identity not found" });
 
-      const adapter = getStorageAdapter(identity.provider);
-      const accessToken = decrypt(identity.encryptedAccessToken);
-      const quota = await adapter.fetchQuota(accessToken);
-
-      await db
-        .update(providerIdentities)
-        .set({
-          quotaTotal: quota.totalBytes,
-          quotaUsed: quota.usedBytes,
-          lastSyncedAt: new Date(),
-        })
-        .where(eq(providerIdentities.id, id));
-
-      return reply.send({ quota });
-    },
-  );
-
-  // -------------------------------------------------------------
-  // 7. SYNC ALL QUOTAS ON DEMAND (/providers/sync-quotas)
-  // -------------------------------------------------------------
-
-  fastify.post(
-    "/sync",
-    async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        await request.jwtVerify();
-      } catch {
-        return reply.status(401).send({ error: "Unauthorized" });
-      }
+        const accessToken = await TokenService.getValidAccessToken(id);
+        const adapter = getStorageAdapter(identity.provider);
+        const quota = await adapter.fetchQuota(accessToken);
 
-      const { userId } = request.user as { userId: string };
-      const identities = await db
-        .select()
-        .from(providerIdentities)
-        .where(eq(providerIdentities.userId, userId));
+        await db
+          .update(providerIdentities)
+          .set({
+            quotaTotal: quota.totalBytes,
+            quotaUsed: quota.usedBytes,
+            isRevoked: false,
+            lastSyncedAt: new Date(),
+          })
+          .where(eq(providerIdentities.id, id));
 
-      for (const identity of identities) {
-        try {
-          const accessToken = await TokenService.getValidAccessToken(
-            identity.id,
-          );
-          const adapter = getStorageAdapter(identity.provider);
-          const quota = await adapter.fetchQuota(accessToken);
+        socketManager.broadcastToUser(user.userId, {
+          type: "PROVIDER_STATUS_CHANGED",
+          payload: { providerId: id, provider: identity.provider, isRevoked: false },
+        });
 
-          await db
-            .update(providerIdentities)
-            .set({
-              quotaTotal: quota.totalBytes,
-              quotaUsed: quota.usedBytes,
-              lastSyncedAt: new Date(),
-            })
-            .where(eq(providerIdentities.id, identity.id));
-        } catch (err: any) {
-          request.log.warn(
-            `Failed to sync quota for ${identity.provider}: ${err.message}`,
-          );
+        return reply.send({ quota, isRevoked: false });
+      } catch (err: any) {
+        request.log.warn(
+          `Failed sync for provider ${identity.provider} [${id}]: ${err.message}`,
+        );
+
+        const isRevoked =
+          err instanceof ProviderAuthExpiredError ||
+          err.message?.includes("invalid_grant") ||
+          err.message?.includes("expired") ||
+          err.message?.includes("revoked") ||
+          err.message?.includes("401");
+
+        if (isRevoked) {
+          await TokenService.markRevoked(id, err.message);
         }
-      }
 
-      return reply.send({
-        success: true,
-        message: "All provider quotas refreshed.",
-      });
+        return reply.status(424).send({
+          error: err.message,
+          isRevoked: true,
+          provider: identity.provider,
+        });
+      }
     },
   );
+
+  // -------------------------------------------------------------
+  // 7. SYNC ALL QUOTAS & RUN STATUS HEALTH CHECK (/providers/sync & /providers/health-check)
+  // -------------------------------------------------------------
+  const handleSyncAndHealthCheck = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ) => {
+    try {
+      await request.jwtVerify();
+    } catch {
+      return reply.status(401).send({ error: "Unauthorized" });
+    }
+
+    const { userId } = request.user as { userId: string };
+    const identities = await db
+      .select()
+      .from(providerIdentities)
+      .where(eq(providerIdentities.userId, userId));
+
+    const results: Array<{
+      id: string;
+      provider: string;
+      accountEmail: string | null;
+      isRevoked: boolean;
+      error?: string;
+    }> = [];
+
+    for (const identity of identities) {
+      const verification = await TokenService.verifyConnection(identity.id);
+      results.push({
+        id: identity.id,
+        provider: identity.provider,
+        accountEmail: identity.accountEmail,
+        isRevoked: verification.isRevoked,
+        error: verification.error,
+      });
+    }
+
+    socketManager.broadcastToUser(userId, {
+      type: "PROVIDER_STATUS_CHANGED",
+      payload: { results },
+    });
+
+    return reply.send({
+      success: true,
+      message: "All provider quotas and connection health statuses refreshed.",
+      results,
+    });
+  };
+
+  fastify.post("/sync", handleSyncAndHealthCheck);
+  fastify.post("/health-check", handleSyncAndHealthCheck);
+  fastify.get("/health-check", handleSyncAndHealthCheck);
 }

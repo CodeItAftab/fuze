@@ -75,6 +75,13 @@ class WebSocketClient {
         }
         break;
 
+      case "FILE_RENAMED":
+        if (data.payload && typeof data.payload === "object" && "id" in data.payload) {
+          const updated = data.payload as Partial<VfsItem> & { id: string };
+          store.addItem(updated as VfsItem);
+        }
+        break;
+
       case "FILE_DELETED": {
         let itemId: string | null = null;
         if (typeof data.payload === "string") {
@@ -88,6 +95,8 @@ class WebSocketClient {
         break;
       }
 
+      case "PROVIDER_CONNECTED":
+      case "PROVIDER_STATUS_CHANGED":
       case "QUOTA_UPDATED":
         void store.refreshProviders();
         break;
