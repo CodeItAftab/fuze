@@ -19,11 +19,11 @@ export const metadata: Metadata = {
     process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
   ),
   title: {
-    default: "Fuze — Zero-Proxy Multi-Cloud Personal Storage",
+    default: "Fuze — All your cloud storage, fused into one",
     template: "%s | Fuze",
   },
   description:
-    "Pool your free Google Drive, OneDrive, Dropbox, and pCloud accounts into one unified, ultra-fast personal cloud with zero server proxy.",
+    "Pool your Google Drive, OneDrive, Dropbox, and Box accounts into one unified, ultra-fast personal cloud with zero server proxy.",
   keywords: [
     "cloud storage",
     "distributed storage",
@@ -33,10 +33,25 @@ export const metadata: Metadata = {
     "resumable multi-cloud uploader",
   ],
   authors: [{ name: "Fuze Storage" }],
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+    other: [
+      { rel: "mask-icon", url: "/safari-pinned-tab.svg", color: "#3B82F6" },
+    ],
+  },
+  manifest: "/site.webmanifest",
   openGraph: {
-    title: "Fuze — Pool Your Free Cloud Accounts Into One Drive",
+    title: "Fuze — All your cloud storage, fused into one",
     description:
-      "Instant zero-proxy multi-cloud drive with intelligent chunking and automated failover.",
+      "Connect your cloud drives and manage every file in one place with zero server proxy.",
     url: "https://fuze.storage",
     siteName: "Fuze",
     images: [
@@ -44,7 +59,7 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Fuze Multi-Cloud Storage Dashboard",
+        alt: "Fuze — All your cloud storage, fused into one",
       },
     ],
     locale: "en_US",
@@ -52,10 +67,10 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Fuze — Zero-Proxy Multi-Cloud Personal Storage",
+    title: "Fuze — All your cloud storage, fused into one",
     description:
-      "Pool your Google Drive, OneDrive, and Dropbox into one high-speed drive.",
-    images: ["/og-image.png"],
+      "Connect your cloud drives and manage every file in one place.",
+    images: ["/twitter-card.png"],
   },
   robots: {
     index: true,
@@ -85,6 +100,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${inter.variable} ${mono.variable} h-full antialiased`}
     >
       <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="alternate icon" href="/favicon.ico" sizes="any" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="manifest" href="/site.webmanifest" />
+        <meta name="msapplication-config" content="/browserconfig.xml" />
+        <meta name="theme-color" content="#0F172A" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
