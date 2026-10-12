@@ -102,6 +102,7 @@ async function main() {
             .limit(1);
 
           if (!session) {
+            reply.clearCookie("fuze_session", { path: "/" });
             return reply.status(401).send({ error: "Session revoked" });
           }
         }

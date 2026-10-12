@@ -8,7 +8,8 @@ export type SyncEventType =
   | "UPLOAD_PROGRESS"
   | "PROVIDER_CONNECTED"
   | "PROVIDER_DISCONNECTED"
-  | "PROVIDER_CLEANUP_PROGRESS";
+  | "PROVIDER_CLEANUP_PROGRESS"
+  | "SESSION_REVOKED";
 
 export interface SyncEvent {
   type: SyncEventType;
@@ -17,13 +18,18 @@ export interface SyncEvent {
 
 class SocketManager {
   private userSockets = new Map<string, Set<WebSocket>>();
+  private sessionSockets = new Map<string, WebSocket>();
 
-  register(userId: string, socket: WebSocket) {
+  register(userId: string, socket: WebSocket, sessionToken?: string) {
     if (!this.userSockets.has(userId)) {
       this.userSockets.set(userId, new Set());
     }
     const sockets = this.userSockets.get(userId)!;
     sockets.add(socket);
+
+    if (sessionToken) {
+      this.sessionSockets.set(sessionToken, socket);
+    }
 
     let isAlive = true;
     socket.on("pong", () => {
@@ -46,6 +52,9 @@ class SocketManager {
       if (sockets.size === 0) {
         this.userSockets.delete(userId);
       }
+      if (sessionToken) {
+        this.sessionSockets.delete(sessionToken);
+      }
     });
   }
 
@@ -57,6 +66,48 @@ class SocketManager {
     for (const socket of sockets) {
       if (socket.readyState === WebSocket.OPEN) {
         socket.send(data);
+      }
+    }
+  }
+
+  revokeSession(sessionToken: string) {
+    const socket = this.sessionSockets.get(sessionToken);
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(
+        JSON.stringify({
+          type: "SESSION_REVOKED",
+          payload: { reason: "Session revoked by user" },
+        }),
+      );
+      setTimeout(() => {
+        try {
+          socket.close(4001, "Session Revoked");
+        } catch {}
+      }, 100);
+      this.sessionSockets.delete(sessionToken);
+    }
+  }
+
+  revokeOtherSessions(userId: string, currentSessionToken: string) {
+    const sockets = this.userSockets.get(userId);
+    if (!sockets) return;
+
+    for (const [token, socket] of this.sessionSockets.entries()) {
+      if (token !== currentSessionToken && sockets.has(socket)) {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(
+            JSON.stringify({
+              type: "SESSION_REVOKED",
+              payload: { reason: "All other sessions revoked" },
+            }),
+          );
+          setTimeout(() => {
+            try {
+              socket.close(4001, "Session Revoked");
+            } catch {}
+          }, 100);
+        }
+        this.sessionSockets.delete(token);
       }
     }
   }

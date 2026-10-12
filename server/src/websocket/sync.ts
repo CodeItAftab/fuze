@@ -28,8 +28,11 @@ export async function websocketRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const decoded = fastify.jwt.verify<{ userId: string }>(jwtToken);
-      socketManager.register(decoded.userId, socket);
+      const decoded = fastify.jwt.verify<{
+        userId: string;
+        sessionToken?: string;
+      }>(jwtToken);
+      socketManager.register(decoded.userId, socket, decoded.sessionToken);
 
       socket.send(
         JSON.stringify({

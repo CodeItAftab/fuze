@@ -3,13 +3,14 @@
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Cloud, Lock, Mail, User as UserIcon, ArrowRight, ShieldCheck, Loader2 } from "lucide-react";
+import { Cloud, Lock, Mail, User as UserIcon, ArrowRight, ShieldCheck, ShieldAlert, Loader2 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth.store";
 
 function LoginForm() {
   const searchParams = useSearchParams();
   const redirectParam = searchParams.get("redirect");
   const modeParam = searchParams.get("mode") || searchParams.get("tab");
+  const isRevoked = searchParams.get("revoked") === "true";
 
   const { setAuth } = useAuthStore();
 
@@ -208,6 +209,20 @@ function LoginForm() {
                   Register
                 </button>
               </div>
+
+              {isRevoked && !unverifiedEmail && (
+                <div className="mb-5 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 shadow-2xs">
+                  <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold block text-amber-900">
+                      Session Terminated
+                    </span>
+                    <span className="text-[11px] text-amber-700 leading-relaxed block mt-0.5">
+                      Your session was revoked from another device or expired. Please sign in again.
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {unverifiedEmail && (
                 <div className="mb-5 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-2">

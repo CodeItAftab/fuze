@@ -1,4 +1,5 @@
 import { useDriveStore, VfsItem, MigrationProgress } from "@/stores/drive.store";
+import { useAuthStore } from "@/stores/auth.store";
 
 export interface WebSocketEventMessage {
   type: string;
@@ -32,7 +33,17 @@ class WebSocketClient {
       }
     };
 
-    this.socket.onclose = () => {
+    this.socket.onclose = (event) => {
+      if (event.code === 4001 || event.reason === "Session Revoked") {
+        console.warn("⚠️ WebSocket closed due to remote session revocation");
+        this.disconnect();
+        useAuthStore.getState().clearAuth();
+        if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+          window.location.href = "/login?revoked=true";
+        }
+        return;
+      }
+
       if (this.reconnectAttempts < this.maxReconnectAttempts) {
         this.reconnectAttempts++;
         setTimeout(
@@ -47,6 +58,16 @@ class WebSocketClient {
     const store = useDriveStore.getState();
 
     switch (data.type) {
+      case "SESSION_REVOKED": {
+        console.warn("⚠️ Received SESSION_REVOKED event from server");
+        this.disconnect();
+        useAuthStore.getState().clearAuth();
+        if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+          window.location.href = "/login?revoked=true";
+        }
+        break;
+      }
+
       case "FILE_CREATED":
         if (data.payload && typeof data.payload === "object") {
           store.addItem(data.payload as VfsItem);

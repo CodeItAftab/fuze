@@ -5,6 +5,7 @@ import { db, users, userSessions } from "../db/index.js";
 import { eq, and, gt, ne } from "drizzle-orm";
 import { z } from "zod";
 import { EmailService } from "../services/email.service.js";
+import { socketManager } from "../websocket/socket-manager.js";
 
 const registerSchema = z.object({
   name: z.string().trim().min(2).max(50),
@@ -566,7 +567,10 @@ export async function authRoutes(fastify: FastifyInstance) {
           ),
         );
 
-      if (!session) return reply.status(401).send({ error: "Session revoked" });
+      if (!session) {
+        reply.clearCookie(COOKIE_NAME, { path: "/" });
+        return reply.status(401).send({ error: "Session revoked" });
+      }
 
       const [user] = await db
         .select({
@@ -678,6 +682,9 @@ export async function authRoutes(fastify: FastifyInstance) {
               ne(userSessions.token, sessionToken),
             ),
           );
+
+        // Immediately notify and disconnect all other active WebSocket sessions
+        socketManager.revokeOtherSessions(userId, sessionToken);
       }
       return reply.send({
         success: true,
@@ -696,6 +703,12 @@ export async function authRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({ error: "Unauthorized" });
       }
       const { userId } = request.user as { userId: string };
+
+      // Immediately notify and disconnect all active user sockets
+      socketManager.broadcastToUser(userId, {
+        type: "SESSION_REVOKED",
+        payload: { reason: "Account permanently deleted" },
+      });
 
       // Deleting user cascades to sessions, identities, vfs_nodes, and chunks
       await db.delete(users).where(eq(users.id, userId));
@@ -810,6 +823,11 @@ export async function authRoutes(fastify: FastifyInstance) {
             eq(userSessions.userId, userId),
           ),
         );
+
+      // Immediately notify and disconnect the revoked socket session
+      if (targetSession.token) {
+        socketManager.revokeSession(targetSession.token);
+      }
 
       if (targetSession.token === sessionToken) {
         reply.clearCookie(COOKIE_NAME, { path: "/" });
