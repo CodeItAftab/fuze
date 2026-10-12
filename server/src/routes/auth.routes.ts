@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { db, users, userSessions } from "../db/index.js";
-import { eq, and, gt } from "drizzle-orm";
+import { eq, and, gt, ne } from "drizzle-orm";
 import { z } from "zod";
 import { EmailService } from "../services/email.service.js";
 
@@ -652,6 +652,59 @@ export async function authRoutes(fastify: FastifyInstance) {
         .set({ name: name.trim(), updatedAt: new Date() })
         .where(eq(users.id, userId));
       return reply.send({ success: true, message: "Profile updated." });
+    },
+  );
+
+  // 7. Revoke Other Sessions (Authenticated)
+  fastify.post(
+    "/revoke-other-sessions",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        return reply.status(401).send({ error: "Unauthorized" });
+      }
+      const { userId, sessionToken } = request.user as {
+        userId: string;
+        sessionToken?: string;
+      };
+
+      if (sessionToken) {
+        await db
+          .delete(userSessions)
+          .where(
+            and(
+              eq(userSessions.userId, userId),
+              ne(userSessions.token, sessionToken),
+            ),
+          );
+      }
+      return reply.send({
+        success: true,
+        message: "All other sessions revoked successfully.",
+      });
+    },
+  );
+
+  // 8. Delete Account (Authenticated - Cascades to all user data)
+  fastify.delete(
+    "/account",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        return reply.status(401).send({ error: "Unauthorized" });
+      }
+      const { userId } = request.user as { userId: string };
+
+      // Deleting user cascades to sessions, identities, vfs_nodes, and chunks
+      await db.delete(users).where(eq(users.id, userId));
+
+      reply.clearCookie(COOKIE_NAME, { path: "/" });
+      return reply.send({
+        success: true,
+        message: "Your Fuze account and all associated data have been permanently deleted.",
+      });
     },
   );
 }
