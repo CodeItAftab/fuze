@@ -17,13 +17,6 @@ export default function DashboardLayout({
 
     // 2. Establish real-time socket connection for live updates and instant session revocation signals
     socketClient.connect();
-
-    // 3. Fallback active session heartbeat every 15 seconds
-    const interval = setInterval(() => {
-      void checkSession();
-    }, 15000);
-
-    return () => clearInterval(interval);
   }, [checkSession]);
 
   return <>{children}</>;

@@ -17,6 +17,8 @@ interface AuthState {
   checkSession: () => Promise<void>;
 }
 
+let checkSessionPromise: Promise<void> | null = null;
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isLoading: true,
@@ -41,26 +43,34 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   checkSession: async () => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-    try {
-      const res = await fetch(`${apiUrl}/auth/me`, { credentials: "include" });
-      if (res.ok) {
-        const data = await res.json();
-        set({ user: data.user, isLoading: false });
-      } else {
-        set({ user: null, isLoading: false });
-        if (
-          typeof window !== "undefined" &&
-          window.location.pathname.startsWith("/dashboard")
-        ) {
-          // If revoked, clean redirect to login page with notice
-          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-          window.location.href =
-            res.status === 401 ? "/login?revoked=true" : "/login";
+    if (checkSessionPromise) return checkSessionPromise;
+
+    checkSessionPromise = (async () => {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      try {
+        const res = await fetch(`${apiUrl}/auth/me`, { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json();
+          set({ user: data.user, isLoading: false });
+        } else {
+          set({ user: null, isLoading: false });
+          if (
+            typeof window !== "undefined" &&
+            window.location.pathname.startsWith("/dashboard")
+          ) {
+            // If revoked, clean redirect to login page with notice
+            // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+            window.location.href =
+              res.status === 401 ? "/login?revoked=true" : "/login";
+          }
         }
+      } catch {
+        set({ user: null, isLoading: false });
+      } finally {
+        checkSessionPromise = null;
       }
-    } catch {
-      set({ user: null, isLoading: false });
-    }
+    })();
+
+    return checkSessionPromise;
   },
 }));

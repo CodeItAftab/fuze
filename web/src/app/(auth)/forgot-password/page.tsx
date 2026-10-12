@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { FuzeLogo } from "@/components/brand/FuzeLogo";
 import {
   Cloud,
   Mail,
@@ -52,13 +53,8 @@ export default function ForgotPasswordPage() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <Link href="/" className="inline-flex items-center gap-2.5 mb-4 group">
-          <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm transition group-hover:scale-105">
-            <Cloud className="h-5 w-5" />
-          </div>
-          <span className="font-bold text-2xl text-slate-900 tracking-tight">
-            Fuze
-          </span>
+        <Link href="/" className="inline-flex items-center justify-center mb-5 group transition-transform hover:scale-105">
+          <FuzeLogo variant="full" height={30} />
         </Link>
         <h2 className="text-xl font-bold text-slate-800">
           Reset your password
