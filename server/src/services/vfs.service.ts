@@ -1,4 +1,10 @@
-import { db, vfsNodes, fileChunks, providerIdentities } from "../db/index.js";
+import {
+  db,
+  vfsNodes,
+  fileChunks,
+  providerIdentities,
+  uploadSessions,
+} from "../db/index.js";
 import { eq, and, isNull, isNotNull, inArray } from "drizzle-orm";
 import { TokenService } from "./token.service.js";
 import { GoogleDriveAdapter } from "../adapters/gdrive.adapter.js";
@@ -165,11 +171,46 @@ export class VfsService {
     return node;
   }
 
+  static async getSubtreeNodeIds(
+    userId: string,
+    rootId: string,
+  ): Promise<string[]> {
+    const result: string[] = [rootId];
+    let currentLevel = [rootId];
+
+    while (currentLevel.length > 0) {
+      const children = await db
+        .select({ id: vfsNodes.id })
+        .from(vfsNodes)
+        .where(
+          and(
+            eq(vfsNodes.userId, userId),
+            inArray(vfsNodes.parentId, currentLevel),
+          ),
+        );
+
+      if (children.length === 0) break;
+      const childIds = children.map((c) => c.id);
+      result.push(...childIds);
+      currentLevel = childIds;
+    }
+
+    return result;
+  }
+
   /**
-   * Permanent Delete: Free cloud quota first, then purge database row.
+   * Permanent Delete: Free cloud quota first across subtree, then purge database row.
    */
   static async permanentlyDelete(userId: string, nodeId: string) {
-    // 1. Fetch file chunks along with their provider type
+    const allNodeIds = await this.getSubtreeNodeIds(userId, nodeId);
+
+    // 1. Clean up or decouple any upload_sessions referencing any nodes in this subtree
+    await db
+      .update(uploadSessions)
+      .set({ parentId: null })
+      .where(inArray(uploadSessions.parentId, allNodeIds));
+
+    // 2. Fetch all file chunks across all affected nodes
     const chunks = await db
       .select({
         providerFileId: fileChunks.providerFileId,
@@ -181,8 +222,9 @@ export class VfsService {
         providerIdentities,
         eq(fileChunks.providerIdentityId, providerIdentities.id),
       )
-      .where(eq(fileChunks.vfsNodeId, nodeId));
-    // 2. Delete bytes from respective cloud providers dynamically
+      .where(inArray(fileChunks.vfsNodeId, allNodeIds));
+
+    // 3. Delete bytes from respective cloud providers dynamically
     for (const chunk of chunks) {
       try {
         const accessToken = await TokenService.getValidAccessToken(
@@ -200,14 +242,49 @@ export class VfsService {
         );
       }
     }
-    // 3. Delete database row (cascades to file_chunks)
+
+    // 4. Delete database row (cascades to child vfs_nodes and file_chunks)
     await db
       .delete(vfsNodes)
       .where(and(eq(vfsNodes.id, nodeId), eq(vfsNodes.userId, userId)));
-    socketManager.broadcastToUser(userId, {
-      type: "FILE_DELETED",
-      payload: { id: nodeId },
-    });
+
+    for (const id of allNodeIds) {
+      socketManager.broadcastToUser(userId, {
+        type: "FILE_DELETED",
+        payload: { id },
+      });
+    }
+  }
+
+  static async batchRestore(userId: string, nodeIds: string[]) {
+    if (nodeIds.length === 0) return [];
+    const nodes = await db
+      .update(vfsNodes)
+      .set({ trashedAt: null })
+      .where(and(inArray(vfsNodes.id, nodeIds), eq(vfsNodes.userId, userId)))
+      .returning();
+
+    for (const node of nodes) {
+      socketManager.broadcastToUser(userId, {
+        type: "FILE_CREATED",
+        payload: node,
+      });
+    }
+    return nodes;
+  }
+
+  static async batchPermanentlyDelete(userId: string, nodeIds: string[]) {
+    for (const id of nodeIds) {
+      await this.permanentlyDelete(userId, id);
+    }
+  }
+
+  static async emptyTrash(userId: string) {
+    const trashed = await this.listTrash(userId);
+    for (const item of trashed) {
+      await this.permanentlyDelete(userId, item.id);
+    }
+    return { count: trashed.length };
   }
 
   static async listStarred(userId: string) {
@@ -322,6 +399,120 @@ export class VfsService {
       .set({ parentId: targetParentId, updatedAt: new Date() })
       .where(and(inArray(vfsNodes.id, nodeIds), eq(vfsNodes.userId, userId)))
       .returning();
+
+    return updated;
+  }
+
+  static async renameNode(userId: string, nodeId: string, newName: string) {
+    const trimmedName = newName.trim();
+    if (!trimmedName) {
+      throw new Error("Name cannot be empty");
+    }
+
+    // 1. Fetch current node
+    const [node] = await db
+      .select()
+      .from(vfsNodes)
+      .where(and(eq(vfsNodes.id, nodeId), eq(vfsNodes.userId, userId)));
+
+    if (!node) {
+      throw new Error("Item not found");
+    }
+
+    if (node.name === trimmedName) {
+      return node;
+    }
+
+    // 2. Check for duplicate name in same directory
+    const existingSameName = await db
+      .select({ id: vfsNodes.id })
+      .from(vfsNodes)
+      .where(
+        and(
+          eq(vfsNodes.userId, userId),
+          node.parentId ? eq(vfsNodes.parentId, node.parentId) : isNull(vfsNodes.parentId),
+          eq(vfsNodes.name, trimmedName),
+          isNull(vfsNodes.trashedAt),
+        ),
+      );
+
+    if (existingSameName.length > 0) {
+      throw new Error(`An item named "${trimmedName}" already exists in this folder.`);
+    }
+
+    // 3. Update name in VFS
+    const [updated] = await db
+      .update(vfsNodes)
+      .set({ name: trimmedName, updatedAt: new Date() })
+      .where(and(eq(vfsNodes.id, nodeId), eq(vfsNodes.userId, userId)))
+      .returning();
+
+    // 4. If this is a file, propagate the new name to cloud providers
+    if (node.type === "file") {
+      try {
+        const chunks = await db
+          .select({
+            id: fileChunks.id,
+            chunkIndex: fileChunks.chunkIndex,
+            providerFileId: fileChunks.providerFileId,
+            providerIdentityId: fileChunks.providerIdentityId,
+            provider: providerIdentities.provider,
+          })
+          .from(fileChunks)
+          .innerJoin(
+            providerIdentities,
+            eq(fileChunks.providerIdentityId, providerIdentities.id),
+          )
+          .where(eq(fileChunks.vfsNodeId, nodeId));
+
+        const isWhole = chunks.length === 1;
+
+        for (const chunk of chunks) {
+          try {
+            const accessToken = await TokenService.getValidAccessToken(
+              chunk.providerIdentityId,
+            );
+            const adapter = getStorageAdapter(chunk.provider);
+            if (adapter.renameFile) {
+              const targetChunkName = isWhole
+                ? trimmedName
+                : `${trimmedName}.part${chunk.chunkIndex}`;
+
+              const newProviderFileId = await adapter.renameFile({
+                providerFileId: chunk.providerFileId,
+                newName: targetChunkName,
+                accessToken,
+              });
+
+              // If provider returns an updated file identifier / path (e.g. Dropbox path)
+              if (
+                newProviderFileId &&
+                typeof newProviderFileId === "string" &&
+                newProviderFileId !== chunk.providerFileId
+              ) {
+                await db
+                  .update(fileChunks)
+                  .set({ providerFileId: newProviderFileId })
+                  .where(eq(fileChunks.id, chunk.id));
+              }
+            }
+          } catch (providerErr) {
+            console.warn(
+              `[VfsService] Provider rename failed for chunk ${chunk.chunkIndex} (${chunk.provider}):`,
+              providerErr,
+            );
+          }
+        }
+      } catch (err) {
+        console.warn("[VfsService] Failed to sync rename with providers:", err);
+      }
+    }
+
+    // 5. Broadcast real-time update
+    socketManager.broadcastToUser(userId, {
+      type: "FILE_RENAMED",
+      payload: updated,
+    });
 
     return updated;
   }

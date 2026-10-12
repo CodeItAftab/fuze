@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -19,6 +19,7 @@ import {
 import { useDriveStore } from "@/stores/drive.store";
 import { useAuthStore } from "@/stores/auth.store";
 import { uploadQueueManager } from "@/lib/upload-queue";
+import { FuzeLogo } from "@/components/brand/FuzeLogo";
 
 interface SidebarProps {
   onNewFolderClick: () => void;
@@ -26,7 +27,7 @@ interface SidebarProps {
 
 export function Sidebar({ onNewFolderClick }: SidebarProps) {
   const pathname = usePathname();
-  const { user, logout, checkSession } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const {
     currentFolderId,
     providers,
@@ -37,11 +38,34 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
   } = useDriveStore();
 
   const [showNewMenu, setShowNewMenu] = useState(false);
+  const newMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showNewMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        newMenuRef.current &&
+        !newMenuRef.current.contains(e.target as Node)
+      ) {
+        setShowNewMenu(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowNewMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showNewMenu]);
 
   useEffect(() => {
     void refreshProviders();
-    void checkSession();
-  }, [refreshProviders, checkSession]);
+  }, [refreshProviders]);
 
   const formatBytes = (bytes: number) => {
     if (!bytes || bytes <= 0) return "0 B";
@@ -96,23 +120,17 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
       >
         <div className="space-y-4">
           {/* App Brand Logo Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200/70">
+          <div className="flex items-center justify-between pt-0.5 pb-3.5 border-b border-slate-200/70">
             <Link
               href="/dashboard"
               onClick={closeMobile}
               className="flex items-center gap-2.5 group"
             >
-              <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-2xs group-hover:bg-blue-700 transition shrink-0">
-                <Cloud className="h-4.5 w-4.5" />
-              </div>
-              <div className="flex flex-col">
-                <span className="font-semibold text-sm tracking-tight text-slate-900 leading-none">
-                  Fuze
-                </span>
-                <span className="text-[9px] text-blue-600 font-semibold uppercase tracking-wider mt-0.5">
-                  Storage
-                </span>
-              </div>
+              <FuzeLogo
+                variant="full"
+                height={28}
+                className="transition-opacity group-hover:opacity-90"
+              />
             </Link>
 
             {/* Mobile Close Button */}
@@ -126,7 +144,7 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
           </div>
 
           {/* New Upload Button & Dropdown (Hidden on mobile where FAB is used) */}
-          <div className="relative hidden lg:block">
+          <div ref={newMenuRef} className="relative hidden lg:block">
             {user?.emailVerified === true ? (
               <button
                 onClick={() => setShowNewMenu(!showNewMenu)}
@@ -177,7 +195,8 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
               href="/dashboard"
               onClick={closeMobile}
               className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs transition ${
-                pathname === "/dashboard" || pathname.startsWith("/dashboard/folder")
+                pathname === "/dashboard" ||
+                pathname.startsWith("/dashboard/folder")
                   ? "bg-blue-50 font-semibold text-blue-700"
                   : "text-slate-600 hover:bg-slate-100 font-normal"
               }`}
@@ -297,9 +316,15 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
                 );
               })
             ) : providers.length > 0 ? (
-              <div className="bg-emerald-500/20 h-full w-full" title="Storage Ready" />
+              <div
+                className="bg-emerald-500/20 h-full w-full"
+                title="Storage Ready"
+              />
             ) : (
-              <div className="bg-slate-200 h-full w-full" title="No accounts linked" />
+              <div
+                className="bg-slate-200 h-full w-full"
+                title="No accounts linked"
+              />
             )}
           </div>
 
@@ -322,10 +347,17 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
                   box: "bg-emerald-500",
                 };
                 return (
-                  <div key={p.id} className="flex items-center gap-1 text-[9px] text-slate-500">
-                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotColorMap[p.provider] || "bg-indigo-600"}`} />
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-1 text-[9px] text-slate-500"
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotColorMap[p.provider] || "bg-indigo-600"}`}
+                    />
                     <span>{labelMap[p.provider] || p.provider}</span>
-                    <span className="text-slate-400 font-mono">({formatBytes(p.quotaUsed)})</span>
+                    <span className="text-slate-400 font-mono">
+                      ({formatBytes(p.quotaUsed)})
+                    </span>
                   </div>
                 );
               })}
@@ -334,7 +366,8 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
 
           <div className="text-[10px] text-slate-500 flex justify-between items-center border-t border-slate-100 pt-1.5">
             <span>
-              {providers.length} {providers.length === 1 ? "account" : "accounts"} linked
+              {providers.length}{" "}
+              {providers.length === 1 ? "account" : "accounts"} linked
             </span>
             <span className="text-emerald-600 font-medium">
               {storageSummary.freePoolBytes > 0

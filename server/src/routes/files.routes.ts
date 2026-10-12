@@ -9,6 +9,7 @@ import {
   fileChunks,
   providerIdentities,
   shares,
+  users,
 } from "../db/index.js";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { getStorageAdapter } from "../adapters/factory.js";
@@ -21,6 +22,9 @@ export async function fileRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       // Allow public access to /share/:token routes
       if (request.url.includes("/share/")) {
+        return;
+      }
+      if ((request as any).user) {
         return;
       }
       try {
@@ -63,6 +67,13 @@ export async function fileRoutes(fastify: FastifyInstance) {
     const user = request.user as { userId: string };
     const items = await VfsService.listTrash(user.userId);
     return reply.send({ items });
+  });
+
+  // 1b-ii. Empty all trashed items
+  fastify.delete("/trash/empty", async (request, reply) => {
+    const user = request.user as { userId: string };
+    const result = await VfsService.emptyTrash(user.userId);
+    return reply.send({ success: true, ...result });
   });
 
   // 1c. List starred items
@@ -159,6 +170,46 @@ export async function fileRoutes(fastify: FastifyInstance) {
     },
   );
 
+  // 1f-ii. Batch restore items
+  fastify.post(
+    "/batch-restore",
+    async (
+      request: FastifyRequest<{
+        Body: { nodeIds: string[] };
+      }>,
+      reply,
+    ) => {
+      const user = request.user as { userId: string };
+      const { nodeIds } = request.body || {};
+      if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
+        return reply.status(400).send({ error: "nodeIds array is required" });
+      }
+
+      await VfsService.batchRestore(user.userId, nodeIds);
+      return reply.send({ success: true });
+    },
+  );
+
+  // 1f-iii. Batch permanently delete items
+  fastify.post(
+    "/batch-permanent",
+    async (
+      request: FastifyRequest<{
+        Body: { nodeIds: string[] };
+      }>,
+      reply,
+    ) => {
+      const user = request.user as { userId: string };
+      const { nodeIds } = request.body || {};
+      if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
+        return reply.status(400).send({ error: "nodeIds array is required" });
+      }
+
+      await VfsService.batchPermanentlyDelete(user.userId, nodeIds);
+      return reply.send({ success: true });
+    },
+  );
+
   // 1g. Batch star/unstar items
   fastify.post(
     "/batch-star",
@@ -203,6 +254,34 @@ export async function fileRoutes(fastify: FastifyInstance) {
         parentId || null,
       );
       return reply.status(201).send({ folder });
+    },
+  );
+
+  // 2b. Rename item (File or Folder)
+  fastify.patch(
+    "/:id",
+    async (
+      request: FastifyRequest<{
+        Params: { id: string };
+        Body: { name: string };
+      }>,
+      reply,
+    ) => {
+      const user = request.user as { userId: string };
+      const { id } = request.params;
+      const { name } = request.body || {};
+
+      if (!name || typeof name !== "string" || !name.trim()) {
+        return reply.status(400).send({ error: "Valid name is required" });
+      }
+
+      try {
+        const updated = await VfsService.renameNode(user.userId, id, name.trim());
+        return reply.send({ success: true, item: updated });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Failed to rename item";
+        return reply.status(400).send({ error: message });
+      }
     },
   );
 
@@ -331,13 +410,13 @@ export async function fileRoutes(fastify: FastifyInstance) {
     async (
       request: FastifyRequest<{
         Params: { id: string };
-        Querystring: { info?: string };
+        Querystring: { info?: string; inline?: string };
       }>,
       reply,
     ) => {
       const user = request.user as { userId: string };
       const { id } = request.params;
-      const { info } = request.query;
+      const { info, inline } = request.query;
 
       const [file] = await db
         .select()
@@ -369,12 +448,21 @@ export async function fileRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: "File chunks missing" });
       }
 
+      const streamUrl = `/files/${file.id}/download?inline=true`;
+
       // If single chunk (whole file)
       if (chunks.length === 1) {
         const single = chunks[0]!;
-        const token = await TokenService.getValidAccessToken(
-          single.providerIdentityId,
-        );
+        let token: string;
+        try {
+          token = await TokenService.getValidAccessToken(
+            single.providerIdentityId,
+          );
+        } catch (err: any) {
+          return reply.status(401).send({
+            error: `Storage provider (${single.provider}) connection expired. Please reconnect the account in Settings.`,
+          });
+        }
         const adapter = getStorageAdapter(single.provider);
         const directUrl = await adapter.getDownloadUrl({
           providerFileId: single.providerFileId,
@@ -389,42 +477,64 @@ export async function fileRoutes(fastify: FastifyInstance) {
             mimeType: file.mimeType,
             size: file.size,
             downloadUrl: directUrl,
+            streamUrl,
           });
         }
 
-        // For Google Drive: stream bytes using Bearer token since direct link requires auth
+        // Stream bytes to client with proper Content-Disposition to ensure exact file size and name
+        const cdnHeaders: Record<string, string> = {};
         if (single.provider === "google_drive") {
-          const driveRes = await fetch(directUrl, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (!driveRes.ok || !driveRes.body) {
-            return reply
-              .status(502)
-              .send({ error: "Failed to stream file from Google Drive" });
-          }
-          reply.header(
-            "Content-Disposition",
-            `attachment; filename="${encodeURIComponent(file.name)}"`,
-          );
-          reply.header(
-            "Content-Type",
-            file.mimeType || "application/octet-stream",
-          );
-          if (file.size) reply.header("Content-Length", file.size.toString());
-          return reply.send(Readable.fromWeb(driveRes.body as any));
+          cdnHeaders["Authorization"] = `Bearer ${token}`;
+        }
+        if (request.headers.range) {
+          cdnHeaders["Range"] = request.headers.range;
         }
 
-        // For Dropbox, OneDrive, Box, pCloud: directUrl is a pre-authenticated high-speed CDN URL
-        return reply.redirect(directUrl, 302);
+        const cdnRes = await fetch(directUrl, { headers: cdnHeaders });
+
+        if (!cdnRes.ok || !cdnRes.body) {
+          return reply.status(cdnRes.status || 502).send({
+            error: `Failed to stream file from ${single.provider} (HTTP ${cdnRes.status})`,
+          });
+        }
+
+        if (cdnRes.status === 206) {
+          reply.status(206);
+          const cr = cdnRes.headers.get("content-range");
+          if (cr) reply.header("Content-Range", cr);
+        }
+
+        const isInline = inline === "true";
+        reply.header("Accept-Ranges", "bytes");
+        reply.header(
+          "Content-Disposition",
+          `${isInline ? "inline" : "attachment"}; filename="${encodeURIComponent(file.name)}"`,
+        );
+        reply.header(
+          "Content-Type",
+          file.mimeType || "application/octet-stream",
+        );
+        const actualLength =
+          cdnRes.headers.get("content-length") || (file.size ? file.size.toString() : null);
+        if (actualLength) reply.header("Content-Length", actualLength);
+
+        return reply.send(Readable.fromWeb(cdnRes.body as any));
       }
 
       // If multi-cloud chunked
       if (info === "true") {
         const chunkDownloads = [];
         for (const c of chunks.sort((a, b) => a.chunkIndex - b.chunkIndex)) {
-          const token = await TokenService.getValidAccessToken(
-            c.providerIdentityId,
-          );
+          let token: string;
+          try {
+            token = await TokenService.getValidAccessToken(
+              c.providerIdentityId,
+            );
+          } catch (err: any) {
+            return reply.status(401).send({
+              error: `Storage provider (${c.provider}) connection expired. Please reconnect the account in Settings.`,
+            });
+          }
           const adapter = getStorageAdapter(c.provider);
           const url = await adapter.getDownloadUrl({
             providerFileId: c.providerFileId,
@@ -445,24 +555,34 @@ export async function fileRoutes(fastify: FastifyInstance) {
           mimeType: file.mimeType,
           size: file.size,
           merkleRoot: file.merkleRoot,
+          streamUrl,
           chunks: chunkDownloads,
         });
       }
 
       // Multi-chunk sequential stream
+      const isInline = inline === "true";
+      reply.header("Accept-Ranges", "bytes");
       reply.header(
         "Content-Disposition",
-        `attachment; filename="${encodeURIComponent(file.name)}"`,
+        `${isInline ? "inline" : "attachment"}; filename="${encodeURIComponent(file.name)}"`,
       );
       reply.header("Content-Type", file.mimeType || "application/octet-stream");
       if (file.size) reply.header("Content-Length", file.size.toString());
 
       const passThrough = new PassThrough();
-      reply.send(passThrough);
+
+      request.raw.on("close", () => {
+        if (!passThrough.destroyed) {
+          passThrough.destroy();
+        }
+      });
 
       (async () => {
         try {
           for (const c of chunks.sort((a, b) => a.chunkIndex - b.chunkIndex)) {
+            if (passThrough.destroyed) break;
+
             const token = await TokenService.getValidAccessToken(
               c.providerIdentityId,
             );
@@ -480,22 +600,186 @@ export async function fileRoutes(fastify: FastifyInstance) {
             const res = await fetch(url, { headers });
             if (!res.ok || !res.body) {
               throw new Error(
-                `Failed to fetch chunk ${c.chunkIndex} from ${c.provider}`,
+                `Failed to fetch chunk ${c.chunkIndex} from ${c.provider} (status: ${res.status})`,
               );
             }
 
             const reader = res.body.getReader();
             while (true) {
+              if (passThrough.destroyed) break;
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (value) {
+                const canContinue = passThrough.write(Buffer.from(value));
+                if (!canContinue) {
+                  await new Promise((resolve) =>
+                    passThrough.once("drain", resolve),
+                  );
+                }
+              }
+            }
+          }
+
+          if (!passThrough.destroyed) {
+            passThrough.end();
+          }
+        } catch (err: any) {
+          console.error(
+            `[Download Error] Failed streaming chunks for node ${file.id}:`,
+            err,
+          );
+          passThrough.destroy(err);
+        }
+      })();
+
+      return reply.send(passThrough);
+    },
+  );
+
+  // 7b. FILE THUMBNAIL (Stream image or video preview for single and chunked files)
+  fastify.get(
+    "/:id/thumbnail",
+    async (
+      request: FastifyRequest<{
+        Params: { id: string };
+      }>,
+      reply,
+    ) => {
+      const user = request.user as { userId: string };
+      const { id } = request.params;
+
+      const [file] = await db
+        .select()
+        .from(vfsNodes)
+        .where(and(eq(vfsNodes.id, id), eq(vfsNodes.userId, user.userId)));
+
+      if (!file || file.type !== "file") {
+        return reply.status(404).send({ error: "File not found" });
+      }
+
+      const chunks = await db
+        .select({
+          chunkIndex: fileChunks.chunkIndex,
+          byteStart: fileChunks.byteStart,
+          byteEnd: fileChunks.byteEnd,
+          providerFileId: fileChunks.providerFileId,
+          providerIdentityId: fileChunks.providerIdentityId,
+          provider: providerIdentities.provider,
+        })
+        .from(fileChunks)
+        .innerJoin(
+          providerIdentities,
+          eq(fileChunks.providerIdentityId, providerIdentities.id),
+        )
+        .where(eq(fileChunks.vfsNodeId, id));
+
+      if (chunks.length === 0) {
+        return reply.status(404).send({ error: "File chunks missing" });
+      }
+
+      const ext = (file.name.split(".").pop() || "").toLowerCase();
+      const mime = (file.mimeType || "").toLowerCase();
+      const isImg =
+        mime.startsWith("image/") ||
+        ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp", "avif"].includes(ext);
+      const isVid =
+        mime.startsWith("video/") ||
+        ["mp4", "webm", "mov", "mkv", "m4v"].includes(ext);
+
+      if (!isImg && !isVid) {
+        return reply.status(404).send({ error: "No media thumbnail available" });
+      }
+
+      // If single chunk (whole file)
+      if (chunks.length === 1) {
+        const single = chunks[0]!;
+        let token: string;
+        try {
+          token = await TokenService.getValidAccessToken(
+            single.providerIdentityId,
+          );
+        } catch (err: any) {
+          return reply.status(424).send({
+            error: "Storage provider connection expired or invalid",
+            provider: single.provider,
+            details: err?.message,
+          });
+        }
+        const adapter = getStorageAdapter(single.provider);
+        const directUrl = await adapter.getDownloadUrl({
+          providerFileId: single.providerFileId,
+          accessToken: token,
+        });
+
+        const cdnHeaders: Record<string, string> = {};
+        if (single.provider === "google_drive") {
+          cdnHeaders["Authorization"] = `Bearer ${token}`;
+        }
+        if (request.headers.range) {
+          cdnHeaders["Range"] = request.headers.range;
+        }
+
+        const cdnRes = await fetch(directUrl, { headers: cdnHeaders });
+        if (!cdnRes.ok || !cdnRes.body) {
+          return reply.status(cdnRes.status || 502).send({
+            error: "Failed to stream media thumbnail",
+          });
+        }
+
+        reply.header("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
+        reply.header("Content-Type", file.mimeType || (isImg ? "image/jpeg" : "video/mp4"));
+        reply.header("Accept-Ranges", "bytes");
+        if (cdnRes.status === 206) {
+          reply.status(206);
+          const cr = cdnRes.headers.get("content-range");
+          if (cr) reply.header("Content-Range", cr);
+        }
+        const len = cdnRes.headers.get("content-length") || (file.size ? file.size.toString() : null);
+        if (len) reply.header("Content-Length", len);
+
+        return reply.send(Readable.fromWeb(cdnRes.body as any));
+      }
+
+      // If multi-cloud chunked file
+      reply.header("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
+      reply.header("Content-Type", file.mimeType || (isImg ? "image/jpeg" : "video/mp4"));
+      reply.header("Accept-Ranges", "bytes");
+      if (file.size) reply.header("Content-Length", file.size.toString());
+
+      const passThrough = new PassThrough();
+      request.raw.on("close", () => {
+        if (!passThrough.destroyed) passThrough.destroy();
+      });
+
+      (async () => {
+        try {
+          for (const c of chunks.sort((a, b) => a.chunkIndex - b.chunkIndex)) {
+            if (passThrough.destroyed) break;
+            const token = await TokenService.getValidAccessToken(c.providerIdentityId);
+            const adapter = getStorageAdapter(c.provider);
+            const url = await adapter.getDownloadUrl({
+              providerFileId: c.providerFileId,
+              accessToken: token,
+            });
+            const headers: Record<string, string> = {};
+            if (c.provider === "google_drive") headers["Authorization"] = `Bearer ${token}`;
+            const res = await fetch(url, { headers });
+            if (!res.ok || !res.body) break;
+            const reader = res.body.getReader();
+            while (true) {
+              if (passThrough.destroyed) break;
               const { done, value } = await reader.read();
               if (done) break;
               if (value) passThrough.write(Buffer.from(value));
             }
           }
-          passThrough.end();
+          if (!passThrough.destroyed) passThrough.end();
         } catch (err: any) {
-          passThrough.destroy(err);
+          if (!passThrough.destroyed) passThrough.destroy(err);
         }
       })();
+
+      return reply.send(passThrough);
     },
   );
 
@@ -512,6 +796,22 @@ export async function fileRoutes(fastify: FastifyInstance) {
         .where(and(eq(vfsNodes.id, id), eq(vfsNodes.userId, user.userId)));
 
       if (!file) return reply.status(404).send({ error: "File not found" });
+
+      let parentName = "My Drive";
+      if (file.parentId) {
+        const [parent] = await db
+          .select({ name: vfsNodes.name })
+          .from(vfsNodes)
+          .where(eq(vfsNodes.id, file.parentId));
+        if (parent) {
+          parentName = parent.name;
+        }
+      }
+
+      const [owner] = await db
+        .select({ email: users.email })
+        .from(users)
+        .where(eq(users.id, user.userId));
 
       const chunks = await db
         .select({
@@ -530,7 +830,11 @@ export async function fileRoutes(fastify: FastifyInstance) {
         .where(eq(fileChunks.vfsNodeId, id));
 
       return reply.send({
-        file,
+        file: {
+          ...file,
+          parentName,
+          ownerEmail: owner?.email || null,
+        },
         chunks: chunks.sort((a, b) => a.chunkIndex - b.chunkIndex),
       });
     },
@@ -597,14 +901,21 @@ export async function fileRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // 10. FILE SHARE ACCESS (Validate token & password, return download URL)
+  // 10. FILE SHARE ACCESS (Validate token & password, return chunked/whole download plan)
   fastify.get(
     "/share/:token",
     async (
-      request: FastifyRequest<{ Params: { token: string } }>,
+      request: FastifyRequest<{
+        Params: { token: string };
+        Querystring: { password?: string };
+      }>,
       reply: FastifyReply,
     ) => {
       const { token } = request.params;
+      const { password } = request.query;
+      const headerPassword = request.headers["x-share-password"] as string | undefined;
+      const passAttempt = password || headerPassword;
+
       const [share] = await db
         .select()
         .from(shares)
@@ -628,19 +939,35 @@ export async function fileRoutes(fastify: FastifyInstance) {
           .status(404)
           .send({ error: "Shared file no longer exists." });
       }
+
       // Check if password protected
       if (share.passwordHash) {
-        return reply.send({
-          isPasswordProtected: true,
-          fileName: file.name,
-          size: file.size,
-          mimeType: file.mimeType,
-        });
+        if (!passAttempt) {
+          return reply.send({
+            isPasswordProtected: true,
+            fileName: file.name,
+            size: file.size,
+            mimeType: file.mimeType,
+          });
+        }
+        const matches = await bcrypt.compare(passAttempt, share.passwordHash);
+        if (!matches) {
+          return reply.status(401).send({
+            isPasswordProtected: true,
+            error: "Incorrect password",
+            fileName: file.name,
+            size: file.size,
+            mimeType: file.mimeType,
+          });
+        }
       }
 
-      // Fetch chunk to resolve direct cloud download URL
-      const [chunk] = await db
+      // Fetch all chunks for this shared file
+      const chunks = await db
         .select({
+          chunkIndex: fileChunks.chunkIndex,
+          byteStart: fileChunks.byteStart,
+          byteEnd: fileChunks.byteEnd,
           providerFileId: fileChunks.providerFileId,
           providerIdentityId: fileChunks.providerIdentityId,
           provider: providerIdentities.provider,
@@ -652,26 +979,262 @@ export async function fileRoutes(fastify: FastifyInstance) {
         )
         .where(eq(fileChunks.vfsNodeId, file.id));
 
-      if (!chunk) {
+      if (chunks.length === 0) {
         return reply.status(404).send({ error: "File chunk data missing." });
       }
 
-      const accessToken = await TokenService.getValidAccessToken(
-        chunk.providerIdentityId,
-      );
-      const adapter = getStorageAdapter(chunk.provider);
-      const downloadUrl = await adapter.getDownloadUrl({
-        providerFileId: chunk.providerFileId,
-        accessToken,
-      });
+      if (chunks.length === 1) {
+        const single = chunks[0]!;
+        const accessToken = await TokenService.getValidAccessToken(
+          single.providerIdentityId,
+        );
+        const adapter = getStorageAdapter(single.provider);
+        const directUrl = await adapter.getDownloadUrl({
+          providerFileId: single.providerFileId,
+          accessToken,
+        });
+
+        return reply.send({
+          isPasswordProtected: false,
+          file: {
+            id: file.id,
+            name: file.name,
+            size: file.size,
+            mimeType: file.mimeType,
+            createdAt: file.createdAt,
+          },
+          strategy: "whole",
+          downloadUrl: directUrl,
+          chunks: [
+            {
+              index: 0,
+              byteStart: 0,
+              byteEnd: file.size,
+              downloadUrl: directUrl,
+            },
+          ],
+        });
+      }
+
+      // Multi-chunk plan
+      const chunkList = [];
+      for (const c of chunks.sort((a, b) => a.chunkIndex - b.chunkIndex)) {
+        const accessToken = await TokenService.getValidAccessToken(
+          c.providerIdentityId,
+        );
+        const adapter = getStorageAdapter(c.provider);
+        const url = await adapter.getDownloadUrl({
+          providerFileId: c.providerFileId,
+          accessToken,
+        });
+
+        chunkList.push({
+          index: c.chunkIndex,
+          byteStart: c.byteStart,
+          byteEnd: c.byteEnd,
+          downloadUrl: url,
+        });
+      }
 
       return reply.send({
         isPasswordProtected: false,
-        fileName: file.name,
-        size: file.size,
-        mimeType: file.mimeType,
-        downloadUrl,
+        file: {
+          id: file.id,
+          name: file.name,
+          size: file.size,
+          mimeType: file.mimeType,
+          createdAt: file.createdAt,
+        },
+        strategy: "chunked",
+        chunks: chunkList,
       });
+    },
+  );
+
+  // 11. FILE SHARE DOWNLOAD STREAM (Public stream fallback for shares)
+  fastify.get(
+    "/share/:token/download",
+    async (
+      request: FastifyRequest<{
+        Params: { token: string };
+        Querystring: { password?: string; info?: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      const { token } = request.params;
+      const { password, info } = request.query;
+
+      const [share] = await db
+        .select()
+        .from(shares)
+        .where(eq(shares.token, token));
+      if (!share) {
+        return reply
+          .status(404)
+          .send({ error: "Share link not found or expired." });
+      }
+      if (share.expiresAt && new Date(share.expiresAt) < new Date()) {
+        return reply.status(410).send({ error: "This share link has expired." });
+      }
+      const [file] = await db
+        .select()
+        .from(vfsNodes)
+        .where(eq(vfsNodes.id, share.vfsNodeId));
+      if (!file) {
+        return reply.status(404).send({ error: "Shared file no longer exists." });
+      }
+
+      if (share.passwordHash) {
+        if (!password) {
+          return reply.status(401).send({ error: "Password required" });
+        }
+        const matches = await bcrypt.compare(password, share.passwordHash);
+        if (!matches) {
+          return reply.status(401).send({ error: "Incorrect password" });
+        }
+      }
+
+      const chunks = await db
+        .select({
+          chunkIndex: fileChunks.chunkIndex,
+          byteStart: fileChunks.byteStart,
+          byteEnd: fileChunks.byteEnd,
+          providerFileId: fileChunks.providerFileId,
+          providerIdentityId: fileChunks.providerIdentityId,
+          provider: providerIdentities.provider,
+        })
+        .from(fileChunks)
+        .innerJoin(
+          providerIdentities,
+          eq(fileChunks.providerIdentityId, providerIdentities.id),
+        )
+        .where(eq(fileChunks.vfsNodeId, file.id));
+
+      if (chunks.length === 0) {
+        return reply.status(404).send({ error: "File chunks missing" });
+      }
+
+      if (chunks.length === 1) {
+        const single = chunks[0]!;
+        const token = await TokenService.getValidAccessToken(
+          single.providerIdentityId,
+        );
+        const adapter = getStorageAdapter(single.provider);
+        const directUrl = await adapter.getDownloadUrl({
+          providerFileId: single.providerFileId,
+          accessToken: token,
+        });
+
+        if (info === "true") {
+          return reply.send({
+            strategy: "whole",
+            fileName: file.name,
+            mimeType: file.mimeType,
+            size: file.size,
+            downloadUrl: directUrl,
+          });
+        }
+
+        const cdnRes = await fetch(directUrl, {
+          headers:
+            single.provider === "google_drive"
+              ? { Authorization: `Bearer ${token}` }
+              : {},
+        });
+
+        if (!cdnRes.ok || !cdnRes.body) {
+          return reply.status(502).send({
+            error: `Failed to stream file from ${single.provider} (HTTP ${cdnRes.status})`,
+          });
+        }
+
+        reply.header(
+          "Content-Disposition",
+          `attachment; filename="${encodeURIComponent(file.name)}"`,
+        );
+        reply.header(
+          "Content-Type",
+          file.mimeType || "application/octet-stream",
+        );
+        const actualLength =
+          cdnRes.headers.get("content-length") ||
+          (file.size ? file.size.toString() : null);
+        if (actualLength) reply.header("Content-Length", actualLength);
+
+        return reply.send(Readable.fromWeb(cdnRes.body as any));
+      }
+
+      // Multi-chunk sequential stream
+      reply.header(
+        "Content-Disposition",
+        `attachment; filename="${encodeURIComponent(file.name)}"`,
+      );
+      reply.header("Content-Type", file.mimeType || "application/octet-stream");
+      if (file.size) reply.header("Content-Length", file.size.toString());
+
+      const passThrough = new PassThrough();
+
+      request.raw.on("close", () => {
+        if (!passThrough.destroyed) {
+          passThrough.destroy();
+        }
+      });
+
+      (async () => {
+        try {
+          for (const c of chunks.sort((a, b) => a.chunkIndex - b.chunkIndex)) {
+            if (passThrough.destroyed) break;
+
+            const token = await TokenService.getValidAccessToken(
+              c.providerIdentityId,
+            );
+            const adapter = getStorageAdapter(c.provider);
+            const url = await adapter.getDownloadUrl({
+              providerFileId: c.providerFileId,
+              accessToken: token,
+            });
+
+            const headers: Record<string, string> = {};
+            if (c.provider === "google_drive") {
+              headers["Authorization"] = `Bearer ${token}`;
+            }
+
+            const res = await fetch(url, { headers });
+            if (!res.ok || !res.body) {
+              throw new Error(
+                `Failed to fetch chunk ${c.chunkIndex} from ${c.provider} (status: ${res.status})`,
+              );
+            }
+
+            const reader = res.body.getReader();
+            while (true) {
+              if (passThrough.destroyed) break;
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (value) {
+                const canContinue = passThrough.write(Buffer.from(value));
+                if (!canContinue) {
+                  await new Promise((resolve) =>
+                    passThrough.once("drain", resolve),
+                  );
+                }
+              }
+            }
+          }
+
+          if (!passThrough.destroyed) {
+            passThrough.end();
+          }
+        } catch (err: any) {
+          console.error(
+            `[Share Download Error] Failed streaming chunks for node ${file.id}:`,
+            err,
+          );
+          passThrough.destroy(err);
+        }
+      })();
+
+      return reply.send(passThrough);
     },
   );
 }

@@ -3,11 +3,27 @@
 :root {
   --background: #ffffff;
   --foreground: #0f172a;
+
+  /* Fuze brand colors */
+  --fuze-blue: #3B82F6;
+  --fuze-amber: #F59E0B;
+  --fuze-green: #10B981;
+  --fuze-slate: #1E293B;   /* icon center disc */
+  --fuze-ink: #0F172A;     /* dark backgrounds, text on light */
+  --fuze-mist: #F8FAFC;    /* light backgrounds, text on dark */
+  --fuze-gray: #94A3B8;    /* secondary text on dark */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-fuze-blue: var(--fuze-blue);
+  --color-fuze-amber: var(--fuze-amber);
+  --color-fuze-green: var(--fuze-green);
+  --color-fuze-slate: var(--fuze-slate);
+  --color-fuze-ink: var(--fuze-ink);
+  --color-fuze-mist: var(--fuze-mist);
+  --color-fuze-gray: var(--fuze-gray);
   --font-sans: var(--font-inter);
   --font-mono: var(--font-mono);
 }

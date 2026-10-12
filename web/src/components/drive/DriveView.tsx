@@ -13,6 +13,11 @@ import { ContextMenu } from "@/components/drive/ContextMenu";
 import { FileDetailsModal } from "@/components/drive/FileDetailsModal";
 import { ShareModal } from "@/components/drive/ShareModal";
 import { MoveModal } from "@/components/drive/MoveModal";
+import { RenameModal } from "@/components/drive/RenameModal";
+import { FilePreviewModal } from "@/components/drive/FilePreviewModal";
+import { downloadFile } from "@/lib/download-engine";
+import { formatBytes } from "@/lib/format";
+import { FuzeLogo } from "@/components/brand/FuzeLogo";
 import {
   Folder,
   FileText,
@@ -40,6 +45,12 @@ import {
   FolderInput,
   Download,
   Trash2,
+  Edit2,
+  Info,
+  Play,
+  Music,
+  FileSpreadsheet,
+  Layers,
 } from "lucide-react";
 
 // Subtle pastel palette matching the landing page mockup
@@ -97,6 +108,268 @@ function getProviderBadgeStyle(badge: string | null | undefined) {
     return "bg-emerald-50 text-emerald-700 border border-emerald-200/80";
   }
   return "bg-slate-50 text-slate-700 border border-slate-200/80";
+}
+
+function FileThumbnail({
+  file,
+  badge,
+}: {
+  file: VfsItem;
+  badge: string;
+}) {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+  const name = file.name.toLowerCase();
+  const ext = (file.name.split(".").pop() || "file").toUpperCase();
+  const mime = (file.mimeType || "").toLowerCase();
+
+  const isImage =
+    mime.startsWith("image/") ||
+    /\.(jpg|jpeg|png|webp|gif|svg|avif|bmp)$/i.test(name);
+  const isVideo =
+    mime.startsWith("video/") ||
+    /\.(mp4|mkv|webm|mov|m4v)$/i.test(name);
+  const isPdf = mime.includes("pdf") || name.endsWith(".pdf");
+  const isSpreadsheet = /\.(xlsx|xls|csv|tsv)$/i.test(name);
+  const isDoc = /\.(docx|doc|txt|rtf|odt)$/i.test(name);
+  const isCode = /\.(ts|tsx|js|jsx|json|py|html|css|sql|sh|yaml|yml)$/i.test(name);
+  const isAudio = mime.startsWith("audio/") || /\.(mp3|wav|ogg|flac|m4a)$/i.test(name);
+  const isArchive = /\.(zip|tar|gz|rar|7z)$/i.test(name);
+  const isChunked = badge.includes("Multi-Cloud");
+
+  const [imgError, setImgError] = useState(false);
+  const [vidError, setVidError] = useState(false);
+
+  // Common Corner Badges Component
+  const CornerBadges = () => (
+    <>
+      <span className="absolute bottom-2 right-2 text-[9px] font-bold uppercase bg-slate-900/75 text-white px-1.5 py-0.5 rounded backdrop-blur-xs select-none shadow-xs pointer-events-none">
+        {ext}
+      </span>
+      {isChunked && (
+        <span className="absolute bottom-2 left-2 text-[9px] font-semibold bg-white/95 text-blue-700 px-1.5 py-0.5 rounded shadow-xs flex items-center gap-1 border border-blue-200/90 select-none pointer-events-none">
+          <Layers className="w-2.5 h-2.5 text-blue-600" />
+          <span>Pooled</span>
+        </span>
+      )}
+    </>
+  );
+
+  // 1. IMAGE THUMBNAIL
+  if (isImage && !imgError) {
+    return (
+      <div className="w-full h-full relative overflow-hidden rounded-lg bg-slate-100/90 flex items-center justify-center p-1.5">
+        <img
+          crossOrigin="use-credentials"
+          src={`${apiUrl}/files/${file.id}/thumbnail`}
+          alt={file.name}
+          loading="lazy"
+          className="w-full h-full object-contain rounded-md transition-transform duration-300 group-hover:scale-105"
+          onError={() => setImgError(true)}
+        />
+        <CornerBadges />
+      </div>
+    );
+  }
+
+  // 2. VIDEO THUMBNAIL
+  if (isVideo && !vidError) {
+    return (
+      <div className="w-full h-full relative overflow-hidden rounded-lg bg-slate-950 flex items-center justify-center">
+        <video
+          crossOrigin="use-credentials"
+          src={`${apiUrl}/files/${file.id}/thumbnail#t=0.5`}
+          preload="metadata"
+          muted
+          playsInline
+          className="w-full h-full object-contain pointer-events-none group-hover:scale-105 transition-transform duration-300"
+          onError={() => setVidError(true)}
+        />
+        <div className="absolute inset-0 flex items-center justify-center bg-black/25 group-hover:bg-black/10 transition">
+          <div className="w-9 h-9 rounded-full bg-black/65 backdrop-blur-xs flex items-center justify-center text-white shadow-md group-hover:scale-110 transition">
+            <Play className="w-4 h-4 fill-white ml-0.5" />
+          </div>
+        </div>
+        <CornerBadges />
+      </div>
+    );
+  }
+
+  // Fallback for Video if failed or still processing
+  if (isVideo) {
+    return (
+      <div className="w-full h-full bg-gradient-to-br from-slate-900 to-indigo-950 rounded-lg flex flex-col items-center justify-center relative overflow-hidden p-3 group-hover:from-slate-850 group-hover:to-indigo-900 transition">
+        <div className="w-11 h-11 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shadow-inner group-hover:scale-110 transition">
+          <Video className="w-5 h-5 text-indigo-400" />
+        </div>
+        <CornerBadges />
+      </div>
+    );
+  }
+
+  // 3. PDF DOCUMENT CARD
+  if (isPdf) {
+    return (
+      <div className="w-full h-full bg-rose-50/50 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-rose-50/80 transition">
+        <div className="w-24 h-28 bg-white rounded-lg shadow-2xs border border-rose-200/80 flex flex-col items-center justify-between p-2.5 transition-transform duration-300 group-hover:scale-105 group-hover:shadow-xs">
+          <div className="w-full flex items-center justify-between">
+            <FileText className="w-4 h-4 text-rose-600" />
+            <span className="text-[8px] font-bold bg-rose-600 text-white px-1.5 py-0.2 rounded uppercase">PDF</span>
+          </div>
+          <div className="w-full space-y-1.5 my-auto px-1 opacity-70">
+            <div className="h-1 bg-rose-300 rounded-full w-full" />
+            <div className="h-1 bg-rose-200 rounded-full w-4/5" />
+            <div className="h-1 bg-rose-200 rounded-full w-3/5" />
+          </div>
+          <div className="w-full pt-1 border-t border-rose-100 flex items-center justify-center">
+            <span className="text-[8px] font-bold text-rose-700 uppercase">Document</span>
+          </div>
+        </div>
+        <CornerBadges />
+      </div>
+    );
+  }
+
+  // 4. SPREADSHEET CARD (Excel / CSV)
+  if (isSpreadsheet) {
+    return (
+      <div className="w-full h-full bg-emerald-50/50 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-emerald-50/80 transition">
+        <div className="w-24 h-28 bg-white rounded-lg shadow-2xs border border-emerald-200/80 flex flex-col items-center justify-between p-2.5 transition-transform duration-300 group-hover:scale-105 group-hover:shadow-xs">
+          <div className="w-full flex items-center justify-between">
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span className="text-[8px] font-bold bg-emerald-600 text-white px-1.5 py-0.2 rounded uppercase">{ext}</span>
+          </div>
+          <div className="w-full grid grid-cols-3 gap-0.5 my-auto bg-emerald-100/60 p-1 rounded border border-emerald-200/60">
+            <div className="h-1.5 bg-emerald-200/80 rounded-xs" />
+            <div className="h-1.5 bg-emerald-200/80 rounded-xs" />
+            <div className="h-1.5 bg-emerald-200/80 rounded-xs" />
+            <div className="h-1.5 bg-white rounded-xs" />
+            <div className="h-1.5 bg-white rounded-xs" />
+            <div className="h-1.5 bg-white rounded-xs" />
+          </div>
+          <div className="w-full pt-1 border-t border-emerald-100 flex items-center justify-center">
+            <span className="text-[8px] font-bold text-emerald-700 uppercase">Spreadsheet</span>
+          </div>
+        </div>
+        <CornerBadges />
+      </div>
+    );
+  }
+
+  // 5. WORD / TEXT DOCUMENT CARD
+  if (isDoc) {
+    return (
+      <div className="w-full h-full bg-blue-50/50 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-blue-50/80 transition">
+        <div className="w-24 h-28 bg-white rounded-lg shadow-2xs border border-blue-200/80 flex flex-col items-center justify-between p-2.5 transition-transform duration-300 group-hover:scale-105 group-hover:shadow-xs">
+          <div className="w-full flex items-center justify-between">
+            <FileText className="w-4 h-4 text-blue-600" />
+            <span className="text-[8px] font-bold bg-blue-600 text-white px-1.5 py-0.2 rounded uppercase">{ext}</span>
+          </div>
+          <div className="w-full space-y-1.5 my-auto px-1 opacity-70">
+            <div className="h-1 bg-blue-300 rounded-full w-full" />
+            <div className="h-1 bg-blue-200 rounded-full w-5/6" />
+            <div className="h-1 bg-blue-200 rounded-full w-2/3" />
+          </div>
+          <div className="w-full pt-1 border-t border-blue-100 flex items-center justify-center">
+            <span className="text-[8px] font-bold text-blue-700 uppercase">Word Doc</span>
+          </div>
+        </div>
+        <CornerBadges />
+      </div>
+    );
+  }
+
+  // 6. CODE FILE CARD
+  if (isCode) {
+    return (
+      <div className="w-full h-full bg-slate-900 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-slate-850 transition">
+        <div className="w-24 h-28 bg-slate-950 rounded-lg shadow-2xs border border-slate-800 flex flex-col items-center justify-between p-2.5 transition-transform duration-300 group-hover:scale-105">
+          <div className="w-full flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block" />
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+            </div>
+            <span className="text-[8px] font-mono font-bold bg-slate-800 text-indigo-300 px-1.5 py-0.2 rounded uppercase">{ext}</span>
+          </div>
+          <div className="w-full space-y-1 my-auto px-1">
+            <div className="h-1 bg-indigo-500/70 rounded-full w-1/2" />
+            <div className="h-1 bg-slate-700 rounded-full w-3/4 ml-1.5" />
+            <div className="h-1 bg-emerald-500/70 rounded-full w-2/3 ml-1.5" />
+            <div className="h-1 bg-indigo-500/70 rounded-full w-1/3" />
+          </div>
+          <div className="w-full pt-1 border-t border-slate-800 flex items-center justify-center">
+            <span className="text-[8px] font-mono text-slate-500 uppercase">Source Code</span>
+          </div>
+        </div>
+        <CornerBadges />
+      </div>
+    );
+  }
+
+  // 7. AUDIO CARD
+  if (isAudio) {
+    return (
+      <div className="w-full h-full bg-purple-50/50 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-purple-50/80 transition">
+        <div className="w-24 h-28 bg-white rounded-lg shadow-2xs border border-purple-200/80 flex flex-col items-center justify-between p-2.5 transition-transform duration-300 group-hover:scale-105 group-hover:shadow-xs">
+          <div className="w-full flex items-center justify-between">
+            <Music className="w-4 h-4 text-purple-600" />
+            <span className="text-[8px] font-bold bg-purple-600 text-white px-1.5 py-0.2 rounded uppercase">{ext}</span>
+          </div>
+          <div className="flex items-end justify-center gap-1 h-7 my-auto">
+            <div className="w-1 bg-purple-400 rounded-full h-3" />
+            <div className="w-1 bg-purple-500 rounded-full h-5" />
+            <div className="w-1 bg-purple-600 rounded-full h-7" />
+            <div className="w-1 bg-purple-500 rounded-full h-4" />
+            <div className="w-1 bg-purple-400 rounded-full h-2" />
+          </div>
+          <div className="w-full pt-1 border-t border-purple-100 flex items-center justify-center">
+            <span className="text-[8px] font-bold text-purple-700 uppercase">Audio Track</span>
+          </div>
+        </div>
+        <CornerBadges />
+      </div>
+    );
+  }
+
+  // 8. ARCHIVE CARD
+  if (isArchive) {
+    return (
+      <div className="w-full h-full bg-amber-50/50 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-amber-50/80 transition">
+        <div className="w-24 h-28 bg-white rounded-lg shadow-2xs border border-amber-200/80 flex flex-col items-center justify-between p-2.5 transition-transform duration-300 group-hover:scale-105 group-hover:shadow-xs">
+          <div className="w-full flex items-center justify-between">
+            <Archive className="w-4 h-4 text-amber-600" />
+            <span className="text-[8px] font-bold bg-amber-600 text-white px-1.5 py-0.2 rounded uppercase">{ext}</span>
+          </div>
+          <div className="flex items-center justify-center my-auto">
+            <Archive className="w-7 h-7 text-amber-500" />
+          </div>
+          <div className="w-full pt-1 border-t border-amber-100 flex items-center justify-center">
+            <span className="text-[8px] font-bold text-amber-700 uppercase">Archive</span>
+          </div>
+        </div>
+        <CornerBadges />
+      </div>
+    );
+  }
+
+  // 9. GENERIC FALLBACK CARD
+  return (
+    <div className="w-full h-full bg-slate-100/70 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-slate-100 transition">
+      <div className="w-24 h-28 bg-white rounded-lg shadow-2xs border border-slate-200/90 flex flex-col items-center justify-between p-2.5 transition-transform duration-300 group-hover:scale-105 group-hover:shadow-xs">
+        <div className="w-full flex items-center justify-between">
+          <FileText className="w-4 h-4 text-slate-500" />
+          <span className="text-[8px] font-bold bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded uppercase">{ext}</span>
+        </div>
+        <div className="flex items-center justify-center my-auto">
+          <FileText className="w-7 h-7 text-slate-400" />
+        </div>
+        <div className="w-full pt-1 border-t border-slate-100 flex items-center justify-center">
+          <span className="text-[8px] font-bold text-slate-500 uppercase">{ext}</span>
+        </div>
+      </div>
+      <CornerBadges />
+    </div>
+  );
 }
 
 interface DriveViewProps {
@@ -160,12 +433,14 @@ export function DriveView({
   } | null>(null);
   const [inspectItem, setInspectItem] = useState<VfsItem | null>(null);
   const [shareItem, setShareItem] = useState<VfsItem | null>(null);
+  const [previewItem, setPreviewItem] = useState<VfsItem | null>(null);
 
   // Selection & Move State
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
   const [moveModalOpen, setMoveModalOpen] = useState(false);
   const [moveTargetItems, setMoveTargetItems] = useState<VfsItem[]>([]);
+  const [renameItem, setRenameItem] = useState<VfsItem | null>(null);
 
   // Sorting
   const [sortBy, setSortBy] = useState<"date" | "name" | "size">("date");
@@ -364,34 +639,27 @@ export function DriveView({
 
   // File operations
   const handleDownload = async (item: VfsItem) => {
-    const link = document.createElement("a");
-    link.href = `${apiUrl}/files/${item.id}/download`;
-    link.download = item.name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      await downloadFile({ fileId: item.id, fileName: item.name });
+    } catch (err) {
+      console.warn("Client-side direct download failed, falling back to server stream:", err);
+      const link = document.createElement("a");
+      link.href = `${apiUrl}/files/${item.id}/download`;
+      link.download = item.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
-  const handleRename = async (item: VfsItem) => {
-    const newName = window.prompt("Enter new title:", item.name);
-    if (!newName || !newName.trim() || newName.trim() === item.name) return;
-    try {
-      const res = await fetch(`${apiUrl}/files/${item.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ name: newName.trim() }),
-      });
-      if (res.ok) {
-        setItems(
-          items.map((i) =>
-            i.id === item.id ? { ...i, name: newName.trim() } : i,
-          ),
-        );
-      }
-    } catch (err) {
-      console.error("Rename failed:", err);
-    }
+  const handleRename = (item: VfsItem) => {
+    setRenameItem(item);
+  };
+
+  const handleRenameSuccess = (item: VfsItem, newName: string) => {
+    setItems(
+      items.map((i) => (i.id === item.id ? { ...i, name: newName } : i)),
+    );
   };
 
   const handleDelete = async (item: VfsItem) => {
@@ -505,14 +773,53 @@ export function DriveView({
     [],
   );
 
+  const handleItemClick = useCallback(
+    (item: VfsItem, e: React.MouseEvent) => {
+      // Range select with Shift key
+      if (e.shiftKey && lastSelectedId) {
+        e.stopPropagation();
+        const ids = processedItems.map((i) => i.id);
+        const lastIdx = ids.indexOf(lastSelectedId);
+        const currIdx = ids.indexOf(item.id);
+        if (lastIdx !== -1 && currIdx !== -1) {
+          const start = Math.min(lastIdx, currIdx);
+          const end = Math.max(lastIdx, currIdx);
+          const rangeIds = ids.slice(start, end + 1);
+          setSelectedIds((prev) => new Set([...Array.from(prev), ...rangeIds]));
+          return;
+        }
+      }
+
+      // If any items are selected or modifier key pressed, toggle this item in the selection
+      if (selectedIds.size > 0 || e.ctrlKey || e.metaKey) {
+        e.stopPropagation();
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          if (next.has(item.id)) {
+            next.delete(item.id);
+          } else {
+            next.add(item.id);
+          }
+          return next;
+        });
+        setLastSelectedId(item.id);
+        return;
+      }
+
+      // Normal click when nothing is selected
+      if (item.type === "folder") {
+        navigateToFolder(item.id);
+      } else {
+        router.push(`/preview/${item.id}`);
+      }
+    },
+    [selectedIds, lastSelectedId, processedItems, navigateToFolder, router],
+  );
+
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
     setLastSelectedId(null);
   }, []);
-
-  const selectAll = useCallback(() => {
-    setSelectedIds(new Set(processedItems.map((i) => i.id)));
-  }, [processedItems]);
 
   const handleOpenMove = (targetItems: VfsItem[]) => {
     setMoveTargetItems(targetItems);
@@ -521,13 +828,13 @@ export function DriveView({
 
   const handleBatchStar = async (star: boolean) => {
     if (selectedIds.size === 0) return;
-    const ids = Array.from(selectedIds);
+    const nodeIds = Array.from(selectedIds);
     try {
       const res = await fetch(`${apiUrl}/files/batch-star`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ ids, starred: star }),
+        body: JSON.stringify({ nodeIds, starred: star }),
       });
       if (res.ok) {
         setItems(
@@ -551,13 +858,13 @@ export function DriveView({
     ) {
       return;
     }
-    const ids = Array.from(selectedIds);
+    const nodeIds = Array.from(selectedIds);
     try {
       const res = await fetch(`${apiUrl}/files/batch-trash`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ ids }),
+        body: JSON.stringify({ nodeIds }),
       });
       if (res.ok) {
         setItems(items.filter((i) => !selectedIds.has(i.id)));
@@ -588,9 +895,6 @@ export function DriveView({
       }
       if (e.key === "Escape") {
         clearSelection();
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
-        e.preventDefault();
-        selectAll();
       } else if (e.key === "Delete" || e.key === "Backspace") {
         if (selectedIds.size > 0 && !showFolderModal && !moveModalOpen) {
           e.preventDefault();
@@ -600,7 +904,7 @@ export function DriveView({
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [clearSelection, selectAll, selectedIds, showFolderModal, moveModalOpen, handleBatchDelete]);
+  }, [clearSelection, selectedIds, showFolderModal, moveModalOpen, handleBatchDelete]);
 
   const getFileIcon = (file: VfsItem) => {
     const mime = file.mimeType || "";
@@ -655,20 +959,24 @@ export function DriveView({
               clearSelection();
             }
           }}
-          className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 w-full max-w-7xl"
+          className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-28 sm:pb-28 lg:pb-8 w-full max-w-7xl"
         >
           {/* Top Integrated Header: Responsive search on left, controls on right */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 sm:pb-4 border-b border-slate-100 mb-5 sm:mb-6">
-            <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="flex items-center flex-1 min-w-0">
               <button
                 onClick={() => setMobileSidebarOpen(true)}
                 aria-label="Open navigation menu"
-                className="lg:hidden p-1.5 -ml-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer shrink-0"
+                className="lg:hidden h-8 w-8 inline-flex items-center justify-center -ml-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer shrink-0 mr-1"
               >
                 <Menu className="h-5 w-5" />
               </button>
 
-              <div className="flex items-center gap-2 text-slate-400 bg-slate-100/70 border border-slate-200/80 px-3 py-1.5 rounded-lg flex-1 sm:max-w-xs md:max-w-sm transition-all focus-within:bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/10 min-w-0">
+              <div className="lg:hidden shrink-0 inline-flex items-center justify-center h-8 mr-3">
+                <FuzeLogo variant="icon" height={24} />
+              </div>
+
+              <div className="h-8 flex items-center gap-2 text-slate-400 bg-slate-100/70 border border-slate-200/80 px-3 rounded-lg flex-1 sm:max-w-xs md:max-w-sm transition-all focus-within:bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/10 min-w-0">
                 <Search className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                 <input
                   ref={searchInputRef}
@@ -767,86 +1075,137 @@ export function DriveView({
             </div>
           </div>
 
-          {/* Selection Action Bar (Google Drive style) */}
+          {/* Google Drive Inspired Selection Action Bar */}
           {selectedIds.size > 0 && (
-            <div className="mb-4 bg-slate-900 text-white rounded-xl px-4 py-2.5 shadow-lg flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-150">
-              <div className="flex items-center gap-3">
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="sticky top-0 z-30 mb-5 bg-white border border-blue-200/90 rounded-2xl px-3.5 sm:px-4 py-2.5 shadow-md shadow-blue-500/5 flex flex-wrap items-center justify-between gap-2.5 animate-in fade-in slide-in-from-top-2 duration-150 ring-1 ring-blue-500/10"
+            >
+              {/* Left Side: Close button and Selection Count */}
+              <div className="flex items-center gap-2 sm:gap-2.5">
                 <button
                   type="button"
-                  onClick={clearSelection}
-                  className="p-1 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    clearSelection();
+                  }}
+                  className="p-1 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-lg transition cursor-pointer"
                   title="Clear selection (Esc)"
                   aria-label="Clear selection"
                 >
                   <X className="h-4 w-4" />
                 </button>
-                <span className="text-xs font-medium">
+                <span className="text-xs font-semibold bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full border border-blue-200/60">
                   {selectedIds.size} selected
                 </span>
-                <span className="text-slate-600 hidden sm:inline">|</span>
-                <button
-                  type="button"
-                  onClick={selectAll}
-                  className="hidden sm:inline text-xs text-blue-400 hover:text-blue-300 hover:underline cursor-pointer"
-                >
-                  Select all ({processedItems.length})
-                </button>
               </div>
 
-              <div className="flex items-center gap-1 sm:gap-2">
+              {/* Right Side: Action Buttons */}
+              <div className="flex items-center gap-1 sm:gap-1.5">
+                {/* Move Action */}
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     const selectedItems = processedItems.filter((i) =>
                       selectedIds.has(i.id),
                     );
                     handleOpenMove(selectedItems);
                   }}
-                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-200 hover:text-white hover:bg-slate-800 rounded-lg transition cursor-pointer"
-                  title="Move to..."
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition cursor-pointer border border-slate-200 hover:border-blue-200 bg-white"
+                  title="Move to destination folder"
                 >
-                  <FolderInput className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Move</span>
+                  <FolderInput className="h-3.5 w-3.5 text-slate-500 group-hover:text-blue-600" />
+                  <span className="hidden xs:inline">Move</span>
                 </button>
 
+                {/* Rename Action (when exactly 1 item selected) */}
+                {selectedIds.size === 1 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const item = processedItems.find((i) => selectedIds.has(i.id));
+                      if (item) handleRename(item);
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition cursor-pointer border border-slate-200 hover:border-blue-200 bg-white"
+                    title="Rename selected item"
+                  >
+                    <Edit2 className="h-3.5 w-3.5 text-slate-500 group-hover:text-blue-600" />
+                    <span className="hidden xs:inline">Rename</span>
+                  </button>
+                )}
+
+                {/* Details Action (when exactly 1 item selected) */}
+                {selectedIds.size === 1 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const item = processedItems.find((i) => selectedIds.has(i.id));
+                      if (item) setInspectItem(item);
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition cursor-pointer border border-slate-200 hover:border-blue-200 bg-white"
+                    title="View file details and storage info"
+                  >
+                    <Info className="h-3.5 w-3.5 text-slate-500 group-hover:text-blue-600" />
+                    <span className="hidden xs:inline">Details</span>
+                  </button>
+                )}
+
+                {/* Star / Unstar Action */}
                 <button
                   type="button"
-                  onClick={() => {
-                    // Check if any are not starred, star all; otherwise unstar all
+                  onClick={(e) => {
+                    e.stopPropagation();
                     const anyUnstarred = processedItems.some(
                       (i) => selectedIds.has(i.id) && !i.starred,
                     );
                     void handleBatchStar(anyUnstarred);
                   }}
-                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-200 hover:text-white hover:bg-slate-800 rounded-lg transition cursor-pointer"
-                  title="Star/Unstar"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition cursor-pointer border border-slate-200 hover:border-amber-200 bg-white"
+                  title="Toggle star on selected items"
                 >
-                  <Star className="h-3.5 w-3.5 text-amber-400" />
-                  <span className="hidden sm:inline">Star</span>
+                  <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-400" />
+                  <span className="hidden xs:inline">
+                    {processedItems.some(
+                      (i) => selectedIds.has(i.id) && !i.starred,
+                    )
+                      ? "Star"
+                      : "Unstar"}
+                  </span>
                 </button>
 
+                {/* Download (if any files selected) */}
                 {processedItems.some(
                   (i) => selectedIds.has(i.id) && i.type === "file",
                 ) && (
                   <button
                     type="button"
-                    onClick={() => void handleBatchDownload()}
-                    className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-200 hover:text-white hover:bg-slate-800 rounded-lg transition cursor-pointer"
-                    title="Download files"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleBatchDownload();
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition cursor-pointer border border-slate-200 hover:border-emerald-200 bg-white"
+                    title="Download selected files"
                   >
-                    <Download className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Download</span>
+                    <Download className="h-3.5 w-3.5 text-emerald-600" />
+                    <span className="hidden xs:inline">Download</span>
                   </button>
                 )}
 
+                {/* Trash Action */}
                 <button
                   type="button"
-                  onClick={() => void handleBatchDelete()}
-                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-rose-400 hover:text-rose-300 hover:bg-slate-800 rounded-lg transition cursor-pointer"
-                  title="Delete"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleBatchDelete();
+                  }}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition cursor-pointer border border-rose-200/80 bg-white"
+                  title="Move selected items to trash"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Trash</span>
+                  <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+                  <span className="hidden xs:inline">Trash</span>
                 </button>
               </div>
             </div>
@@ -885,11 +1244,11 @@ export function DriveView({
             <div className="space-y-6 animate-pulse">
               <div>
                 <div className="h-3 w-16 bg-slate-200 rounded mb-2.5" />
-                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
                   {[1, 2, 3].map((n) => (
                     <div
                       key={n}
-                      className="border border-slate-200/80 rounded-xl p-3 sm:p-3.5 flex items-center gap-3 bg-white shadow-2xs"
+                      className="border border-slate-200/80 rounded-xl px-3 py-2.5 sm:p-3.5 flex items-center gap-3 bg-white shadow-2xs"
                     >
                       <div className="h-6 w-6 rounded-lg bg-slate-200 shrink-0" />
                       <div className="flex-1 space-y-1.5 min-w-0">
@@ -928,7 +1287,7 @@ export function DriveView({
                   <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
                     Folders
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
                     {folders.map((folder) => {
                       const palette = getFolderPalette(folder.id || folder.name);
                       const isSelected = selectedIds.has(folder.id);
@@ -936,7 +1295,7 @@ export function DriveView({
                         <div
                           key={folder.id}
                           onDoubleClick={() => navigateToFolder(folder.id)}
-                          onClick={(e) => toggleSelect(folder, e)}
+                          onClick={(e) => handleItemClick(folder, e)}
                           onContextMenu={(e) => {
                             e.preventDefault();
                             setContextMenu({
@@ -945,57 +1304,57 @@ export function DriveView({
                               item: folder,
                             });
                           }}
-                          className={`border rounded-xl p-3 sm:p-3.5 flex items-center justify-between transition cursor-pointer group ${
+                          className={`border rounded-xl px-3 py-2.5 sm:p-3.5 flex items-center justify-between transition cursor-pointer group gap-2.5 ${
                             isSelected
                               ? "bg-blue-50/60 border-blue-400 ring-2 ring-blue-500/20 shadow-xs"
                               : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-2xs"
                           }`}
                         >
-                          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
-                            {/* Checkbox */}
+                          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
+                            {/* Checkbox (always visible) */}
                             <button
                               type="button"
                               onClick={(e) => toggleSelectCheckbox(folder.id, e)}
-                              className={`p-0.5 rounded transition cursor-pointer shrink-0 ${
+                              className={`p-1 rounded-md transition cursor-pointer shrink-0 ${
                                 isSelected
-                                  ? "text-blue-600 opacity-100"
-                                  : "text-slate-400 opacity-0 group-hover:opacity-100 hover:text-slate-600"
+                                  ? "text-blue-600 bg-blue-50"
+                                  : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"
                               }`}
                               title={isSelected ? "Deselect" : "Select"}
                             >
                               {isSelected ? (
                                 <CheckSquare className="h-4 w-4 fill-blue-50 text-blue-600" />
                               ) : (
-                                <Square className="h-4 w-4" />
+                                <Square className="h-4 w-4 text-slate-400 hover:text-slate-600" />
                               )}
                             </button>
 
-                            <Folder className={`h-5 w-5 sm:h-6 sm:w-6 shrink-0 ${palette.icon}`} />
+                            <Folder className={`h-5 w-5 sm:h-5.5 sm:w-5.5 shrink-0 ${palette.icon}`} />
                             <div className="min-w-0 flex-1">
                               <div
-                                className="font-semibold text-slate-800 text-xs truncate"
+                                className="font-semibold text-slate-800 text-xs truncate leading-snug"
                                 title={folder.name}
                               >
                                 {folder.name}
                               </div>
-                              <div className="text-[10px] text-slate-400 font-normal">
+                              <div className="text-[10px] text-slate-400 font-normal leading-tight">
                                 Folder
                               </div>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-1 shrink-0">
-                            {/* Star Toggle */}
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            {/* Star Toggle (always visible) */}
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 void handleToggleStar(folder);
                               }}
-                              className={`p-1 rounded hover:bg-slate-100 transition cursor-pointer ${
+                              className={`p-1.5 rounded-md hover:bg-slate-100 transition cursor-pointer ${
                                 folder.starred
-                                  ? "text-amber-500 opacity-100"
-                                  : "text-slate-400 opacity-0 group-hover:opacity-100 hover:text-amber-500"
+                                  ? "text-amber-500"
+                                  : "text-slate-300 hover:text-amber-500"
                               }`}
                               title={folder.starred ? "Unstar" : "Star"}
                             >
@@ -1015,7 +1374,7 @@ export function DriveView({
                                   item: folder,
                                 });
                               }}
-                              className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 transition shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                              className="p-1.5 hover:bg-slate-100 rounded-md text-slate-400 hover:text-slate-600 transition shrink-0"
                             >
                               <MoreVertical className="h-3.5 w-3.5" />
                             </button>
@@ -1049,15 +1408,15 @@ export function DriveView({
                   </div>
                 ) : viewMode === "grid" ? (
                   /* Responsive Grid View for Files */
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-5">
                     {files.map((file) => {
                       const badge = getDisplayBadge(file);
                       const isSelected = selectedIds.has(file.id);
                       return (
                         <div
                           key={file.id}
-                          onDoubleClick={() => handleDownload(file)}
-                          onClick={(e) => toggleSelect(file, e)}
+                          onDoubleClick={() => router.push(`/preview/${file.id}`)}
+                          onClick={(e) => handleItemClick(file, e)}
                           onContextMenu={(e) => {
                             e.preventDefault();
                             setContextMenu({
@@ -1072,15 +1431,15 @@ export function DriveView({
                               : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-2xs"
                           }`}
                         >
-                          <div className="h-24 bg-slate-50/80 rounded-lg flex items-center justify-center mb-2.5 relative group-hover:bg-blue-50/30 transition">
-                            {/* Checkbox (top-left) */}
+                          <div className="h-36 sm:h-40 bg-slate-50/80 rounded-lg flex items-center justify-center mb-2.5 relative group-hover:bg-blue-50/30 transition overflow-hidden">
+                            {/* Checkbox (top-left) - always visible */}
                             <button
                               type="button"
                               onClick={(e) => toggleSelectCheckbox(file.id, e)}
                               className={`absolute top-1.5 left-1.5 p-1 rounded-md transition cursor-pointer z-10 ${
                                 isSelected
-                                  ? "text-blue-600 bg-white/95 shadow-2xs opacity-100"
-                                  : "text-slate-400 bg-white/90 hover:bg-white hover:text-slate-700 opacity-0 group-hover:opacity-100 shadow-2xs"
+                                  ? "text-blue-600 bg-white/95 shadow-2xs"
+                                  : "text-slate-400 bg-white/90 hover:bg-white hover:text-slate-700 shadow-2xs"
                               }`}
                               title={isSelected ? "Deselect" : "Select"}
                             >
@@ -1091,8 +1450,8 @@ export function DriveView({
                               )}
                             </button>
 
-                            {/* File Icon */}
-                            <div className="scale-125">{getFileIcon(file)}</div>
+                            {/* Visual Thumbnail */}
+                            <FileThumbnail file={file} badge={badge} />
 
                             {/* Star Toggle (top-right next to context menu) */}
                             <button
@@ -1101,10 +1460,10 @@ export function DriveView({
                                 e.stopPropagation();
                                 void handleToggleStar(file);
                               }}
-                              className={`absolute top-1.5 right-7 p-1 rounded-md bg-white/90 hover:bg-white transition shadow-2xs cursor-pointer ${
+                              className={`absolute top-1.5 right-7 p-1 rounded-md bg-white/90 hover:bg-white transition shadow-2xs cursor-pointer z-10 ${
                                 file.starred
-                                  ? "text-amber-500 opacity-100"
-                                  : "text-slate-400 hover:text-amber-500 opacity-0 group-hover:opacity-100"
+                                  ? "text-amber-500"
+                                  : "text-slate-300 hover:text-amber-500"
                               }`}
                               title={file.starred ? "Unstar" : "Star"}
                             >
@@ -1124,28 +1483,28 @@ export function DriveView({
                                   item: file,
                                 });
                               }}
-                              className="absolute top-1.5 right-1.5 p-1 rounded-md bg-white/90 hover:bg-white text-slate-400 hover:text-slate-700 opacity-0 group-hover:opacity-100 transition shadow-2xs cursor-pointer"
+                              className="absolute top-1.5 right-1.5 p-1 rounded-md bg-white/90 hover:bg-white text-slate-400 hover:text-slate-700 transition shadow-2xs cursor-pointer z-10"
                             >
                               <MoreVertical className="h-3 w-3" />
                             </button>
                           </div>
 
-                          <div className="min-w-0">
+                          <div className="min-w-0 pt-0.5">
                             <div
-                              className="font-medium text-slate-800 text-xs truncate"
+                              className="font-medium text-slate-800 text-xs truncate leading-snug"
                               title={file.name}
                             >
                               {file.name}
                             </div>
-                            <div className="flex flex-col gap-1 mt-1 text-[10px] text-slate-400">
+                            <div className="flex items-center justify-between gap-1.5 mt-1.5 text-[10px] text-slate-400">
                               <span
-                                className={`self-start px-1.5 py-0.2 rounded-full font-medium text-[9px] ${getProviderBadgeStyle(
+                                className={`px-1.5 py-0.5 rounded-full font-medium text-[9px] truncate max-w-[120px] ${getProviderBadgeStyle(
                                   badge,
                                 )}`}
                               >
                                 {badge}
                               </span>
-                              <span>{(file.size / (1024 * 1024)).toFixed(1)} MB</span>
+                              <span className="shrink-0 font-medium">{formatBytes(file.size)}</span>
                             </div>
                           </div>
                         </div>
@@ -1161,8 +1520,8 @@ export function DriveView({
                       return (
                         <div
                           key={file.id}
-                          onDoubleClick={() => handleDownload(file)}
-                          onClick={(e) => toggleSelect(file, e)}
+                          onDoubleClick={() => router.push(`/preview/${file.id}`)}
+                          onClick={(e) => handleItemClick(file, e)}
                           onContextMenu={(e) => {
                             e.preventDefault();
                             setContextMenu({
@@ -1178,14 +1537,14 @@ export function DriveView({
                           }`}
                         >
                           <div className="flex items-center gap-3 min-w-0 flex-1">
-                            {/* Checkbox */}
+                            {/* Checkbox - always visible */}
                             <button
                               type="button"
                               onClick={(e) => toggleSelectCheckbox(file.id, e)}
-                              className={`p-0.5 rounded transition cursor-pointer shrink-0 ${
+                              className={`p-1 rounded-md transition cursor-pointer shrink-0 ${
                                 isSelected
-                                  ? "text-blue-600 opacity-100"
-                                  : "text-slate-400 opacity-0 group-hover:opacity-100 hover:text-slate-600"
+                                  ? "text-blue-600"
+                                  : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
                               }`}
                               title={isSelected ? "Deselect" : "Select"}
                             >
@@ -1214,7 +1573,7 @@ export function DriveView({
                                   {badge}
                                 </span>
                                 <span>•</span>
-                                <span>{(file.size / (1024 * 1024)).toFixed(1)} MB</span>
+                                <span>{formatBytes(file.size)}</span>
                               </div>
                             </div>
                           </div>
@@ -1227,10 +1586,10 @@ export function DriveView({
                                 e.stopPropagation();
                                 void handleToggleStar(file);
                               }}
-                              className={`p-1 rounded hover:bg-slate-100 transition cursor-pointer ${
+                              className={`p-1.5 rounded-md hover:bg-slate-100 transition cursor-pointer ${
                                 file.starred
-                                  ? "text-amber-500 opacity-100"
-                                  : "text-slate-400 opacity-0 group-hover:opacity-100 hover:text-amber-500"
+                                  ? "text-amber-500"
+                                  : "text-slate-300 hover:text-amber-500"
                               }`}
                               title={file.starred ? "Unstar" : "Star"}
                             >
@@ -1249,7 +1608,7 @@ export function DriveView({
                               {badge}
                             </span>
                             <span className="hidden sm:inline-block text-slate-500 w-16 text-right text-xs">
-                              {(file.size / (1024 * 1024)).toFixed(1)} MB
+                              {formatBytes(file.size)}
                             </span>
                             <button
                               onClick={(e) => {
@@ -1399,7 +1758,18 @@ export function DriveView({
           x={contextMenu.x}
           y={contextMenu.y}
           item={contextMenu.item}
+          isSelected={selectedIds.has(contextMenu.item.id)}
+          onToggleSelect={(item) => {
+            setSelectedIds((prev) => {
+              const next = new Set(prev);
+              if (next.has(item.id)) next.delete(item.id);
+              else next.add(item.id);
+              return next;
+            });
+            setLastSelectedId(item.id);
+          }}
           onClose={() => setContextMenu(null)}
+          onPreview={(item) => router.push(`/preview/${item.id}`)}
           onDownload={handleDownload}
           onDelete={handleDelete}
           onToggleStar={handleToggleStar}
@@ -1410,11 +1780,24 @@ export function DriveView({
         />
       )}
 
-      {/* File Chunks Inspector Modal */}
+      {/* File Preview Modal */}
+      {previewItem && (
+        <FilePreviewModal
+          item={previewItem}
+          onClose={() => setPreviewItem(null)}
+        />
+      )}
+
+      {/* File Details & Chunks Inspector Modal */}
       {inspectItem && (
         <FileDetailsModal
           item={inspectItem}
           onClose={() => setInspectItem(null)}
+          onPreview={(item) => router.push(`/preview/${item.id}`)}
+          onShare={(item) => {
+            setInspectItem(null);
+            setShareItem(item);
+          }}
         />
       )}
 
@@ -1435,6 +1818,14 @@ export function DriveView({
           clearSelection();
           void fetchData();
         }}
+      />
+
+      {/* Rename Item Modal */}
+      <RenameModal
+        isOpen={!!renameItem}
+        item={renameItem}
+        onClose={() => setRenameItem(null)}
+        onSuccess={handleRenameSuccess}
       />
 
       {/* Upload Progress Floating Widget */}

@@ -2,13 +2,28 @@
 
 import { useEffect, useRef } from "react";
 import { VfsItem } from "@/stores/drive.store";
-import { Download, Trash2, Star, Edit2, Info, Share2, FolderInput } from "lucide-react";
+import {
+  Download,
+  Trash2,
+  Star,
+  Edit2,
+  Info,
+  Share2,
+  FolderInput,
+  Eye,
+  ExternalLink,
+  CheckSquare,
+  Square,
+} from "lucide-react";
 
 export interface ContextMenuProps {
   x: number;
   y: number;
   item: VfsItem;
+  isSelected?: boolean;
+  onToggleSelect?: (item: VfsItem) => void;
   onClose: () => void;
+  onPreview?: (item: VfsItem) => void;
   onDownload: (item: VfsItem) => Promise<void>;
   onDelete: (item: VfsItem) => Promise<void>;
   onToggleStar: (item: VfsItem) => Promise<void>;
@@ -22,7 +37,10 @@ export function ContextMenu({
   x,
   y,
   item,
+  isSelected,
+  onToggleSelect,
   onClose,
+  onPreview,
   onDownload,
   onDelete,
   onToggleStar,
@@ -59,6 +77,41 @@ export function ContextMenu({
       style={{ top: `${adjustedY}px`, left: `${adjustedX}px` }}
       className="fixed z-50 w-44 bg-white rounded-2xl shadow-xl border border-slate-200/90 py-1.5 text-xs font-sans animate-in fade-in zoom-in-95 duration-100"
     >
+      {onToggleSelect && (
+        <button
+          onClick={() => {
+            onToggleSelect(item);
+            onClose();
+          }}
+          className="w-full px-3 py-1.5 flex items-center gap-2.5 text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+        >
+          {isSelected ? (
+            <>
+              <CheckSquare className="h-3.5 w-3.5 text-blue-600" />
+              <span>Deselect</span>
+            </>
+          ) : (
+            <>
+              <Square className="h-3.5 w-3.5 text-slate-500" />
+              <span>Select</span>
+            </>
+          )}
+        </button>
+      )}
+
+      {item.type === "file" && onPreview && (
+        <button
+          onClick={() => {
+            onPreview(item);
+            onClose();
+          }}
+          className="w-full px-3 py-1.5 flex items-center gap-2.5 text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+        >
+          <Eye className="h-3.5 w-3.5 text-slate-500" />
+          <span>Preview</span>
+        </button>
+      )}
+
       {item.type === "file" && onShare && (
         <button
           onClick={() => {

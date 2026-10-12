@@ -3,6 +3,7 @@
 import { Menu } from "lucide-react";
 import { useDriveStore } from "@/stores/drive.store";
 import { usePathname } from "next/navigation";
+import { FuzeLogo } from "@/components/brand/FuzeLogo";
 
 export function Navbar() {
   const { setMobileSidebarOpen } = useDriveStore();
@@ -22,10 +23,14 @@ export function Navbar() {
         <button
           onClick={() => setMobileSidebarOpen(true)}
           aria-label="Open sidebar menu"
-          className="lg:hidden p-2 -ml-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition cursor-pointer shrink-0"
+          className="lg:hidden h-9 w-9 inline-flex items-center justify-center -ml-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition cursor-pointer shrink-0"
         >
           <Menu className="h-5 w-5" />
         </button>
+
+        <div className="lg:hidden shrink-0 inline-flex items-center justify-center h-9">
+          <FuzeLogo variant="icon" height={24} />
+        </div>
 
         {/* Current Page Title */}
         <h1 className="font-bold text-sm text-slate-800">

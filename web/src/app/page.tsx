@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { FuzeLogo } from "@/components/brand/FuzeLogo";
 import {
   HardDrive,
   ShieldCheck,
@@ -100,17 +101,9 @@ export default function HomePage() {
       {/* Navigation */}
       <header className="border-b border-slate-200/80 bg-white/90 backdrop-blur sticky top-0 z-50">
         <div className="max-w-7xl mx-auto flex h-16 items-center justify-between px-6">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-white text-base shadow-sm">
-              F
-            </div>
-            <span className="font-bold text-xl tracking-tight text-slate-900">
-              Fuze
-            </span>
-            <span className="ml-1 text-xs font-medium text-slate-400">
-              Storage
-            </span>
-          </div>
+          <Link href="/" className="flex items-center gap-3">
+            <FuzeLogo variant="full" height={28} />
+          </Link>
 
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
             <a href="#calculator" className="hover:text-slate-900 transition">
@@ -617,7 +610,10 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="border-t border-slate-200 py-8 px-6 text-xs text-slate-500 text-center">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div>© 2026 Fuze Storage. Clean, zero-proxy multi-cloud pooling.</div>
+          <div className="flex items-center gap-2.5">
+            <FuzeLogo variant="icon" height={22} />
+            <span>© 2026 Fuze Storage. All your cloud storage, fused into one.</span>
+          </div>
           <div className="flex gap-6 font-medium text-slate-600">
             <a href="#calculator" className="hover:text-slate-900">
               Calculator
