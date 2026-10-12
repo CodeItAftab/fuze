@@ -56,6 +56,20 @@ export class PCloudAdapter implements StorageAdapter {
     );
   }
 
+  async renameFile(params: {
+    providerFileId: string;
+    newName: string;
+    accessToken: string;
+  }): Promise<void> {
+    const res = await fetch(
+      `https://api.pcloud.com/renamefile?fileid=${params.providerFileId}&toname=${encodeURIComponent(params.newName)}&access_token=${params.accessToken}`,
+    );
+    if (!res.ok) {
+      const errText = await res.text();
+      console.warn(`[pCloud] Rename warning (${res.status}): ${errText}`);
+    }
+  }
+
   async fetchQuota(accessToken: string): Promise<QuotaResult> {
     const res = await fetch(
       `https://api.pcloud.com/userinfo?access_token=${accessToken}`,

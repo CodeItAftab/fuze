@@ -51,6 +51,9 @@ export async function uploadRoutes(fastify: FastifyInstance) {
       });
       return reply.status(201).send(session);
     } catch (err: any) {
+      if (err.name === "ProviderAuthExpiredError") {
+        return reply.status(401).send({ error: err.message, code: "PROVIDER_AUTH_EXPIRED" });
+      }
       return reply.status(400).send({ error: err.message });
     }
   });
@@ -75,6 +78,9 @@ export async function uploadRoutes(fastify: FastifyInstance) {
         );
         return reply.send(res);
       } catch (err: any) {
+        if (err.name === "ProviderAuthExpiredError") {
+          return reply.status(401).send({ error: err.message, code: "PROVIDER_AUTH_EXPIRED" });
+        }
         return reply.status(400).send({ error: err.message });
       }
     },

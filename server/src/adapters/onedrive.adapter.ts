@@ -97,6 +97,28 @@ export class OneDriveAdapter implements StorageAdapter {
     );
   }
 
+  async renameFile(params: {
+    providerFileId: string;
+    newName: string;
+    accessToken: string;
+  }): Promise<void> {
+    const res = await fetch(
+      `https://graph.microsoft.com/v1.0/me/drive/items/${params.providerFileId}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${params.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: params.newName }),
+      },
+    );
+    if (!res.ok) {
+      const errText = await res.text();
+      console.warn(`[OneDrive] Rename warning (${res.status}): ${errText}`);
+    }
+  }
+
   async fetchQuota(accessToken: string): Promise<QuotaResult> {
     const res = await fetch("https://graph.microsoft.com/v1.0/me/drive", {
       headers: { Authorization: `Bearer ${accessToken}` },

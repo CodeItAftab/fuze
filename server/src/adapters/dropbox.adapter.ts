@@ -99,6 +99,40 @@ export class DropboxAdapter implements StorageAdapter {
     });
   }
 
+  async renameFile(params: {
+    providerFileId: string;
+    newName: string;
+    accessToken: string;
+  }): Promise<string | void> {
+    const fromPath = params.providerFileId.startsWith("/")
+      ? params.providerFileId
+      : `/Fuze/${params.providerFileId}`;
+
+    const lastSlashIdx = fromPath.lastIndexOf("/");
+    const dir = lastSlashIdx !== -1 ? fromPath.substring(0, lastSlashIdx) : "/Fuze";
+    const toPath = `${dir}/${params.newName}`;
+
+    const res = await fetch("https://api.dropboxapi.com/2/files/move_v2", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${params.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from_path: fromPath,
+        to_path: toPath,
+        autorename: false,
+      }),
+    });
+
+    if (res.ok) {
+      return toPath.startsWith("/Fuze/") ? toPath.substring(6) : toPath;
+    } else {
+      const errText = await res.text();
+      console.warn(`[Dropbox] Rename warning (${res.status}): ${errText}`);
+    }
+  }
+
   async fetchQuota(accessToken: string): Promise<QuotaResult> {
     const res = await fetch(
       "https://api.dropboxapi.com/2/users/get_space_usage",

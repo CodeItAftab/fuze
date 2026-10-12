@@ -21,6 +21,7 @@ interface BoxUserResponse {
 
 interface BoxTokenResponse {
   access_token: string;
+  refresh_token?: string;
   expires_in: number;
 }
 
@@ -31,32 +32,22 @@ export class BoxAdapter implements StorageAdapter {
     size: number;
     accessToken: string;
   }): Promise<UploadSessionResult> {
-    const response = await fetch(
-      "https://upload.box.com/api/2.0/files/upload_sessions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${params.accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          folder_id: "0",
-          file_name: params.fileName,
-          file_size: params.size,
+    // With CORS configured for http://localhost:3000, Box supports direct client-side
+    // multipart upload to https://upload.box.com/api/2.0/files/content
+    // Attributes must contain name and parent folder { id: "0" }
+    return {
+      sessionUrl: "https://upload.box.com/api/2.0/files/content",
+      expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
+      httpMethod: "POST",
+      uploadType: "multipart",
+      formDataFields: {
+        attributes: JSON.stringify({
+          name: params.fileName,
+          parent: { id: "0" },
         }),
       },
-    );
-    if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`Box upload session failed (${response.status}): ${err}`);
-    }
-    const data = (await response.json()) as BoxUploadSessionResponse;
-    return {
-      sessionUrl: data.session_endpoints.upload_part,
-      expiresAt: new Date(data.expires_at || Date.now() + 24 * 3600 * 1000),
-      httpMethod: "PUT",
       headers: {
-        "Content-Type": "application/octet-stream",
+        Authorization: `Bearer ${params.accessToken}`,
       },
     };
   }
@@ -77,7 +68,10 @@ export class BoxAdapter implements StorageAdapter {
 
     const downloadUrl = res.headers.get("Location");
     if (!downloadUrl) {
-      throw new Error("Failed to obtain Box download URL");
+      const errText = await res.text().catch(() => "");
+      throw new Error(
+        `Failed to obtain Box download URL (HTTP ${res.status}): ${errText || "No Location redirect header"}`,
+      );
     }
     return downloadUrl;
   }
@@ -90,6 +84,25 @@ export class BoxAdapter implements StorageAdapter {
       method: "DELETE",
       headers: { Authorization: `Bearer ${params.accessToken}` },
     });
+  }
+
+  async renameFile(params: {
+    providerFileId: string;
+    newName: string;
+    accessToken: string;
+  }): Promise<void> {
+    const res = await fetch(`https://api.box.com/2.0/files/${params.providerFileId}`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${params.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name: params.newName }),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      console.warn(`[Box] Rename warning (${res.status}): ${errText}`);
+    }
   }
 
   async fetchQuota(accessToken: string): Promise<QuotaResult> {
@@ -110,7 +123,7 @@ export class BoxAdapter implements StorageAdapter {
 
   async refreshAccessToken(
     refreshToken: string,
-  ): Promise<{ accessToken: string; expiresInSeconds: number }> {
+  ): Promise<{ accessToken: string; refreshToken?: string; expiresInSeconds: number }> {
     const clientId = process.env.BOX_CLIENT_ID || "";
     const clientSecret = process.env.BOX_CLIENT_SECRET || "";
 
@@ -133,6 +146,7 @@ export class BoxAdapter implements StorageAdapter {
     const data = (await res.json()) as BoxTokenResponse;
     return {
       accessToken: data.access_token,
+      refreshToken: data.refresh_token,
       expiresInSeconds: data.expires_in || 3600,
     };
   }

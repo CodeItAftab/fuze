@@ -3,6 +3,8 @@ export interface UploadSessionResult {
   expiresAt: Date;
   httpMethod?: "PUT" | "POST";
   headers?: Record<string, string>;
+  uploadType?: "binary" | "multipart";
+  formDataFields?: Record<string, string>;
 }
 export interface QuotaResult {
   totalBytes: number;
@@ -28,10 +30,17 @@ export interface StorageAdapter {
     accessToken: string;
   }): Promise<void>;
 
+  renameFile?(params: {
+    providerFileId: string;
+    newName: string;
+    accessToken: string;
+  }): Promise<string | void>;
+
   fetchQuota(accessToken: string): Promise<QuotaResult>;
 
   refreshAccessToken(refreshToken: string): Promise<{
     accessToken: string;
+    refreshToken?: string;
     expiresInSeconds: number;
   }>;
 }

@@ -145,7 +145,7 @@ export class UploadSessionService {
       ...(sessionRes.headers || {}),
     };
 
-    if (identity.provider !== "dropbox") {
+    if (identity.provider !== "dropbox" && sessionRes.uploadType !== "multipart") {
       // Chunk byte range relative to this provider's session file
       const chunkRange = `bytes 0-${chunkSize - 1}/${chunkSize}`;
       headers["Content-Range"] = chunkRange;
@@ -155,6 +155,8 @@ export class UploadSessionService {
       uploadUrl: sessionRes.sessionUrl,
       httpMethod: sessionRes.httpMethod || "PUT",
       headers,
+      uploadType: sessionRes.uploadType || "binary",
+      formDataFields: sessionRes.formDataFields,
     };
   }
 

@@ -296,6 +296,8 @@ export class UploadQueueManager {
         uploadUrl: string;
         httpMethod?: string;
         headers?: Record<string, string>;
+        uploadType?: "binary" | "multipart";
+        formDataFields?: Record<string, string>;
       };
 
       const chunkBlob = item.file.slice(chunk.byteStart, chunk.byteEnd);
@@ -413,7 +415,22 @@ export class UploadQueueManager {
             }
 
             resetStallTimer();
-            xhr.send(chunkBlob);
+
+            // Direct multipart upload (for Box with CORS)
+            if (instruction.uploadType === "multipart") {
+              const formData = new FormData();
+              if (instruction.formDataFields) {
+                for (const [k, v] of Object.entries(instruction.formDataFields)) {
+                  formData.append(k, v);
+                }
+              }
+              // For Box, file part comes after attributes
+              formData.append("file", chunkBlob, item.file.name);
+              xhr.send(formData);
+            } else {
+              // Binary byte stream upload (Google Drive, OneDrive, Dropbox, pCloud)
+              xhr.send(chunkBlob);
+            }
           });
 
           // Chunk upload succeeded
@@ -436,7 +453,10 @@ export class UploadQueueManager {
         if (uploadSuccess.responseText) {
           const cd = JSON.parse(uploadSuccess.responseText);
           if (cd && typeof cd === "object") {
-            if (typeof cd.path_display === "string") {
+            if (Array.isArray(cd.entries) && cd.entries[0]?.id) {
+              // Box returns { entries: [ { id: "12345" } ] }
+              providerFileId = String(cd.entries[0].id);
+            } else if (typeof cd.path_display === "string") {
               providerFileId = cd.path_display;
             } else if (typeof cd.id === "string") {
               providerFileId = cd.id;

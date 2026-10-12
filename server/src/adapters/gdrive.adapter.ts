@@ -87,6 +87,28 @@ export class GoogleDriveAdapter implements StorageAdapter {
     }
   }
 
+  async renameFile(params: {
+    providerFileId: string;
+    newName: string;
+    accessToken: string;
+  }): Promise<void> {
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${params.providerFileId}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${params.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: params.newName }),
+      },
+    );
+    if (!res.ok) {
+      const errText = await res.text();
+      console.warn(`[GDrive] Rename warning (${res.status}): ${errText}`);
+    }
+  }
+
   async fetchQuota(accessToken: string): Promise<QuotaResult> {
     const res = await fetch(
       "https://www.googleapis.com/drive/v3/about?fields=storageQuota",
