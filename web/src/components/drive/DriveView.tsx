@@ -12,6 +12,7 @@ import { UploadWidget } from "@/components/upload/UploadWidget";
 import { ContextMenu } from "@/components/drive/ContextMenu";
 import { FileDetailsModal } from "@/components/drive/FileDetailsModal";
 import { ShareModal } from "@/components/drive/ShareModal";
+import { MoveModal } from "@/components/drive/MoveModal";
 import {
   Folder,
   FileText,
@@ -33,6 +34,12 @@ import {
   Check,
   LayoutGrid,
   List,
+  CheckSquare,
+  Square,
+  Star,
+  FolderInput,
+  Download,
+  Trash2,
 } from "lucide-react";
 
 // Subtle pastel palette matching the landing page mockup
@@ -94,9 +101,13 @@ function getProviderBadgeStyle(badge: string | null | undefined) {
 
 interface DriveViewProps {
   folderId?: string | null;
+  isStarredView?: boolean;
 }
 
-export function DriveView({ folderId = null }: DriveViewProps) {
+export function DriveView({
+  folderId = null,
+  isStarredView = false,
+}: DriveViewProps) {
   const router = useRouter();
   const {
     breadcrumbs,
@@ -149,6 +160,12 @@ export function DriveView({ folderId = null }: DriveViewProps) {
   } | null>(null);
   const [inspectItem, setInspectItem] = useState<VfsItem | null>(null);
   const [shareItem, setShareItem] = useState<VfsItem | null>(null);
+
+  // Selection & Move State
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
+  const [moveModalOpen, setMoveModalOpen] = useState(false);
+  const [moveTargetItems, setMoveTargetItems] = useState<VfsItem[]>([]);
 
   // Sorting
   const [sortBy, setSortBy] = useState<"date" | "name" | "size">("date");
@@ -229,20 +246,25 @@ export function DriveView({ folderId = null }: DriveViewProps) {
     [router],
   );
 
-  // Fetch folder data
+  // Fetch folder or starred data
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const folderParam = folderId ? `?parentId=${folderId}` : "";
+      const endpoint = isStarredView
+        ? `${apiUrl}/files/starred`
+        : `${apiUrl}/files${folderId ? `?parentId=${folderId}` : ""}`;
+
       const [filesRes, provRes] = await Promise.all([
-        fetch(`${apiUrl}/files${folderParam}`, { credentials: "include" }),
+        fetch(endpoint, { credentials: "include" }),
         fetch(`${apiUrl}/providers`, { credentials: "include" }),
       ]);
 
       if (filesRes.ok) {
         const data = await filesRes.json();
         setItems(data.items || []);
-        if (data.breadcrumbs && Array.isArray(data.breadcrumbs)) {
+        if (isStarredView) {
+          setBreadcrumbs([{ id: null, name: "Starred" }]);
+        } else if (data.breadcrumbs && Array.isArray(data.breadcrumbs)) {
           setBreadcrumbs(data.breadcrumbs);
         } else if (!folderId) {
           setBreadcrumbs([{ id: null, name: "My Drive" }]);
@@ -258,7 +280,15 @@ export function DriveView({ folderId = null }: DriveViewProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [apiUrl, folderId, setItems, setBreadcrumbs, setProviders, setIsLoading]);
+  }, [
+    apiUrl,
+    folderId,
+    isStarredView,
+    setItems,
+    setBreadcrumbs,
+    setProviders,
+    setIsLoading,
+  ]);
 
   useEffect(() => {
     setCurrentFolder(folderId || null);
@@ -424,6 +454,154 @@ export function DriveView({ folderId = null }: DriveViewProps) {
   const folders = processedItems.filter((i) => i.type === "folder");
   const files = processedItems.filter((i) => i.type === "file");
 
+  // Selection Handlers (Google Drive style)
+  const toggleSelect = useCallback(
+    (item: VfsItem, e: React.MouseEvent) => {
+      const id = item.id;
+      if (e.shiftKey && lastSelectedId) {
+        // Range select across processedItems
+        const ids = processedItems.map((i) => i.id);
+        const lastIdx = ids.indexOf(lastSelectedId);
+        const currIdx = ids.indexOf(id);
+        if (lastIdx !== -1 && currIdx !== -1) {
+          const start = Math.min(lastIdx, currIdx);
+          const end = Math.max(lastIdx, currIdx);
+          const rangeIds = ids.slice(start, end + 1);
+          setSelectedIds(new Set([...Array.from(selectedIds), ...rangeIds]));
+          return;
+        }
+      }
+
+      if (e.ctrlKey || e.metaKey) {
+        // Toggle single item
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+          return next;
+        });
+        setLastSelectedId(id);
+        return;
+      }
+
+      // Normal click: select just this item (or if already selected and single, keep it)
+      setSelectedIds(new Set([id]));
+      setLastSelectedId(id);
+    },
+    [lastSelectedId, processedItems, selectedIds],
+  );
+
+  const toggleSelectCheckbox = useCallback(
+    (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+      setLastSelectedId(id);
+    },
+    [],
+  );
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    setLastSelectedId(null);
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelectedIds(new Set(processedItems.map((i) => i.id)));
+  }, [processedItems]);
+
+  const handleOpenMove = (targetItems: VfsItem[]) => {
+    setMoveTargetItems(targetItems);
+    setMoveModalOpen(true);
+  };
+
+  const handleBatchStar = async (star: boolean) => {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    try {
+      const res = await fetch(`${apiUrl}/files/batch-star`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ids, starred: star }),
+      });
+      if (res.ok) {
+        setItems(
+          items.map((i) =>
+            selectedIds.has(i.id) ? { ...i, starred: star } : i,
+          ),
+        );
+      }
+    } catch (err) {
+      console.error("Batch star failed:", err);
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    if (
+      !window.confirm(
+        `Move ${count} item${count > 1 ? "s" : ""} to trash?`,
+      )
+    ) {
+      return;
+    }
+    const ids = Array.from(selectedIds);
+    try {
+      const res = await fetch(`${apiUrl}/files/batch-trash`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ids }),
+      });
+      if (res.ok) {
+        setItems(items.filter((i) => !selectedIds.has(i.id)));
+        clearSelection();
+      }
+    } catch (err) {
+      console.error("Batch delete failed:", err);
+    }
+  };
+
+  const handleBatchDownload = async () => {
+    const selectedFiles = processedItems.filter(
+      (i) => selectedIds.has(i.id) && i.type === "file",
+    );
+    for (const f of selectedFiles) {
+      await handleDownload(f);
+    }
+  };
+
+  // Keyboard shortcut listener for Ctrl+A, Escape, Delete
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (
+        document.activeElement?.tagName === "INPUT" ||
+        document.activeElement?.tagName === "TEXTAREA"
+      ) {
+        return;
+      }
+      if (e.key === "Escape") {
+        clearSelection();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        selectAll();
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        if (selectedIds.size > 0 && !showFolderModal && !moveModalOpen) {
+          e.preventDefault();
+          void handleBatchDelete();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [clearSelection, selectAll, selectedIds, showFolderModal, moveModalOpen, handleBatchDelete]);
+
   const getFileIcon = (file: VfsItem) => {
     const mime = file.mimeType || "";
     const name = file.name.toLowerCase();
@@ -470,7 +648,15 @@ export function DriveView({ folderId = null }: DriveViewProps) {
           </div>
         )}
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 w-full max-w-7xl">
+        <main
+          onClick={(e) => {
+            // If user clicked directly on main background, deselect
+            if (e.target === e.currentTarget) {
+              clearSelection();
+            }
+          }}
+          className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 w-full max-w-7xl"
+        >
           {/* Top Integrated Header: Responsive search on left, controls on right */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 sm:pb-4 border-b border-slate-100 mb-5 sm:mb-6">
             <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -581,6 +767,91 @@ export function DriveView({ folderId = null }: DriveViewProps) {
             </div>
           </div>
 
+          {/* Selection Action Bar (Google Drive style) */}
+          {selectedIds.size > 0 && (
+            <div className="mb-4 bg-slate-900 text-white rounded-xl px-4 py-2.5 shadow-lg flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  className="p-1 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
+                  title="Clear selection (Esc)"
+                  aria-label="Clear selection"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+                <span className="text-xs font-medium">
+                  {selectedIds.size} selected
+                </span>
+                <span className="text-slate-600 hidden sm:inline">|</span>
+                <button
+                  type="button"
+                  onClick={selectAll}
+                  className="hidden sm:inline text-xs text-blue-400 hover:text-blue-300 hover:underline cursor-pointer"
+                >
+                  Select all ({processedItems.length})
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1 sm:gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const selectedItems = processedItems.filter((i) =>
+                      selectedIds.has(i.id),
+                    );
+                    handleOpenMove(selectedItems);
+                  }}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-200 hover:text-white hover:bg-slate-800 rounded-lg transition cursor-pointer"
+                  title="Move to..."
+                >
+                  <FolderInput className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Move</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Check if any are not starred, star all; otherwise unstar all
+                    const anyUnstarred = processedItems.some(
+                      (i) => selectedIds.has(i.id) && !i.starred,
+                    );
+                    void handleBatchStar(anyUnstarred);
+                  }}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-200 hover:text-white hover:bg-slate-800 rounded-lg transition cursor-pointer"
+                  title="Star/Unstar"
+                >
+                  <Star className="h-3.5 w-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Star</span>
+                </button>
+
+                {processedItems.some(
+                  (i) => selectedIds.has(i.id) && i.type === "file",
+                ) && (
+                  <button
+                    type="button"
+                    onClick={() => void handleBatchDownload()}
+                    className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-200 hover:text-white hover:bg-slate-800 rounded-lg transition cursor-pointer"
+                    title="Download files"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Download</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => void handleBatchDelete()}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-rose-400 hover:text-rose-300 hover:bg-slate-800 rounded-lg transition cursor-pointer"
+                  title="Delete"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Trash</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Clean breadcrumb only shown when navigating inside subfolders */}
           {folderId && (
             <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-6 font-normal overflow-x-auto scrollbar-none pb-0.5">
@@ -660,11 +931,12 @@ export function DriveView({ folderId = null }: DriveViewProps) {
                   <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
                     {folders.map((folder) => {
                       const palette = getFolderPalette(folder.id || folder.name);
+                      const isSelected = selectedIds.has(folder.id);
                       return (
                         <div
                           key={folder.id}
                           onDoubleClick={() => navigateToFolder(folder.id)}
-                          onClick={() => navigateToFolder(folder.id)}
+                          onClick={(e) => toggleSelect(folder, e)}
                           onContextMenu={(e) => {
                             e.preventDefault();
                             setContextMenu({
@@ -673,11 +945,33 @@ export function DriveView({ folderId = null }: DriveViewProps) {
                               item: folder,
                             });
                           }}
-                          className="border border-slate-200 rounded-xl p-3 sm:p-3.5 flex items-center justify-between bg-white hover:border-slate-300 hover:shadow-2xs transition cursor-pointer group"
+                          className={`border rounded-xl p-3 sm:p-3.5 flex items-center justify-between transition cursor-pointer group ${
+                            isSelected
+                              ? "bg-blue-50/60 border-blue-400 ring-2 ring-blue-500/20 shadow-xs"
+                              : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-2xs"
+                          }`}
                         >
-                          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                            {/* Checkbox */}
+                            <button
+                              type="button"
+                              onClick={(e) => toggleSelectCheckbox(folder.id, e)}
+                              className={`p-0.5 rounded transition cursor-pointer shrink-0 ${
+                                isSelected
+                                  ? "text-blue-600 opacity-100"
+                                  : "text-slate-400 opacity-0 group-hover:opacity-100 hover:text-slate-600"
+                              }`}
+                              title={isSelected ? "Deselect" : "Select"}
+                            >
+                              {isSelected ? (
+                                <CheckSquare className="h-4 w-4 fill-blue-50 text-blue-600" />
+                              ) : (
+                                <Square className="h-4 w-4" />
+                              )}
+                            </button>
+
                             <Folder className={`h-5 w-5 sm:h-6 sm:w-6 shrink-0 ${palette.icon}`} />
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               <div
                                 className="font-semibold text-slate-800 text-xs truncate"
                                 title={folder.name}
@@ -690,19 +984,42 @@ export function DriveView({ folderId = null }: DriveViewProps) {
                             </div>
                           </div>
 
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setContextMenu({
-                                x: e.clientX,
-                                y: e.clientY,
-                                item: folder,
-                              });
-                            }}
-                            className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 transition shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
-                          >
-                            <MoreVertical className="h-3.5 w-3.5" />
-                          </button>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {/* Star Toggle */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleToggleStar(folder);
+                              }}
+                              className={`p-1 rounded hover:bg-slate-100 transition cursor-pointer ${
+                                folder.starred
+                                  ? "text-amber-500 opacity-100"
+                                  : "text-slate-400 opacity-0 group-hover:opacity-100 hover:text-amber-500"
+                              }`}
+                              title={folder.starred ? "Unstar" : "Star"}
+                            >
+                              <Star
+                                className={`h-3.5 w-3.5 ${
+                                  folder.starred ? "fill-amber-400 text-amber-500" : ""
+                                }`}
+                              />
+                            </button>
+
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setContextMenu({
+                                  x: e.clientX,
+                                  y: e.clientY,
+                                  item: folder,
+                                });
+                              }}
+                              className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 transition shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                            >
+                              <MoreVertical className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -735,10 +1052,12 @@ export function DriveView({ folderId = null }: DriveViewProps) {
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                     {files.map((file) => {
                       const badge = getDisplayBadge(file);
+                      const isSelected = selectedIds.has(file.id);
                       return (
                         <div
                           key={file.id}
                           onDoubleClick={() => handleDownload(file)}
+                          onClick={(e) => toggleSelect(file, e)}
                           onContextMenu={(e) => {
                             e.preventDefault();
                             setContextMenu({
@@ -747,10 +1066,55 @@ export function DriveView({ folderId = null }: DriveViewProps) {
                               item: file,
                             });
                           }}
-                          className="border border-slate-200 rounded-xl p-3 bg-white hover:border-slate-300 hover:shadow-2xs transition cursor-pointer group flex flex-col justify-between"
+                          className={`border rounded-xl p-3 transition cursor-pointer group flex flex-col justify-between relative ${
+                            isSelected
+                              ? "bg-blue-50/60 border-blue-400 ring-2 ring-blue-500/20 shadow-xs"
+                              : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-2xs"
+                          }`}
                         >
                           <div className="h-24 bg-slate-50/80 rounded-lg flex items-center justify-center mb-2.5 relative group-hover:bg-blue-50/30 transition">
+                            {/* Checkbox (top-left) */}
+                            <button
+                              type="button"
+                              onClick={(e) => toggleSelectCheckbox(file.id, e)}
+                              className={`absolute top-1.5 left-1.5 p-1 rounded-md transition cursor-pointer z-10 ${
+                                isSelected
+                                  ? "text-blue-600 bg-white/95 shadow-2xs opacity-100"
+                                  : "text-slate-400 bg-white/90 hover:bg-white hover:text-slate-700 opacity-0 group-hover:opacity-100 shadow-2xs"
+                              }`}
+                              title={isSelected ? "Deselect" : "Select"}
+                            >
+                              {isSelected ? (
+                                <CheckSquare className="h-3.5 w-3.5 fill-blue-50 text-blue-600" />
+                              ) : (
+                                <Square className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+
+                            {/* File Icon */}
                             <div className="scale-125">{getFileIcon(file)}</div>
+
+                            {/* Star Toggle (top-right next to context menu) */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleToggleStar(file);
+                              }}
+                              className={`absolute top-1.5 right-7 p-1 rounded-md bg-white/90 hover:bg-white transition shadow-2xs cursor-pointer ${
+                                file.starred
+                                  ? "text-amber-500 opacity-100"
+                                  : "text-slate-400 hover:text-amber-500 opacity-0 group-hover:opacity-100"
+                              }`}
+                              title={file.starred ? "Unstar" : "Star"}
+                            >
+                              <Star
+                                className={`h-3 w-3 ${
+                                  file.starred ? "fill-amber-400 text-amber-500" : ""
+                                }`}
+                              />
+                            </button>
+
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -760,7 +1124,7 @@ export function DriveView({ folderId = null }: DriveViewProps) {
                                   item: file,
                                 });
                               }}
-                              className="absolute top-1.5 right-1.5 p-1 rounded-md bg-white/90 hover:bg-white text-slate-400 hover:text-slate-700 opacity-0 group-hover:opacity-100 transition shadow-2xs"
+                              className="absolute top-1.5 right-1.5 p-1 rounded-md bg-white/90 hover:bg-white text-slate-400 hover:text-slate-700 opacity-0 group-hover:opacity-100 transition shadow-2xs cursor-pointer"
                             >
                               <MoreVertical className="h-3 w-3" />
                             </button>
@@ -793,10 +1157,12 @@ export function DriveView({ folderId = null }: DriveViewProps) {
                   <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 bg-white shadow-2xs">
                     {files.map((file) => {
                       const badge = getDisplayBadge(file);
+                      const isSelected = selectedIds.has(file.id);
                       return (
                         <div
                           key={file.id}
                           onDoubleClick={() => handleDownload(file)}
+                          onClick={(e) => toggleSelect(file, e)}
                           onContextMenu={(e) => {
                             e.preventDefault();
                             setContextMenu({
@@ -805,9 +1171,31 @@ export function DriveView({ folderId = null }: DriveViewProps) {
                               item: file,
                             });
                           }}
-                          className="p-3 sm:p-3.5 flex items-center justify-between hover:bg-slate-50/80 transition text-xs gap-3"
+                          className={`p-3 sm:p-3.5 flex items-center justify-between transition text-xs gap-3 cursor-pointer group ${
+                            isSelected
+                              ? "bg-blue-50/60 ring-1 ring-inset ring-blue-500/20"
+                              : "hover:bg-slate-50/80"
+                          }`}
                         >
                           <div className="flex items-center gap-3 min-w-0 flex-1">
+                            {/* Checkbox */}
+                            <button
+                              type="button"
+                              onClick={(e) => toggleSelectCheckbox(file.id, e)}
+                              className={`p-0.5 rounded transition cursor-pointer shrink-0 ${
+                                isSelected
+                                  ? "text-blue-600 opacity-100"
+                                  : "text-slate-400 opacity-0 group-hover:opacity-100 hover:text-slate-600"
+                              }`}
+                              title={isSelected ? "Deselect" : "Select"}
+                            >
+                              {isSelected ? (
+                                <CheckSquare className="h-4 w-4 fill-blue-50 text-blue-600" />
+                              ) : (
+                                <Square className="h-4 w-4" />
+                              )}
+                            </button>
+
                             <div className="shrink-0">{getFileIcon(file)}</div>
                             <div className="min-w-0 flex-1">
                               <div
@@ -831,7 +1219,28 @@ export function DriveView({ folderId = null }: DriveViewProps) {
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                            {/* Star Toggle Button */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleToggleStar(file);
+                              }}
+                              className={`p-1 rounded hover:bg-slate-100 transition cursor-pointer ${
+                                file.starred
+                                  ? "text-amber-500 opacity-100"
+                                  : "text-slate-400 opacity-0 group-hover:opacity-100 hover:text-amber-500"
+                              }`}
+                              title={file.starred ? "Unstar" : "Star"}
+                            >
+                              <Star
+                                className={`h-3.5 w-3.5 ${
+                                  file.starred ? "fill-amber-400 text-amber-500" : ""
+                                }`}
+                              />
+                            </button>
+
                             <span
                               className={`hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${getProviderBadgeStyle(
                                 badge,
@@ -997,6 +1406,7 @@ export function DriveView({ folderId = null }: DriveViewProps) {
           onRename={handleRename}
           onDetails={(item) => setInspectItem(item)}
           onShare={(item) => setShareItem(item)}
+          onMove={(item) => handleOpenMove([item])}
         />
       )}
 
@@ -1012,6 +1422,20 @@ export function DriveView({ folderId = null }: DriveViewProps) {
       {shareItem && (
         <ShareModal item={shareItem} onClose={() => setShareItem(null)} />
       )}
+
+      {/* Move Destination Modal */}
+      <MoveModal
+        isOpen={moveModalOpen}
+        itemsToMove={moveTargetItems}
+        onClose={() => {
+          setMoveModalOpen(false);
+          setMoveTargetItems([]);
+        }}
+        onMoved={() => {
+          clearSelection();
+          void fetchData();
+        }}
+      />
 
       {/* Upload Progress Floating Widget */}
       <UploadWidget onOpenChange={setIsUploadWidgetOpen} />

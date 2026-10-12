@@ -14,6 +14,7 @@ import {
   LogOut,
   X,
   Lock,
+  Star,
 } from "lucide-react";
 import { useDriveStore } from "@/stores/drive.store";
 import { useAuthStore } from "@/stores/auth.store";
@@ -183,6 +184,25 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
             >
               <HardDrive className="h-4 w-4" />
               <span>My Drive</span>
+            </Link>
+
+            <Link
+              href="/dashboard/starred"
+              onClick={closeMobile}
+              className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs transition ${
+                pathname === "/dashboard/starred"
+                  ? "bg-blue-50 font-semibold text-blue-700"
+                  : "text-slate-600 hover:bg-slate-100 font-normal"
+              }`}
+            >
+              <Star
+                className={`h-4 w-4 ${
+                  pathname === "/dashboard/starred"
+                    ? "text-amber-500 fill-amber-400"
+                    : "text-slate-500"
+                }`}
+              />
+              <span>Starred</span>
             </Link>
 
             <Link

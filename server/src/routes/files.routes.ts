@@ -10,9 +10,10 @@ import {
   providerIdentities,
   shares,
 } from "../db/index.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull, inArray } from "drizzle-orm";
 import { getStorageAdapter } from "../adapters/factory.js";
 import { TokenService } from "../services/token.service.js";
+import { socketManager } from "../websocket/socket-manager.js";
 
 export async function fileRoutes(fastify: FastifyInstance) {
   fastify.addHook(
@@ -64,6 +65,129 @@ export async function fileRoutes(fastify: FastifyInstance) {
     return reply.send({ items });
   });
 
+  // 1c. List starred items
+  fastify.get("/starred", async (request, reply) => {
+    const user = request.user as { userId: string };
+    const items = await VfsService.listStarred(user.userId);
+    return reply.send({ items });
+  });
+
+  // 1d. List all folders (for move modal destination tree)
+  fastify.get("/folders", async (request, reply) => {
+    const user = request.user as { userId: string };
+    const folders = await db
+      .select({
+        id: vfsNodes.id,
+        name: vfsNodes.name,
+        parentId: vfsNodes.parentId,
+        createdAt: vfsNodes.createdAt,
+      })
+      .from(vfsNodes)
+      .where(
+        and(
+          eq(vfsNodes.userId, user.userId),
+          eq(vfsNodes.type, "folder"),
+          isNull(vfsNodes.trashedAt),
+        ),
+      );
+    return reply.send({ folders });
+  });
+
+  // 1e. Move items (single or multiple) to destination folder
+  fastify.post(
+    "/move",
+    async (
+      request: FastifyRequest<{
+        Body: { nodeIds: string[]; targetParentId: string | null };
+      }>,
+      reply,
+    ) => {
+      const user = request.user as { userId: string };
+      const { nodeIds, targetParentId } = request.body || {};
+      if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
+        return reply.status(400).send({ error: "nodeIds array is required" });
+      }
+
+      try {
+        const moved = await VfsService.moveNodes(
+          user.userId,
+          nodeIds,
+          targetParentId || null,
+        );
+        return reply.send({ success: true, moved });
+      } catch (err: unknown) {
+        return reply.status(400).send({
+          error: err instanceof Error ? err.message : "Failed to move items",
+        });
+      }
+    },
+  );
+
+  // 1f. Batch trash items
+  fastify.post(
+    "/batch-trash",
+    async (
+      request: FastifyRequest<{
+        Body: { nodeIds: string[] };
+      }>,
+      reply,
+    ) => {
+      const user = request.user as { userId: string };
+      const { nodeIds } = request.body || {};
+      if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
+        return reply.status(400).send({ error: "nodeIds array is required" });
+      }
+
+      await db
+        .update(vfsNodes)
+        .set({ trashedAt: new Date() })
+        .where(
+          and(
+            inArray(vfsNodes.id, nodeIds),
+            eq(vfsNodes.userId, user.userId),
+          ),
+        );
+
+      for (const id of nodeIds) {
+        socketManager.broadcastToUser(user.userId, {
+          type: "FILE_DELETED",
+          payload: { id },
+        });
+      }
+
+      return reply.send({ success: true });
+    },
+  );
+
+  // 1g. Batch star/unstar items
+  fastify.post(
+    "/batch-star",
+    async (
+      request: FastifyRequest<{
+        Body: { nodeIds: string[]; starred: boolean };
+      }>,
+      reply,
+    ) => {
+      const user = request.user as { userId: string };
+      const { nodeIds, starred } = request.body || {};
+      if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
+        return reply.status(400).send({ error: "nodeIds array is required" });
+      }
+
+      await db
+        .update(vfsNodes)
+        .set({ starred: !!starred, updatedAt: new Date() })
+        .where(
+          and(
+            inArray(vfsNodes.id, nodeIds),
+            eq(vfsNodes.userId, user.userId),
+          ),
+        );
+
+      return reply.send({ success: true });
+    },
+  );
+
   // 2. Create folder
   fastify.post(
     "/folder",
@@ -113,20 +237,38 @@ export async function fileRoutes(fastify: FastifyInstance) {
   );
 
   // 6. Toggle Starred / Favorite
-  fastify.patch(
+  fastify.post(
     "/:id/star",
     async (
       request: FastifyRequest<{
         Params: { id: string };
-        Body: { starred: boolean };
+        Body?: { starred?: boolean };
       }>,
       reply,
     ) => {
       const user = request.user as { userId: string };
-      const { starred } = request.body;
+      const [existing] = await db
+        .select({ id: vfsNodes.id, starred: vfsNodes.starred })
+        .from(vfsNodes)
+        .where(
+          and(
+            eq(vfsNodes.id, request.params.id),
+            eq(vfsNodes.userId, user.userId),
+          ),
+        );
+
+      if (!existing) {
+        return reply.status(404).send({ error: "Item not found" });
+      }
+
+      const nextStarred =
+        request.body?.starred !== undefined
+          ? !!request.body.starred
+          : !existing.starred;
+
       const [node] = await db
         .update(vfsNodes)
-        .set({ starred, updatedAt: new Date() })
+        .set({ starred: nextStarred, updatedAt: new Date() })
         .where(
           and(
             eq(vfsNodes.id, request.params.id),
@@ -134,7 +276,52 @@ export async function fileRoutes(fastify: FastifyInstance) {
           ),
         )
         .returning();
-      return reply.send({ file: node });
+
+      return reply.send({ file: node, starred: nextStarred });
+    },
+  );
+
+  fastify.patch(
+    "/:id/star",
+    async (
+      request: FastifyRequest<{
+        Params: { id: string };
+        Body?: { starred?: boolean };
+      }>,
+      reply,
+    ) => {
+      const user = request.user as { userId: string };
+      const [existing] = await db
+        .select({ id: vfsNodes.id, starred: vfsNodes.starred })
+        .from(vfsNodes)
+        .where(
+          and(
+            eq(vfsNodes.id, request.params.id),
+            eq(vfsNodes.userId, user.userId),
+          ),
+        );
+
+      if (!existing) {
+        return reply.status(404).send({ error: "Item not found" });
+      }
+
+      const nextStarred =
+        request.body?.starred !== undefined
+          ? !!request.body.starred
+          : !existing.starred;
+
+      const [node] = await db
+        .update(vfsNodes)
+        .set({ starred: nextStarred, updatedAt: new Date() })
+        .where(
+          and(
+            eq(vfsNodes.id, request.params.id),
+            eq(vfsNodes.userId, user.userId),
+          ),
+        )
+        .returning();
+
+      return reply.send({ file: node, starred: nextStarred });
     },
   );
 

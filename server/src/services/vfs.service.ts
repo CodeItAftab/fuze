@@ -209,4 +209,120 @@ export class VfsService {
       payload: { id: nodeId },
     });
   }
+
+  static async listStarred(userId: string) {
+    const nodes = await db
+      .select()
+      .from(vfsNodes)
+      .where(
+        and(
+          eq(vfsNodes.userId, userId),
+          eq(vfsNodes.starred, true),
+          isNull(vfsNodes.trashedAt),
+        ),
+      );
+
+    const fileIds = nodes.filter((n) => n.type === "file").map((n) => n.id);
+    const chunksByFile = new Map<string, Array<{ provider: string }>>();
+
+    if (fileIds.length > 0) {
+      const chunks = await db
+        .select({
+          vfsNodeId: fileChunks.vfsNodeId,
+          provider: providerIdentities.provider,
+        })
+        .from(fileChunks)
+        .innerJoin(
+          providerIdentities,
+          eq(fileChunks.providerIdentityId, providerIdentities.id),
+        )
+        .where(inArray(fileChunks.vfsNodeId, fileIds));
+
+      for (const c of chunks) {
+        if (!chunksByFile.has(c.vfsNodeId)) {
+          chunksByFile.set(c.vfsNodeId, []);
+        }
+        chunksByFile.get(c.vfsNodeId)!.push({ provider: c.provider });
+      }
+    }
+
+    const items = nodes.map((node) => {
+      if (node.type === "folder") {
+        return { ...node, providerBadge: null };
+      }
+      const chunks = chunksByFile.get(node.id) || [];
+      let providerBadge = "Zero-Proxy Cloud";
+      if (chunks.length === 1) {
+        const prov = chunks[0].provider;
+        const nameMap: Record<string, string> = {
+          google_drive: "Google Drive (Whole)",
+          one_drive: "OneDrive (Whole)",
+          dropbox: "Dropbox (Whole)",
+          pcloud: "pCloud (Whole)",
+          box: "Box (Whole)",
+        };
+        providerBadge = nameMap[prov] || `${prov} (Whole)`;
+      } else if (chunks.length > 1) {
+        const unique = new Set(chunks.map((c) => c.provider));
+        providerBadge = `Multi-Cloud (${unique.size} Providers)`;
+      }
+      return {
+        ...node,
+        providerBadge,
+      };
+    });
+
+    return items;
+  }
+
+  static async moveNodes(
+    userId: string,
+    nodeIds: string[],
+    targetParentId: string | null,
+  ) {
+    if (targetParentId) {
+      const [targetFolder] = await db
+        .select()
+        .from(vfsNodes)
+        .where(
+          and(
+            eq(vfsNodes.id, targetParentId),
+            eq(vfsNodes.userId, userId),
+            isNull(vfsNodes.trashedAt),
+          ),
+        );
+      if (!targetFolder || targetFolder.type !== "folder") {
+        throw new Error("Target folder not found or is not a valid folder.");
+      }
+    }
+
+    for (const id of nodeIds) {
+      if (id === targetParentId) {
+        throw new Error("Cannot move a folder into itself.");
+      }
+      if (targetParentId) {
+        let curr: string | null = targetParentId;
+        const visited = new Set<string>();
+        while (curr && !visited.has(curr)) {
+          if (curr === id) {
+            throw new Error("Cannot move a folder into its own subfolder.");
+          }
+          visited.add(curr);
+          const [parent] = await db
+            .select({ parentId: vfsNodes.parentId })
+            .from(vfsNodes)
+            .where(and(eq(vfsNodes.id, curr), eq(vfsNodes.userId, userId)));
+          curr = parent ? parent.parentId : null;
+        }
+      }
+    }
+
+    const updated = await db
+      .update(vfsNodes)
+      .set({ parentId: targetParentId, updatedAt: new Date() })
+      .where(and(inArray(vfsNodes.id, nodeIds), eq(vfsNodes.userId, userId)))
+      .returning();
+
+    return updated;
+  }
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { VfsItem } from "@/stores/drive.store";
-import { Download, Trash2, Star, Edit2, Info, Share2 } from "lucide-react";
+import { Download, Trash2, Star, Edit2, Info, Share2, FolderInput } from "lucide-react";
 
 export interface ContextMenuProps {
   x: number;
@@ -15,6 +15,7 @@ export interface ContextMenuProps {
   onRename: (item: VfsItem) => void;
   onDetails: (item: VfsItem) => void;
   onShare?: (item: VfsItem) => void;
+  onMove?: (item: VfsItem) => void;
 }
 
 export function ContextMenu({
@@ -28,6 +29,7 @@ export function ContextMenu({
   onRename,
   onDetails,
   onShare,
+  onMove,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -108,6 +110,19 @@ export function ContextMenu({
         <Edit2 className="h-3.5 w-3.5 text-slate-500" />
         <span>Rename</span>
       </button>
+
+      {onMove && (
+        <button
+          onClick={() => {
+            onMove(item);
+            onClose();
+          }}
+          className="w-full px-3 py-1.5 flex items-center gap-2.5 text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+        >
+          <FolderInput className="h-3.5 w-3.5 text-slate-500" />
+          <span>Move to...</span>
+        </button>
+      )}
 
       <button
         onClick={() => {
