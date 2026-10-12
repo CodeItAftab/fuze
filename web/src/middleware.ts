@@ -4,7 +4,9 @@ import type { NextRequest } from "next/server";
 export function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get("fuze_session");
   const isDashboardRoute = request.nextUrl.pathname.startsWith("/dashboard");
-  const isAuthRoute = request.nextUrl.pathname.startsWith("/login");
+  const isAuthRoute =
+    request.nextUrl.pathname.startsWith("/login") ||
+    request.nextUrl.pathname.startsWith("/register");
 
   // If visiting dashboard without session cookie -> Instant redirect to /login
   if (isDashboardRoute && !sessionCookie) {
@@ -13,7 +15,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // If already authenticated and visiting /login -> Instant redirect to /dashboard
+  // If already authenticated and visiting /login or /register -> Instant redirect to /dashboard
   if (isAuthRoute && sessionCookie) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
@@ -22,5 +24,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login"],
+  matcher: ["/dashboard/:path*", "/login", "/register"],
 };

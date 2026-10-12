@@ -1,16 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Cloud, Lock, Mail, User as UserIcon, ArrowRight, ShieldCheck, Loader2 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth.store";
 
-export default function LoginPage() {
-  const router = useRouter();
+function LoginForm() {
+  const searchParams = useSearchParams();
+  const redirectParam = searchParams.get("redirect");
+  const modeParam = searchParams.get("mode") || searchParams.get("tab");
+
   const { setAuth } = useAuthStore();
 
-  const [isRegister, setIsRegister] = useState(false);
+  const [isRegister, setIsRegister] = useState(modeParam === "register");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -56,10 +59,16 @@ export default function LoginPage() {
       }
 
       setAuth(data.user);
-      router.push("/dashboard");
+      const destination =
+        redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")
+          ? redirectParam
+          : "/dashboard";
+
+      // Full page navigation bypasses App Router client cache and ensures session cookies reach middleware
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.href = destination;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
-    } finally {
       setIsLoading(false);
     }
   };
@@ -330,5 +339,19 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+          <Loader2 className="h-6 w-6 text-blue-600 animate-spin" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

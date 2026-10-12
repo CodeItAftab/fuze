@@ -51,7 +51,8 @@ function VerifyEmailContent() {
         setAuth(data.user);
       }
       setTimeout(() => {
-        router.push("/dashboard");
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+        window.location.href = "/dashboard";
       }, 2000);
     } catch (err: unknown) {
       setError(
