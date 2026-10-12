@@ -707,4 +707,115 @@ export async function authRoutes(fastify: FastifyInstance) {
       });
     },
   );
+
+  // 9. List Active Sessions (Authenticated)
+  fastify.get(
+    "/sessions",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        return reply.status(401).send({ error: "Unauthorized" });
+      }
+      const { userId, sessionToken } = request.user as {
+        userId: string;
+        sessionToken?: string;
+      };
+
+      const now = new Date();
+      const sessions = await db
+        .select({
+          id: userSessions.id,
+          userAgent: userSessions.userAgent,
+          createdAt: userSessions.createdAt,
+          expiresAt: userSessions.expiresAt,
+          token: userSessions.token,
+        })
+        .from(userSessions)
+        .where(
+          and(
+            eq(userSessions.userId, userId),
+            gt(userSessions.expiresAt, now),
+          ),
+        );
+
+      const items = sessions.map((s) => {
+        let browser = "Web Browser";
+        let os = "Desktop Device";
+        const ua = s.userAgent || "";
+
+        if (/iPhone/i.test(ua)) os = "iPhone (iOS)";
+        else if (/iPad/i.test(ua)) os = "iPad (iPadOS)";
+        else if (/Android/i.test(ua)) os = "Android Device";
+        else if (/Windows NT 10.0/i.test(ua)) os = "Windows 10/11";
+        else if (/Windows/i.test(ua)) os = "Windows PC";
+        else if (/Macintosh|Mac OS X/i.test(ua)) os = "macOS";
+        else if (/Linux/i.test(ua)) os = "Linux";
+
+        if (/Edg\//i.test(ua)) browser = "Microsoft Edge";
+        else if (/Chrome\//i.test(ua)) browser = "Google Chrome";
+        else if (/Safari\//i.test(ua) && !/Chrome\//i.test(ua)) browser = "Apple Safari";
+        else if (/Firefox\//i.test(ua)) browser = "Mozilla Firefox";
+
+        return {
+          id: s.id,
+          device: `${browser} on ${os}`,
+          userAgent: s.userAgent,
+          createdAt: s.createdAt,
+          isCurrent: s.token === sessionToken,
+        };
+      });
+
+      return reply.send({ sessions: items });
+    },
+  );
+
+  // 10. Revoke Specific Session (Authenticated)
+  fastify.delete(
+    "/sessions/:sessionId",
+    async (
+      request: FastifyRequest<{ Params: { sessionId: string } }>,
+      reply: FastifyReply,
+    ) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        return reply.status(401).send({ error: "Unauthorized" });
+      }
+      const { userId, sessionToken } = request.user as {
+        userId: string;
+        sessionToken?: string;
+      };
+      const { sessionId } = request.params;
+
+      const [targetSession] = await db
+        .select()
+        .from(userSessions)
+        .where(
+          and(
+            eq(userSessions.id, sessionId),
+            eq(userSessions.userId, userId),
+          ),
+        );
+
+      if (!targetSession) {
+        return reply.status(404).send({ error: "Session not found." });
+      }
+
+      await db
+        .delete(userSessions)
+        .where(
+          and(
+            eq(userSessions.id, sessionId),
+            eq(userSessions.userId, userId),
+          ),
+        );
+
+      if (targetSession.token === sessionToken) {
+        reply.clearCookie(COOKIE_NAME, { path: "/" });
+      }
+
+      return reply.send({ success: true, message: "Session revoked successfully." });
+    },
+  );
 }

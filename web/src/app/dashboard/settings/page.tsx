@@ -15,9 +15,20 @@ import {
   Mail,
   Shield,
   Laptop,
+  Smartphone,
+  Globe,
+  Trash2,
   AlertTriangle,
   Lock,
 } from "lucide-react";
+
+interface SessionItem {
+  id: string;
+  device: string;
+  userAgent?: string;
+  createdAt: string;
+  isCurrent: boolean;
+}
 
 export default function SettingsPage() {
   const { user, setUser, logout, checkSession } = useAuthStore();
@@ -58,9 +69,15 @@ export default function SettingsPage() {
     text: string;
   } | null>(null);
 
-  // Revoke Other Sessions
+  // Active Sessions & Devices Management
+  const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const [isLoadingSessions, setIsLoadingSessions] = useState(true);
+  const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
   const [isRevokingSessions, setIsRevokingSessions] = useState(false);
-  const [sessionMsg, setSessionMsg] = useState<string | null>(null);
+  const [sessionMsg, setSessionMsg] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   // Delete Account Modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -69,6 +86,27 @@ export default function SettingsPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+
+  const fetchSessions = async () => {
+    setIsLoadingSessions(true);
+    try {
+      const res = await fetch(`${apiUrl}/auth/sessions`, {
+        credentials: "include",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSessions(data.sessions || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch sessions", err);
+    } finally {
+      setIsLoadingSessions(false);
+    }
+  };
+
+  useEffect(() => {
+    void fetchSessions();
+  }, []);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,6 +207,32 @@ export default function SettingsPage() {
     }
   };
 
+  const handleRevokeSession = async (sessionId: string) => {
+    setRevokingSessionId(sessionId);
+    setSessionMsg(null);
+    try {
+      const res = await fetch(`${apiUrl}/auth/sessions/${sessionId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to revoke session");
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      setSessionMsg({
+        type: "success",
+        text: "Device session revoked successfully.",
+      });
+      setTimeout(() => setSessionMsg(null), 3500);
+    } catch (err: unknown) {
+      setSessionMsg({
+        type: "error",
+        text: err instanceof Error ? err.message : "Error revoking session.",
+      });
+    } finally {
+      setRevokingSessionId(null);
+    }
+  };
+
   const handleRevokeOtherSessions = async () => {
     setIsRevokingSessions(true);
     setSessionMsg(null);
@@ -179,13 +243,55 @@ export default function SettingsPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to revoke sessions");
-      setSessionMsg("All other browser sessions have been logged out.");
-      setTimeout(() => setSessionMsg(null), 4000);
+      setSessions((prev) => prev.filter((s) => s.isCurrent));
+      setSessionMsg({
+        type: "success",
+        text: "All other device sessions have been logged out.",
+      });
+      setTimeout(() => setSessionMsg(null), 3500);
     } catch (err: unknown) {
-      setSessionMsg(err instanceof Error ? err.message : "Error revoking sessions.");
+      setSessionMsg({
+        type: "error",
+        text: err instanceof Error ? err.message : "Error revoking sessions.",
+      });
     } finally {
       setIsRevokingSessions(false);
     }
+  };
+
+  const formatSessionDate = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const getDeviceIcon = (deviceStr: string, uaStr?: string) => {
+    const combined = `${deviceStr} ${uaStr || ""}`.toLowerCase();
+    if (
+      combined.includes("iphone") ||
+      combined.includes("ipad") ||
+      combined.includes("android") ||
+      combined.includes("mobile")
+    ) {
+      return <Smartphone className="h-4 w-4 text-slate-500 shrink-0" />;
+    }
+    if (
+      combined.includes("windows") ||
+      combined.includes("mac") ||
+      combined.includes("linux")
+    ) {
+      return <Laptop className="h-4 w-4 text-slate-500 shrink-0" />;
+    }
+    return <Globe className="h-4 w-4 text-slate-500 shrink-0" />;
   };
 
   const handleDeleteAccount = async () => {
@@ -226,9 +332,9 @@ export default function SettingsPage() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white">
         <VerificationBanner />
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 w-full">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 w-full max-w-7xl">
           {/* Header */}
-          <div className="flex items-center gap-3 pb-4 border-b border-slate-100 mb-6 max-w-2xl mx-auto">
+          <div className="flex items-center gap-2.5 pb-3 sm:pb-4 border-b border-slate-100 mb-5 sm:mb-6">
             <button
               onClick={() => setMobileSidebarOpen(true)}
               aria-label="Open sidebar menu"
@@ -241,12 +347,12 @@ export default function SettingsPage() {
                 Settings
               </h1>
               <p className="text-[11px] text-slate-500 font-normal">
-                Manage your profile, security, and account settings
+                Manage your profile, security, and active sessions
               </p>
             </div>
           </div>
 
-          <div className="max-w-2xl mx-auto space-y-5 pb-12">
+          <div className="max-w-3xl space-y-5 pb-12">
             {/* 1. Profile Section */}
             <section className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-6">
               {/* Identity Row */}
@@ -461,62 +567,134 @@ export default function SettingsPage() {
               </form>
             </section>
 
-            {/* 3. Session & Sign Out Section */}
+            {/* 3. Session & Devices Management Section */}
             <section className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-6">
-              <div className="flex items-center gap-2 mb-1">
-                <Laptop className="h-4 w-4 text-slate-700" />
-                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                  Session & Devices
-                </h2>
-              </div>
-              <p className="text-[11px] text-slate-500 mb-4">
-                Manage your active web browser session
-              </p>
-
-              <div className="p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-                <div className="flex items-center gap-2.5">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                  <div>
-                    <span className="text-xs font-semibold text-slate-900 block">
-                      Current Web Session
-                    </span>
-                    <span className="text-[11px] text-slate-500">
-                      Active on this device
-                    </span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100 mb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Laptop className="h-4 w-4 text-slate-700" />
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                      Active Sessions & Devices
+                    </h2>
                   </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Devices and browsers currently authenticated to your Fuze account
+                  </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    void logout();
-                  }}
-                  className="w-full sm:w-auto px-3.5 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-medium transition cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <LogOut className="h-3.5 w-3.5 text-slate-500" />
-                  <span>Sign Out</span>
-                </button>
+                {sessions.some((s) => !s.isCurrent) && (
+                  <button
+                    type="button"
+                    onClick={handleRevokeOtherSessions}
+                    disabled={isRevokingSessions}
+                    className="self-start sm:self-auto px-3 py-1.5 border border-slate-200/90 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 shadow-2xs shrink-0"
+                  >
+                    {isRevokingSessions ? (
+                      <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
+                    ) : (
+                      <Lock className="h-3 w-3 text-slate-400" />
+                    )}
+                    <span>Revoke Other Sessions</span>
+                  </button>
+                )}
               </div>
 
               {sessionMsg && (
-                <div className="mb-3 p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-xs">
-                  {sessionMsg}
+                <div
+                  className={`mb-4 p-3 rounded-xl border text-xs flex items-center justify-between ${
+                    sessionMsg.type === "success"
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                      : "bg-rose-50 border-rose-200 text-rose-800"
+                  }`}
+                >
+                  <span>{sessionMsg.text}</span>
+                  <button
+                    onClick={() => setSessionMsg(null)}
+                    className="text-xs font-bold px-1 hover:opacity-75"
+                  >
+                    ✕
+                  </button>
                 </div>
               )}
 
-              <button
-                type="button"
-                onClick={handleRevokeOtherSessions}
-                disabled={isRevokingSessions}
-                className="text-xs font-medium text-slate-500 hover:text-slate-800 transition cursor-pointer flex items-center gap-1.5"
-              >
-                {isRevokingSessions ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Lock className="h-3.5 w-3.5" />
-                )}
-                <span>Sign out of all other devices</span>
-              </button>
+              {isLoadingSessions ? (
+                <div className="py-8 flex flex-col items-center justify-center gap-2 text-slate-400">
+                  <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                  <span className="text-xs">Loading active sessions...</span>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {sessions.map((s) => (
+                    <div
+                      key={s.id}
+                      className={`p-3.5 rounded-xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                        s.isCurrent
+                          ? "border-blue-200/80 bg-blue-50/20"
+                          : "border-slate-200/80 bg-white hover:bg-slate-50/50"
+                      }`}
+                    >
+                      <div className="flex items-start sm:items-center gap-3 min-w-0">
+                        <div className="p-2 rounded-lg bg-slate-100 border border-slate-200/60 shrink-0 mt-0.5 sm:mt-0">
+                          {getDeviceIcon(s.device, s.userAgent)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-semibold text-slate-900 truncate">
+                              {s.device}
+                            </span>
+                            {s.isCurrent && (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                <span>Active Now (This Device)</span>
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-slate-400 block mt-0.5">
+                            {s.isCurrent
+                              ? `Session started ${formatSessionDate(s.createdAt)}`
+                              : `Logged in ${formatSessionDate(s.createdAt)}`}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                        {s.isCurrent ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void logout();
+                            }}
+                            className="px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                          >
+                            <LogOut className="h-3 w-3 text-slate-500" />
+                            <span>Sign Out</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleRevokeSession(s.id)}
+                            disabled={revokingSessionId === s.id}
+                            className="px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:text-rose-700 bg-rose-50/50 hover:bg-rose-100/70 border border-rose-200/70 rounded-lg transition cursor-pointer flex items-center gap-1.5"
+                          >
+                            {revokingSessionId === s.id ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3 w-3" />
+                            )}
+                            <span>Revoke</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {sessions.length === 0 && (
+                    <p className="text-xs text-slate-400 py-3 text-center">
+                      No active sessions recorded.
+                    </p>
+                  )}
+                </div>
+              )}
             </section>
 
             {/* 4. Danger Zone */}

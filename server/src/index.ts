@@ -6,6 +6,9 @@ import jwt from "@fastify/jwt";
 import websocket from "@fastify/websocket";
 import dotenv from "dotenv";
 
+import { db, userSessions } from "./db/index.js";
+import { eq, and, gt } from "drizzle-orm";
+
 // Routes
 import { authRoutes } from "./routes/auth.routes.js";
 import { uploadRoutes } from "./routes/uploads.routes.js";
@@ -50,6 +53,62 @@ async function main() {
       cookieName: "fuze_session",
       signed: true,
     },
+  });
+
+  // 4b. Enforce database-backed session revocation across all protected routes
+  app.addHook("preHandler", async (request, reply) => {
+    const publicPaths = [
+      "/health",
+      "/auth/login",
+      "/auth/register",
+      "/auth/verify-email",
+      "/auth/resend-verification",
+      "/auth/forgot-password",
+      "/auth/reset-password",
+    ];
+
+    if (
+      publicPaths.some((p) => request.url.startsWith(p)) ||
+      request.url.includes("/share/") ||
+      request.url.includes("/callback")
+    ) {
+      return;
+    }
+
+    let token = request.headers.authorization?.replace("Bearer ", "");
+    if (!token && request.cookies?.fuze_session) {
+      const unsigned = request.unsignCookie(request.cookies.fuze_session);
+      if (unsigned.valid && unsigned.value) token = unsigned.value;
+    }
+
+    if (token) {
+      try {
+        const decoded = app.jwt.verify<{
+          userId: string;
+          sessionToken?: string;
+        }>(token);
+        (request as any).user = decoded;
+
+        if (decoded.sessionToken) {
+          const [session] = await db
+            .select({ id: userSessions.id })
+            .from(userSessions)
+            .where(
+              and(
+                eq(userSessions.token, decoded.sessionToken),
+                gt(userSessions.expiresAt, new Date()),
+              ),
+            )
+            .limit(1);
+
+          if (!session) {
+            return reply.status(401).send({ error: "Session revoked" });
+          }
+        }
+      } catch {
+        // Let route handlers trigger appropriate 401 if unauthenticated
+      }
+    }
   });
 
   // 5. WebSocket Engine
