@@ -2,6 +2,7 @@ import {
   StorageAdapter,
   UploadSessionResult,
   QuotaResult,
+  ThumbnailResult,
 } from "./base.adapter.js";
 
 interface DropboxSessionResponse {
@@ -79,6 +80,43 @@ export class DropboxAdapter implements StorageAdapter {
 
     const data = (await res.json()) as DropboxLinkResponse;
     return data.link;
+  }
+
+  async getThumbnail(params: {
+    providerFileId: string;
+    accessToken: string;
+  }): Promise<ThumbnailResult | null> {
+    try {
+      const cleanPath = params.providerFileId.startsWith("/")
+        ? params.providerFileId
+        : `/${params.providerFileId}`;
+
+      const res = await fetch(
+        "https://content.dropboxapi.com/2/files/get_thumbnail_v2",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${params.accessToken}`,
+            "Dropbox-API-Arg": JSON.stringify({
+              resource: { ".tag": "path", path: cleanPath },
+              format: "jpeg",
+              size: "w256h256",
+              mode: "strict",
+            }),
+          },
+        },
+      );
+      if (res.ok) {
+        const arrayBuf = await res.arrayBuffer();
+        return {
+          buffer: Buffer.from(arrayBuf),
+          mimeType: "image/jpeg",
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   async deleteFile(params: {

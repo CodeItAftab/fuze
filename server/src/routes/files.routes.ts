@@ -12,8 +12,10 @@ import {
   users,
 } from "../db/index.js";
 import { eq, and, isNull, inArray } from "drizzle-orm";
+import { createReadStream } from "node:fs";
 import { getStorageAdapter } from "../adapters/factory.js";
 import { TokenService } from "../services/token.service.js";
+import { ThumbnailCacheService } from "../services/thumbnail-cache.service.js";
 import { socketManager } from "../websocket/socket-manager.js";
 
 export async function fileRoutes(fastify: FastifyInstance) {
@@ -153,10 +155,7 @@ export async function fileRoutes(fastify: FastifyInstance) {
         .update(vfsNodes)
         .set({ trashedAt: new Date() })
         .where(
-          and(
-            inArray(vfsNodes.id, nodeIds),
-            eq(vfsNodes.userId, user.userId),
-          ),
+          and(inArray(vfsNodes.id, nodeIds), eq(vfsNodes.userId, user.userId)),
         );
 
       for (const id of nodeIds) {
@@ -229,10 +228,7 @@ export async function fileRoutes(fastify: FastifyInstance) {
         .update(vfsNodes)
         .set({ starred: !!starred, updatedAt: new Date() })
         .where(
-          and(
-            inArray(vfsNodes.id, nodeIds),
-            eq(vfsNodes.userId, user.userId),
-          ),
+          and(inArray(vfsNodes.id, nodeIds), eq(vfsNodes.userId, user.userId)),
         );
 
       return reply.send({ success: true });
@@ -276,10 +272,15 @@ export async function fileRoutes(fastify: FastifyInstance) {
       }
 
       try {
-        const updated = await VfsService.renameNode(user.userId, id, name.trim());
+        const updated = await VfsService.renameNode(
+          user.userId,
+          id,
+          name.trim(),
+        );
         return reply.send({ success: true, item: updated });
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Failed to rename item";
+        const message =
+          err instanceof Error ? err.message : "Failed to rename item";
         return reply.status(400).send({ error: message });
       }
     },
@@ -515,7 +516,8 @@ export async function fileRoutes(fastify: FastifyInstance) {
           file.mimeType || "application/octet-stream",
         );
         const actualLength =
-          cdnRes.headers.get("content-length") || (file.size ? file.size.toString() : null);
+          cdnRes.headers.get("content-length") ||
+          (file.size ? file.size.toString() : null);
         if (actualLength) reply.header("Content-Length", actualLength);
 
         return reply.send(Readable.fromWeb(cdnRes.body as any));
@@ -636,7 +638,7 @@ export async function fileRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // 7b. FILE THUMBNAIL (Stream image or video preview for single and chunked files)
+  // 7b. FILE THUMBNAIL (Stream image or video preview with configurable local LRU cache and ETag 304 support)
   fastify.get(
     "/:id/thumbnail",
     async (
@@ -657,6 +659,48 @@ export async function fileRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: "File not found" });
       }
 
+      const ext = (file.name.split(".").pop() || "").toLowerCase();
+      const mime = (file.mimeType || "").toLowerCase();
+      const isImg =
+        mime.startsWith("image/") ||
+        ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp", "avif"].includes(
+          ext,
+        );
+      const isVid =
+        mime.startsWith("video/") ||
+        ["mp4", "webm", "mov", "mkv", "m4v"].includes(ext);
+
+      const versionTag = file.updatedAt
+        ? file.updatedAt.getTime().toString()
+        : "1";
+      const etag = `"${file.id}-${versionTag}"`;
+
+      // 1. HTTP 304 Not Modified validation (instant response, zero server bandwidth)
+      if (request.headers["if-none-match"] === etag) {
+        reply.header("ETag", etag);
+        reply.header(
+          "Cache-Control",
+          "public, max-age=3600, stale-while-revalidate=86400",
+        );
+        return reply.status(304).send();
+      }
+
+      // 2. Check local disk LRU cache
+      const cached = await ThumbnailCacheService.get(file.id, versionTag);
+      if (cached) {
+        reply.header("ETag", etag);
+        reply.header(
+          "Cache-Control",
+          "public, max-age=3600, stale-while-revalidate=86400",
+        );
+        reply.header("Content-Type", cached.mimeType);
+        reply.header("Content-Length", cached.size.toString());
+        reply.header("Accept-Ranges", "bytes");
+        reply.header("X-Cache-Status", "HIT");
+        return reply.send(createReadStream(cached.filePath));
+      }
+
+      // 3. Cache Miss: Query file chunks from DB
       const chunks = await db
         .select({
           chunkIndex: fileChunks.chunkIndex,
@@ -677,20 +721,11 @@ export async function fileRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: "File chunks missing" });
       }
 
-      const ext = (file.name.split(".").pop() || "").toLowerCase();
-      const mime = (file.mimeType || "").toLowerCase();
-      const isImg =
-        mime.startsWith("image/") ||
-        ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp", "avif"].includes(ext);
-      const isVid =
-        mime.startsWith("video/") ||
-        ["mp4", "webm", "mov", "mkv", "m4v"].includes(ext);
+      // Max item size allowed into disk cache to protect memory and storage on free servers (15 MB)
+      const MAX_CACHEABLE_FILE_SIZE = 15 * 1024 * 1024;
+      const contentType = file.mimeType || (isImg ? "image/jpeg" : "video/mp4");
 
-      if (!isImg && !isVid) {
-        return reply.status(404).send({ error: "No media thumbnail available" });
-      }
-
-      // If single chunk (whole file)
+      // Case A: Single chunk (whole file on one cloud provider)
       if (chunks.length === 1) {
         const single = chunks[0]!;
         let token: string;
@@ -706,6 +741,51 @@ export async function fileRoutes(fastify: FastifyInstance) {
           });
         }
         const adapter = getStorageAdapter(single.provider);
+
+        // 1. First attempt: Ask provider for a native lightweight thumbnail (works for videos, docs, and images)
+        if (adapter.getThumbnail) {
+          try {
+            const nativeThumb = await adapter.getThumbnail({
+              providerFileId: single.providerFileId,
+              accessToken: token,
+            });
+            if (nativeThumb && nativeThumb.buffer.length > 0) {
+              await ThumbnailCacheService.save(
+                file.id,
+                nativeThumb.buffer,
+                nativeThumb.mimeType,
+                versionTag,
+              );
+
+              reply.header("ETag", etag);
+              reply.header(
+                "Cache-Control",
+                "public, max-age=3600, stale-while-revalidate=86400",
+              );
+              reply.header("Content-Type", nativeThumb.mimeType);
+              reply.header(
+                "Content-Length",
+                nativeThumb.buffer.length.toString(),
+              );
+              reply.header("Accept-Ranges", "bytes");
+              reply.header("X-Cache-Status", "MISS-CACHED");
+              return reply.send(nativeThumb.buffer);
+            }
+          } catch (err: any) {
+            console.warn(
+              `[Thumbnail] Native thumbnail fetch failed on ${single.provider} for node ${file.id}:`,
+              err?.message,
+            );
+          }
+        }
+
+        // 2. If not a media file (e.g. unsupported document/archive) and native thumbnail failed, return 404
+        if (!isImg && !isVid) {
+          return reply
+            .status(404)
+            .send({ error: "No thumbnail available for this file type" });
+        }
+
         const directUrl = await adapter.getDownloadUrl({
           providerFileId: single.providerFileId,
           accessToken: token,
@@ -726,24 +806,127 @@ export async function fileRoutes(fastify: FastifyInstance) {
           });
         }
 
-        reply.header("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
-        reply.header("Content-Type", file.mimeType || (isImg ? "image/jpeg" : "video/mp4"));
+        const contentLength = cdnRes.headers.get("content-length")
+          ? parseInt(cdnRes.headers.get("content-length")!, 10)
+          : file.size || 0;
+
+        // Cache image if whole file is within our safe size limit and not a partial range request
+        if (
+          !request.headers.range &&
+          cdnRes.status === 200 &&
+          isImg &&
+          contentLength > 0 &&
+          contentLength <= MAX_CACHEABLE_FILE_SIZE
+        ) {
+          const arrayBuf = await cdnRes.arrayBuffer();
+          const buf = Buffer.from(arrayBuf);
+
+          // Save thumbnail to configurable disk cache asynchronously
+          await ThumbnailCacheService.save(
+            file.id,
+            buf,
+            contentType,
+            versionTag,
+          );
+
+          reply.header("ETag", etag);
+          reply.header(
+            "Cache-Control",
+            "public, max-age=3600, stale-while-revalidate=86400",
+          );
+          reply.header("Content-Type", contentType);
+          reply.header("Content-Length", buf.length.toString());
+          reply.header("Accept-Ranges", "bytes");
+          reply.header("X-Cache-Status", "MISS-CACHED");
+          return reply.send(buf);
+        }
+
+        // Direct stream for video, range requests, or files exceeding MAX_CACHEABLE_FILE_SIZE
+        reply.header("ETag", etag);
+        reply.header(
+          "Cache-Control",
+          "public, max-age=86400, stale-while-revalidate=604800",
+        );
+        reply.header("Content-Type", contentType);
         reply.header("Accept-Ranges", "bytes");
+        reply.header("X-Cache-Status", "BYPASS");
+
         if (cdnRes.status === 206) {
           reply.status(206);
           const cr = cdnRes.headers.get("content-range");
           if (cr) reply.header("Content-Range", cr);
         }
-        const len = cdnRes.headers.get("content-length") || (file.size ? file.size.toString() : null);
+        const len =
+          cdnRes.headers.get("content-length") ||
+          (file.size ? file.size.toString() : null);
         if (len) reply.header("Content-Length", len);
 
         return reply.send(Readable.fromWeb(cdnRes.body as any));
       }
 
-      // If multi-cloud chunked file
-      reply.header("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
-      reply.header("Content-Type", file.mimeType || (isImg ? "image/jpeg" : "video/mp4"));
+      // Case B: Multi-cloud chunked file
+      const totalSize = file.size || 0;
+      if (
+        isImg &&
+        totalSize > 0 &&
+        totalSize <= MAX_CACHEABLE_FILE_SIZE &&
+        !request.headers.range
+      ) {
+        try {
+          const buffers: Buffer[] = [];
+          for (const c of chunks.sort((a, b) => a.chunkIndex - b.chunkIndex)) {
+            const token = await TokenService.getValidAccessToken(
+              c.providerIdentityId,
+            );
+            const adapter = getStorageAdapter(c.provider);
+            const url = await adapter.getDownloadUrl({
+              providerFileId: c.providerFileId,
+              accessToken: token,
+            });
+            const headers: Record<string, string> = {};
+            if (c.provider === "google_drive") {
+              headers["Authorization"] = `Bearer ${token}`;
+            }
+            const res = await fetch(url, { headers });
+            if (!res.ok) throw new Error(`Chunk ${c.chunkIndex} fetch failed`);
+            const chunkBuf = Buffer.from(await res.arrayBuffer());
+            buffers.push(chunkBuf);
+          }
+          const fullBuf = Buffer.concat(buffers);
+          await ThumbnailCacheService.save(
+            file.id,
+            fullBuf,
+            contentType,
+            versionTag,
+          );
+
+          reply.header("ETag", etag);
+          reply.header(
+            "Cache-Control",
+            "public, max-age=86400, stale-while-revalidate=604800",
+          );
+          reply.header("Content-Type", contentType);
+          reply.header("Content-Length", fullBuf.length.toString());
+          reply.header("Accept-Ranges", "bytes");
+          reply.header("X-Cache-Status", "MISS-CACHED");
+          return reply.send(fullBuf);
+        } catch (err: any) {
+          console.warn(
+            "[Thumbnail] Multi-chunk buffering failed, falling back to sequential stream:",
+            err?.message,
+          );
+        }
+      }
+
+      // Fallback: Multi-cloud sequential stream
+      reply.header("ETag", etag);
+      reply.header(
+        "Cache-Control",
+        "public, max-age=86400, stale-while-revalidate=604800",
+      );
+      reply.header("Content-Type", contentType);
       reply.header("Accept-Ranges", "bytes");
+      reply.header("X-Cache-Status", "BYPASS");
       if (file.size) reply.header("Content-Length", file.size.toString());
 
       const passThrough = new PassThrough();
@@ -755,14 +938,18 @@ export async function fileRoutes(fastify: FastifyInstance) {
         try {
           for (const c of chunks.sort((a, b) => a.chunkIndex - b.chunkIndex)) {
             if (passThrough.destroyed) break;
-            const token = await TokenService.getValidAccessToken(c.providerIdentityId);
+            const token = await TokenService.getValidAccessToken(
+              c.providerIdentityId,
+            );
             const adapter = getStorageAdapter(c.provider);
             const url = await adapter.getDownloadUrl({
               providerFileId: c.providerFileId,
               accessToken: token,
             });
             const headers: Record<string, string> = {};
-            if (c.provider === "google_drive") headers["Authorization"] = `Bearer ${token}`;
+            if (c.provider === "google_drive") {
+              headers["Authorization"] = `Bearer ${token}`;
+            }
             const res = await fetch(url, { headers });
             if (!res.ok || !res.body) break;
             const reader = res.body.getReader();
@@ -913,7 +1100,9 @@ export async function fileRoutes(fastify: FastifyInstance) {
     ) => {
       const { token } = request.params;
       const { password } = request.query;
-      const headerPassword = request.headers["x-share-password"] as string | undefined;
+      const headerPassword = request.headers["x-share-password"] as
+        | string
+        | undefined;
       const passAttempt = password || headerPassword;
 
       const [share] = await db
@@ -1074,14 +1263,18 @@ export async function fileRoutes(fastify: FastifyInstance) {
           .send({ error: "Share link not found or expired." });
       }
       if (share.expiresAt && new Date(share.expiresAt) < new Date()) {
-        return reply.status(410).send({ error: "This share link has expired." });
+        return reply
+          .status(410)
+          .send({ error: "This share link has expired." });
       }
       const [file] = await db
         .select()
         .from(vfsNodes)
         .where(eq(vfsNodes.id, share.vfsNodeId));
       if (!file) {
-        return reply.status(404).send({ error: "Shared file no longer exists." });
+        return reply
+          .status(404)
+          .send({ error: "Shared file no longer exists." });
       }
 
       if (share.passwordHash) {

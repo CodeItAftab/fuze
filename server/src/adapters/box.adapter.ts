@@ -2,6 +2,7 @@ import {
   StorageAdapter,
   UploadSessionResult,
   QuotaResult,
+  ThumbnailResult,
 } from "./base.adapter.js";
 
 interface BoxUploadSessionResponse {
@@ -74,6 +75,32 @@ export class BoxAdapter implements StorageAdapter {
       );
     }
     return downloadUrl;
+  }
+
+  async getThumbnail(params: {
+    providerFileId: string;
+    accessToken: string;
+  }): Promise<ThumbnailResult | null> {
+    try {
+      const res = await fetch(
+        `https://api.box.com/2.0/files/${params.providerFileId}/thumbnail.png?min_height=256&min_width=256`,
+        {
+          method: "GET",
+          headers: { Authorization: `Bearer ${params.accessToken}` },
+          redirect: "follow",
+        },
+      );
+      if (res.ok) {
+        const arrayBuf = await res.arrayBuffer();
+        return {
+          buffer: Buffer.from(arrayBuf),
+          mimeType: "image/png",
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   async deleteFile(params: {

@@ -25,7 +25,12 @@ export class UploadSessionService {
     const identities = await db
       .select()
       .from(providerIdentities)
-      .where(eq(providerIdentities.userId, params.userId));
+      .where(
+        and(
+          eq(providerIdentities.userId, params.userId),
+          eq(providerIdentities.isRevoked, false),
+        ),
+      );
 
     const providerQuotas = identities.map((id) => ({
       providerIdentityId: id.id,

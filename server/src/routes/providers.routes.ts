@@ -8,7 +8,7 @@ import {
   uploadChunks,
   vfsNodes,
 } from "../db/index.js";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, ne, sql } from "drizzle-orm";
 import { encrypt, decrypt } from "../utils/crypto.js";
 import { getStorageAdapter, SupportedProvider } from "../adapters/factory.js";
 import { socketManager } from "../websocket/socket-manager.js";
@@ -261,6 +261,19 @@ export async function providerRoutes(fastify: FastifyInstance) {
         break;
       }
 
+      case "pcloud": {
+        const params = new URLSearchParams({
+          client_id: process.env.PCLOUD_CLIENT_ID || "",
+          redirect_uri:
+            process.env.PCLOUD_REDIRECT_URI ||
+            "http://localhost:4000/providers/pcloud/callback",
+          response_type: "code",
+          state,
+        });
+        authUrl = `https://my.pcloud.com/oauth2/authorize?${params.toString()}`;
+        break;
+      }
+
       default:
         return reply
           .status(400)
@@ -475,6 +488,54 @@ export async function providerRoutes(fastify: FastifyInstance) {
             break;
           }
 
+          case "pcloud": {
+            canonicalProvider = "pcloud";
+            const tokenRes = await fetch(
+              "https://api.pcloud.com/oauth2_token",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: new URLSearchParams({
+                  client_id: process.env.PCLOUD_CLIENT_ID || "",
+                  client_secret: process.env.PCLOUD_CLIENT_SECRET || "",
+                  code,
+                }),
+              },
+            );
+            const tData = (await tokenRes.json()) as any;
+            if (!tokenRes.ok || (tData.result !== undefined && tData.result !== 0)) {
+              throw new Error(
+                tData.error ||
+                  tData.error_description ||
+                  `pCloud token exchange failed (code: ${tData.result})`,
+              );
+            }
+
+            accessToken = tData.access_token;
+            // pCloud access tokens are permanent until explicitly revoked by user
+            refreshToken = tData.access_token;
+            expiresIn = 315360000; // 10 years
+
+            const baseApi =
+              tData.locationid === 2
+                ? "https://eapi.pcloud.com"
+                : "https://api.pcloud.com";
+
+            const uRes = await fetch(
+              `${baseApi}/userinfo?access_token=${accessToken}`,
+            );
+            const uData = (await uRes.json()) as any;
+            if (uData.result !== 0) {
+              throw new Error(
+                `Failed to fetch pCloud user profile (code: ${uData.result})`,
+              );
+            }
+            accountEmail = uData.email || "";
+            break;
+          }
+
           default:
             throw new Error(`Unsupported callback provider: ${provider}`);
         }
@@ -484,6 +545,38 @@ export async function providerRoutes(fastify: FastifyInstance) {
         const quota = await adapter.fetchQuota(accessToken);
 
         const tokenExpiresAt = new Date(Date.now() + expiresIn * 1000);
+
+        // -------------------------------------------------------------
+        // Cross-User Account Collision Protection:
+        // Ensure no OTHER Fuze user has already linked this exact same cloud account.
+        // -------------------------------------------------------------
+        if (accountEmail) {
+          const normalizedEmail = accountEmail.trim().toLowerCase();
+          const [claimedByOther] = await db
+            .select({
+              id: providerIdentities.id,
+              userId: providerIdentities.userId,
+            })
+            .from(providerIdentities)
+            .where(
+              and(
+                ne(providerIdentities.userId, userId),
+                eq(providerIdentities.provider, canonicalProvider),
+                sql`LOWER(TRIM(${providerIdentities.accountEmail})) = ${normalizedEmail}`,
+              ),
+            );
+
+          if (claimedByOther) {
+            const displayName = canonicalProvider
+              .replace("_", " ")
+              .replace(/\b\w/g, (c) => c.toUpperCase());
+            return reply.redirect(
+              `${clientOrigin}/dashboard/storage?error=${encodeURIComponent(
+                `This ${displayName} account (${accountEmail}) is already connected by another Fuze user. A cloud account can only be linked to one Fuze profile at a time to prevent data collisions and unauthorized access.`,
+              )}`,
+            );
+          }
+        }
 
         const [existing] = await db
           .select({

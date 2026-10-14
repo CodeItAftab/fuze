@@ -124,12 +124,19 @@ export default function StorageProvidersPage() {
       color: "border-indigo-200 bg-indigo-50/40 text-indigo-700",
       connectedProvider: providers.find((p) => p.provider === "box"),
     },
+    {
+      id: "pcloud",
+      name: "pCloud",
+      freeTier: "+10 GB Free",
+      color: "border-cyan-200 bg-cyan-50/40 text-cyan-700",
+      connectedProvider: providers.find((p) => p.provider === "pcloud"),
+    },
   ];
 
   const providerToSlug = (provider: string) => {
     if (provider === "google_drive") return "google";
     if (provider === "one_drive") return "onedrive";
-    return provider; // "dropbox", "box"
+    return provider; // "dropbox", "box", "pcloud"
   };
 
   return (

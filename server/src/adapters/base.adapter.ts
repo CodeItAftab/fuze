@@ -11,6 +11,11 @@ export interface QuotaResult {
   usedBytes: number;
 }
 
+export interface ThumbnailResult {
+  buffer: Buffer;
+  mimeType: string;
+}
+
 export interface StorageAdapter {
   createResumableUploadSession(params: {
     fileName: string;
@@ -24,6 +29,11 @@ export interface StorageAdapter {
     providerFileId: string;
     accessToken: string;
   }): Promise<string>;
+
+  getThumbnail?(params: {
+    providerFileId: string;
+    accessToken: string;
+  }): Promise<ThumbnailResult | null>;
 
   deleteFile(params: {
     providerFileId: string;
@@ -44,3 +54,4 @@ export interface StorageAdapter {
     expiresInSeconds: number;
   }>;
 }
+

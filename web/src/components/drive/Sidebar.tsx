@@ -150,7 +150,7 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
                 onClick={() => setShowNewMenu(!showNewMenu)}
                 className="w-full flex items-center justify-center gap-2 rounded-lg bg-blue-600 py-2 font-semibold text-white shadow-2xs text-xs hover:bg-blue-700 active:scale-98 transition cursor-pointer"
               >
-                <span>+ New Upload</span>
+                <span>New</span>
               </button>
             ) : (
               <div

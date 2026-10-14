@@ -2,6 +2,7 @@ import {
   StorageAdapter,
   UploadSessionResult,
   QuotaResult,
+  ThumbnailResult,
 } from "./base.adapter.js";
 
 interface OneDriveSessionResponse {
@@ -82,6 +83,32 @@ export class OneDriveAdapter implements StorageAdapter {
 
     const data = (await res.json()) as OneDriveItemResponse;
     return data["@microsoft.graph.downloadUrl"] || "";
+  }
+
+  async getThumbnail(params: {
+    providerFileId: string;
+    accessToken: string;
+  }): Promise<ThumbnailResult | null> {
+    try {
+      const res = await fetch(
+        `https://graph.microsoft.com/v1.0/me/drive/items/${params.providerFileId}/thumbnails/0/medium/content`,
+        {
+          headers: { Authorization: `Bearer ${params.accessToken}` },
+          redirect: "follow",
+        },
+      );
+      if (res.ok) {
+        const arrayBuf = await res.arrayBuffer();
+        const mimeType = res.headers.get("content-type") || "image/jpeg";
+        return {
+          buffer: Buffer.from(arrayBuf),
+          mimeType,
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   async deleteFile(params: {

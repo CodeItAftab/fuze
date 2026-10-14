@@ -2,6 +2,7 @@ import {
   StorageAdapter,
   UploadSessionResult,
   QuotaResult,
+  ThumbnailResult,
 } from "./base.adapter.js";
 
 interface GoogleDriveAboutResponse {
@@ -69,6 +70,42 @@ export class GoogleDriveAdapter implements StorageAdapter {
     accessToken: string;
   }): Promise<string> {
     return `https://www.googleapis.com/drive/v3/files/${params.providerFileId}?alt=media`;
+  }
+
+  async getThumbnail(params: {
+    providerFileId: string;
+    accessToken: string;
+  }): Promise<ThumbnailResult | null> {
+    try {
+      const metaRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${params.providerFileId}?fields=thumbnailLink,hasThumbnail`,
+        {
+          headers: { Authorization: `Bearer ${params.accessToken}` },
+        },
+      );
+      if (!metaRes.ok) return null;
+      const meta = (await metaRes.json()) as {
+        thumbnailLink?: string;
+        hasThumbnail?: boolean;
+      };
+      if (!meta.thumbnailLink) return null;
+
+      // Google Drive default thumbnail is =s220, replace with =s400 for crisp previews
+      const highResUrl = meta.thumbnailLink.replace(/=s\d+$/, "=s400");
+      const thumbRes = await fetch(highResUrl, {
+        headers: { Authorization: `Bearer ${params.accessToken}` },
+      });
+      if (!thumbRes.ok) return null;
+
+      const arrayBuf = await thumbRes.arrayBuffer();
+      const mimeType = thumbRes.headers.get("content-type") || "image/jpeg";
+      return {
+        buffer: Buffer.from(arrayBuf),
+        mimeType,
+      };
+    } catch {
+      return null;
+    }
   }
 
   async deleteFile(params: {

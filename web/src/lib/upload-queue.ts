@@ -456,6 +456,12 @@ export class UploadQueueManager {
             if (Array.isArray(cd.entries) && cd.entries[0]?.id) {
               // Box returns { entries: [ { id: "12345" } ] }
               providerFileId = String(cd.entries[0].id);
+            } else if (Array.isArray(cd.fileids) && cd.fileids[0]) {
+              // pCloud returns { result: 0, fileids: [12345] }
+              providerFileId = String(cd.fileids[0]);
+            } else if (Array.isArray(cd.metadata) && cd.metadata[0]?.fileid) {
+              // pCloud metadata fallback
+              providerFileId = String(cd.metadata[0].fileid);
             } else if (typeof cd.path_display === "string") {
               providerFileId = cd.path_display;
             } else if (typeof cd.id === "string") {

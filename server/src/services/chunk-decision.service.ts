@@ -21,11 +21,20 @@ export interface DecisionResult {
 
 // Provider-specific single-file limits on free tier
 const PROVIDER_MAX_FILE_LIMITS: Record<string, number> = {
-  box: 50 * 1024 * 1024, // Box direct multipart upload endpoint supports files up to 50 MB
   google_drive: 5 * 1024 * 1024 * 1024 * 1024, // 5 TB
   one_drive: 250 * 1024 * 1024 * 1024, // 250 GB
-  dropbox: 140 * 1024 * 1024, // Dropbox direct upload endpoint has a 150 MB ceiling
   pcloud: 10 * 1024 * 1024 * 1024, // 10 GB
+  box: 250 * 1024 * 1024, // 250 MB (standard account single-file upload ceiling)
+  dropbox: 150 * 1024 * 1024, // 150 MB
+};
+
+// Provider throughput and capability preference weights for Whole files
+const PROVIDER_PRIORITY_WEIGHT: Record<string, number> = {
+  google_drive: 100, // 15 GB free, global high-speed CDN, instant native previews
+  pcloud: 95, // 10 GB free, direct high-speed transfers, native previews
+  one_drive: 90, // 5 GB free, high reliability, Office previews
+  box: 85, // 10 GB free, rich preview engine (120+ formats)
+  dropbox: 70, // 2 GB free
 };
 
 // Provider-specific minimum chunk/file limits for chunked/resumable upload APIs
@@ -44,13 +53,13 @@ export class ChunkDecisionService {
       };
     }
 
-    // Sort providers by descending free space
-    const sorted = [...providers]
-      .map((p) => ({ ...p }))
-      .sort((a, b) => b.freeBytes - a.freeBytes);
-
-    // Rule 1: Does the file fit entirely in ANY single provider (respecting both min and max limits)?
-    const singleFit = sorted.find((p) => {
+    // -------------------------------------------------------------------------
+    // RULE 1: STRICT "WHOLE FILE" PRIORITY
+    // Check if ANY active provider can host the entire file as a single whole object.
+    // Whole uploads are vastly faster, avoid multi-provider assembly overhead,
+    // and enable instant provider-native thumbnail generation.
+    // -------------------------------------------------------------------------
+    const wholeCandidates = providers.filter((p) => {
       const minAllowed = PROVIDER_MIN_FILE_LIMITS[p.provider] ?? 0;
       const maxAllowed = PROVIDER_MAX_FILE_LIMITS[p.provider] ?? Infinity;
       return (
@@ -60,7 +69,22 @@ export class ChunkDecisionService {
       );
     });
 
-    if (singleFit) {
+    if (wholeCandidates.length > 0) {
+      // Prioritize the best provider:
+      // 1. Providers that have abundant free space relative to file size (so we don't exhaust small providers)
+      // 2. High-performance providers (Google Drive > pCloud > OneDrive > Box > Dropbox)
+      wholeCandidates.sort((a, b) => {
+        const spaceDiff = b.freeBytes - a.freeBytes;
+        // If one provider has substantially more space (> 1 GB difference), prioritize it
+        if (Math.abs(spaceDiff) > 1024 * 1024 * 1024) {
+          return spaceDiff;
+        }
+        const weightA = PROVIDER_PRIORITY_WEIGHT[a.provider] || 50;
+        const weightB = PROVIDER_PRIORITY_WEIGHT[b.provider] || 50;
+        return weightB - weightA;
+      });
+
+      const selected = wholeCandidates[0]!;
       return {
         strategy: "whole",
         chunks: [
@@ -69,14 +93,22 @@ export class ChunkDecisionService {
             byteStart: 0,
             byteEnd: fileSize,
             size: fileSize,
-            provider: singleFit.provider,
-            providerIdentityId: singleFit.providerIdentityId,
+            provider: selected.provider,
+            providerIdentityId: selected.providerIdentityId,
           },
         ],
       };
     }
 
-    // Rule 2: Exceeds every single provider -> Chunk across combined free space
+    // -------------------------------------------------------------------------
+    // RULE 2: MULTI-CLOUD CHUNKING (STRICT LAST RESORT)
+    // Only triggered when NO single provider has enough remaining space for the file.
+    // Combines free quota across all connected providers to host the file.
+    // -------------------------------------------------------------------------
+    const sorted = [...providers]
+      .map((p) => ({ ...p }))
+      .sort((a, b) => b.freeBytes - a.freeBytes);
+
     const totalFreeSpace = sorted.reduce((sum, p) => sum + p.freeBytes, 0);
     if (totalFreeSpace < fileSize) {
       const neededGB = (fileSize / 1e9).toFixed(2);
@@ -84,7 +116,7 @@ export class ChunkDecisionService {
       return {
         strategy: "chunked",
         chunks: [],
-        error: `Insufficient storage. Needed: ${neededGB} GB, Total Available: ${availableGB} GB.`,
+        error: `Insufficient storage across all providers. Needed: ${neededGB} GB, Total Available: ${availableGB} GB.`,
       };
     }
 

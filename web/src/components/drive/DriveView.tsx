@@ -138,6 +138,9 @@ function FileThumbnail({
 
   const [imgError, setImgError] = useState(false);
   const [vidError, setVidError] = useState(false);
+  const [docError, setDocError] = useState(false);
+  const isDocument =
+    isPdf || isDoc || isSpreadsheet || /\.(pptx|ppt|key|odp|rtf)$/i.test(name);
 
   // Common Corner Badges Component
   const CornerBadges = () => (
@@ -171,16 +174,15 @@ function FileThumbnail({
     );
   }
 
-  // 2. VIDEO THUMBNAIL
+  // 2. VIDEO THUMBNAIL (Cached image preview with Play overlay)
   if (isVideo && !vidError) {
     return (
       <div className="w-full h-full relative overflow-hidden rounded-lg bg-slate-950 flex items-center justify-center">
-        <video
+        <img
           crossOrigin="use-credentials"
-          src={`${apiUrl}/files/${file.id}/thumbnail#t=0.5`}
-          preload="metadata"
-          muted
-          playsInline
+          src={`${apiUrl}/files/${file.id}/thumbnail`}
+          alt={file.name}
+          loading="lazy"
           className="w-full h-full object-contain pointer-events-none group-hover:scale-105 transition-transform duration-300"
           onError={() => setVidError(true)}
         />
@@ -206,7 +208,24 @@ function FileThumbnail({
     );
   }
 
-  // 3. PDF DOCUMENT CARD
+  // 3. DOCUMENT THUMBNAIL (Native cloud preview for PDF, Docs, Spreadsheets)
+  if (isDocument && !docError) {
+    return (
+      <div className="w-full h-full relative overflow-hidden rounded-lg bg-slate-100/90 flex items-center justify-center p-1.5">
+        <img
+          crossOrigin="use-credentials"
+          src={`${apiUrl}/files/${file.id}/thumbnail`}
+          alt={file.name}
+          loading="lazy"
+          className="w-full h-full object-contain rounded-md shadow-2xs transition-transform duration-300 group-hover:scale-105"
+          onError={() => setDocError(true)}
+        />
+        <CornerBadges />
+      </div>
+    );
+  }
+
+  // 4. PDF DOCUMENT CARD (Fallback graphic card)
   if (isPdf) {
     return (
       <div className="w-full h-full bg-rose-50/50 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-rose-50/80 transition">

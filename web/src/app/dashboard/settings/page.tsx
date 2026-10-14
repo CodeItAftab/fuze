@@ -82,6 +82,7 @@ export default function SettingsPage() {
   // Delete Account Modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteCloudFiles, setDeleteCloudFiles] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -306,6 +307,10 @@ export default function SettingsPage() {
       const res = await fetch(`${apiUrl}/auth/account`, {
         method: "DELETE",
         credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ deleteCloudFiles }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to delete account");
@@ -714,6 +719,7 @@ export default function SettingsPage() {
                 onClick={() => {
                   setDeleteConfirmation("");
                   setDeleteError(null);
+                  setDeleteCloudFiles(false);
                   setShowDeleteModal(true);
                 }}
                 className="w-full sm:w-auto px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-semibold transition cursor-pointer"
@@ -743,9 +749,31 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <p className="text-xs text-slate-600 leading-relaxed mb-4">
-              All files, folders, and linked provider accounts will be permanently removed.
+            <p className="text-xs text-slate-600 leading-relaxed mb-3">
+              Your Fuze profile, virtual file system, and linked account sessions will be permanently erased.
             </p>
+
+            {/* Cloud Files Choice Checkbox */}
+            <div className="mb-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={deleteCloudFiles}
+                  onChange={(e) => setDeleteCloudFiles(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
+                />
+                <div className="text-xs">
+                  <span className="font-semibold text-slate-800 block">
+                    Also delete files from connected cloud drives
+                  </span>
+                  <span className="text-slate-500 text-[11px] leading-tight block mt-0.5">
+                    {deleteCloudFiles
+                      ? "All files and chunk parts stored in Google Drive, OneDrive, Dropbox, Box, and pCloud will be permanently erased."
+                      : "Files will remain safely in your personal cloud accounts. Only Fuze indexes and connections are deleted."}
+                  </span>
+                </div>
+              </label>
+            </div>
 
             <div className="mb-4">
               <label className="block text-xs font-semibold text-slate-800 mb-1.5">
@@ -782,7 +810,13 @@ export default function SettingsPage() {
                 className="w-full sm:w-auto px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
               >
                 {isDeletingAccount && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                <span>Delete Permanently</span>
+                <span>
+                  {isDeletingAccount
+                    ? deleteCloudFiles
+                      ? "Purging cloud data..."
+                      : "Deleting account..."
+                    : "Delete Permanently"}
+                </span>
               </button>
             </div>
           </div>

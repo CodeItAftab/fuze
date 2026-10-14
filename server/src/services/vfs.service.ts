@@ -4,12 +4,13 @@ import {
   fileChunks,
   providerIdentities,
   uploadSessions,
+  uploadChunks,
 } from "../db/index.js";
 import { eq, and, isNull, isNotNull, inArray } from "drizzle-orm";
 import { TokenService } from "./token.service.js";
-import { GoogleDriveAdapter } from "../adapters/gdrive.adapter.js";
 import { socketManager } from "../websocket/socket-manager.js";
 import { getStorageAdapter } from "../adapters/factory.js";
+import { ThumbnailCacheService } from "./thumbnail-cache.service.js";
 
 export class VfsService {
   static async listChildren(userId: string, parentId: string | null = null) {
@@ -113,12 +114,7 @@ export class VfsService {
     return db
       .select()
       .from(vfsNodes)
-      .where(
-        and(
-          eq(vfsNodes.userId, userId),
-          isNotNull(vfsNodes.trashedAt),
-        ),
-      );
+      .where(and(eq(vfsNodes.userId, userId), isNotNull(vfsNodes.trashedAt)));
   }
 
   static async createFolder(
@@ -249,6 +245,7 @@ export class VfsService {
       .where(and(eq(vfsNodes.id, nodeId), eq(vfsNodes.userId, userId)));
 
     for (const id of allNodeIds) {
+      void ThumbnailCacheService.delete(id);
       socketManager.broadcastToUser(userId, {
         type: "FILE_DELETED",
         payload: { id },
@@ -430,14 +427,18 @@ export class VfsService {
       .where(
         and(
           eq(vfsNodes.userId, userId),
-          node.parentId ? eq(vfsNodes.parentId, node.parentId) : isNull(vfsNodes.parentId),
+          node.parentId
+            ? eq(vfsNodes.parentId, node.parentId)
+            : isNull(vfsNodes.parentId),
           eq(vfsNodes.name, trimmedName),
           isNull(vfsNodes.trashedAt),
         ),
       );
 
     if (existingSameName.length > 0) {
-      throw new Error(`An item named "${trimmedName}" already exists in this folder.`);
+      throw new Error(
+        `An item named "${trimmedName}" already exists in this folder.`,
+      );
     }
 
     // 3. Update name in VFS
@@ -515,5 +516,120 @@ export class VfsService {
     });
 
     return updated;
+  }
+
+  /**
+   * Purges all user data across VFS and (optionally) cloud providers.
+   * If deleteCloudFiles is true, physically deletes all files and chunks
+   * from Google Drive, OneDrive, Dropbox, Box, and pCloud before database cascading.
+   */
+  static async purgeAllUserData(userId: string, deleteCloudFiles = false) {
+    // 1. Fetch all user nodes to clear disk thumbnail cache
+    const userNodes = await db
+      .select({ id: vfsNodes.id })
+      .from(vfsNodes)
+      .where(eq(vfsNodes.userId, userId));
+
+    for (const node of userNodes) {
+      void ThumbnailCacheService.delete(node.id);
+    }
+
+    // 2. If user requested cloud deletion, remove all chunks from providers
+    if (deleteCloudFiles) {
+      // 2a. Finalized file chunks
+      const chunks = await db
+        .select({
+          providerFileId: fileChunks.providerFileId,
+          providerIdentityId: fileChunks.providerIdentityId,
+          provider: providerIdentities.provider,
+        })
+        .from(fileChunks)
+        .innerJoin(
+          providerIdentities,
+          eq(fileChunks.providerIdentityId, providerIdentities.id),
+        )
+        .innerJoin(vfsNodes, eq(fileChunks.vfsNodeId, vfsNodes.id))
+        .where(eq(vfsNodes.userId, userId));
+
+      // 2b. Unfinalized upload chunks with a valid providerFileId
+      const abandonedUploadChunks = await db
+        .select({
+          providerFileId: uploadChunks.providerFileId,
+          providerIdentityId: uploadChunks.providerIdentityId,
+          provider: providerIdentities.provider,
+        })
+        .from(uploadChunks)
+        .innerJoin(
+          uploadSessions,
+          eq(uploadChunks.uploadSessionId, uploadSessions.id),
+        )
+        .innerJoin(
+          providerIdentities,
+          eq(uploadChunks.providerIdentityId, providerIdentities.id),
+        )
+        .where(
+          and(
+            eq(uploadSessions.userId, userId),
+            isNotNull(uploadChunks.providerFileId),
+          ),
+        );
+
+      const allItemsToDelete = [
+        ...chunks.map((c) => ({
+          providerFileId: c.providerFileId,
+          providerIdentityId: c.providerIdentityId,
+          provider: c.provider,
+        })),
+        ...abandonedUploadChunks
+          .filter((c) => c.providerFileId)
+          .map((c) => ({
+            providerFileId: c.providerFileId!,
+            providerIdentityId: c.providerIdentityId,
+            provider: c.provider,
+          })),
+      ];
+
+      // Pre-fetch tokens per provider identity
+      const tokenMap = new Map<string, string>();
+      for (const item of allItemsToDelete) {
+        if (!tokenMap.has(item.providerIdentityId)) {
+          try {
+            const token = await TokenService.getValidAccessToken(
+              item.providerIdentityId,
+            );
+            tokenMap.set(item.providerIdentityId, token);
+          } catch (tokenErr) {
+            console.warn(
+              `[VfsService] Token retrieval failed for identity ${item.providerIdentityId}:`,
+              tokenErr,
+            );
+          }
+        }
+      }
+
+      // Delete in parallel batches of 5
+      const BATCH_SIZE = 5;
+      for (let i = 0; i < allItemsToDelete.length; i += BATCH_SIZE) {
+        const batch = allItemsToDelete.slice(i, i + BATCH_SIZE);
+        await Promise.allSettled(
+          batch.map(async (item) => {
+            const accessToken = tokenMap.get(item.providerIdentityId);
+            if (!accessToken) return;
+            try {
+              const adapter = getStorageAdapter(item.provider);
+              await adapter.deleteFile({
+                providerFileId: item.providerFileId,
+                accessToken,
+              });
+            } catch (delErr) {
+              console.warn(
+                `[VfsService] Failed to delete file ${item.providerFileId} from ${item.provider}:`,
+                delErr,
+              );
+            }
+          }),
+        );
+      }
+    }
   }
 }

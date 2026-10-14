@@ -2,6 +2,7 @@ import {
   StorageAdapter,
   UploadSessionResult,
   QuotaResult,
+  ThumbnailResult,
 } from "./base.adapter.js";
 
 interface PCloudSpaceResponse {
@@ -45,6 +46,30 @@ export class PCloudAdapter implements StorageAdapter {
       throw new Error("Failed to obtain pCloud download link");
     }
     return `https://${data.hosts[0]}${data.path}`;
+  }
+
+  async getThumbnail(params: {
+    providerFileId: string;
+    accessToken: string;
+  }): Promise<ThumbnailResult | null> {
+    try {
+      const res = await fetch(
+        `https://api.pcloud.com/getthumb?fileid=${params.providerFileId}&size=256x256&crop=0&access_token=${params.accessToken}`,
+      );
+      if (res.ok) {
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("image")) {
+          const arrayBuf = await res.arrayBuffer();
+          return {
+            buffer: Buffer.from(arrayBuf),
+            mimeType: contentType,
+          };
+        }
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   async deleteFile(params: {

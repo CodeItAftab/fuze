@@ -5,6 +5,7 @@ import { db, users, userSessions } from "../db/index.js";
 import { eq, and, gt, ne } from "drizzle-orm";
 import { z } from "zod";
 import { EmailService } from "../services/email.service.js";
+import { VfsService } from "../services/vfs.service.js";
 import { socketManager } from "../websocket/socket-manager.js";
 
 const registerSchema = z.object({
@@ -704,19 +705,37 @@ export async function authRoutes(fastify: FastifyInstance) {
       }
       const { userId } = request.user as { userId: string };
 
-      // Immediately notify and disconnect all active user sockets
+      // Optional user preference: deleteCloudFiles
+      const body = request.body as { deleteCloudFiles?: boolean } | undefined;
+      const query = request.query as { deleteCloudFiles?: string } | undefined;
+      const deleteCloudFiles =
+        body?.deleteCloudFiles === true || query?.deleteCloudFiles === "true";
+
+      // 1. Purge thumbnails and (optionally) cloud files from providers before DB cascade
+      try {
+        await VfsService.purgeAllUserData(userId, deleteCloudFiles);
+      } catch (purgeErr) {
+        request.log.error(
+          purgeErr,
+          `Failed to complete cloud files purge for user ${userId}`,
+        );
+      }
+
+      // 2. Immediately notify and disconnect all active user sockets
       socketManager.broadcastToUser(userId, {
         type: "SESSION_REVOKED",
         payload: { reason: "Account permanently deleted" },
       });
 
-      // Deleting user cascades to sessions, identities, vfs_nodes, and chunks
+      // 3. Deleting user cascades to sessions, identities, vfs_nodes, and chunks
       await db.delete(users).where(eq(users.id, userId));
 
       reply.clearCookie(COOKIE_NAME, { path: "/" });
       return reply.send({
         success: true,
-        message: "Your Fuze account and all associated data have been permanently deleted.",
+        message: deleteCloudFiles
+          ? "Your Fuze account, files, and connected cloud data have been permanently deleted."
+          : "Your Fuze account and indexing data have been permanently deleted. Your files remain stored in your personal cloud accounts.",
       });
     },
   );
