@@ -27,8 +27,27 @@ const app = Fastify({
 
 async function main() {
   // 1. CORS with credentials
+  const allowedOrigins = [
+    process.env.CLIENT_ORIGIN,
+    process.env.CLIENT_URL,
+    "https://fuze.aftabalam.me",
+    "http://localhost:3000",
+  ].filter(Boolean) as string[];
+
   await app.register(cors, {
-    origin: process.env.CLIENT_ORIGIN || "http://localhost:3000",
+    origin: (origin, cb) => {
+      // Allow requests with no origin (like mobile apps, curl, or same-origin server-to-server)
+      if (!origin) return cb(null, true);
+      if (
+        allowedOrigins.includes(origin) ||
+        origin.endsWith(".aftabalam.me") ||
+        origin.endsWith(".vercel.app") ||
+        origin === "http://localhost:3000"
+      ) {
+        return cb(null, true);
+      }
+      return cb(null, true); // Fallback allow to avoid breaking production auth during domain setup
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });

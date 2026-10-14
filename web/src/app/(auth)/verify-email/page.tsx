@@ -48,6 +48,10 @@ function VerifyEmailContent() {
       }
 
       setIsSuccess(true);
+      if (data.token) {
+        localStorage.setItem("fuze_token", data.token);
+        document.cookie = `fuze_session=${encodeURIComponent(data.token)}; path=/; max-age=604800; SameSite=Lax; Secure`;
+      }
       if (data.user) {
         setAuth(data.user);
       }

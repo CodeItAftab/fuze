@@ -28,12 +28,22 @@ export const useAuthStore = create<AuthState>((set) => ({
   clearAuth: () => set({ user: null, isLoading: false }),
   logout: async () => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("fuze_token") : null;
+
     try {
       await fetch(`${apiUrl}/auth/logout`, {
         method: "POST",
         credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
     } catch {}
+
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("fuze_token");
+      document.cookie = "fuze_session=; path=/; max-age=0; SameSite=Lax; Secure";
+    }
+
     set({ user: null, isLoading: false });
     if (typeof window !== "undefined") {
       // Full page redirect ensures all in-memory client state and sockets are torn down
@@ -47,8 +57,21 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     checkSessionPromise = (async () => {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const token =
+        typeof window !== "undefined"
+          ? localStorage.getItem("fuze_token")
+          : null;
+
       try {
-        const res = await fetch(`${apiUrl}/auth/me`, { credentials: "include" });
+        const headers: Record<string, string> = {};
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+
+        const res = await fetch(`${apiUrl}/auth/me`, {
+          credentials: "include",
+          headers,
+        });
         if (res.ok) {
           const data = await res.json();
           set({ user: data.user, isLoading: false });

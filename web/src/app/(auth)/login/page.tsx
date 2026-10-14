@@ -60,6 +60,12 @@ function LoginForm() {
         return;
       }
 
+      if (data.token) {
+        localStorage.setItem("fuze_token", data.token);
+        // Set client-accessible session cookie so Vercel Next.js middleware grants instant dashboard access
+        document.cookie = `fuze_session=${encodeURIComponent(data.token)}; path=/; max-age=604800; SameSite=Lax; Secure`;
+      }
+
       setAuth(data.user);
       const destination =
         redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")

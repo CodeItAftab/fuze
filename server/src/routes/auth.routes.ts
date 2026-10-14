@@ -162,7 +162,8 @@ export async function authRoutes(fastify: FastifyInstance) {
         path: "/",
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        domain: process.env.COOKIE_DOMAIN || undefined,
         expires: sessionExpiresAt,
         signed: true,
       });
@@ -259,7 +260,8 @@ export async function authRoutes(fastify: FastifyInstance) {
         path: "/",
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        domain: process.env.COOKIE_DOMAIN || undefined,
         expires: sessionExpiresAt,
         signed: true,
       });
@@ -500,7 +502,8 @@ export async function authRoutes(fastify: FastifyInstance) {
         path: "/",
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        domain: process.env.COOKIE_DOMAIN || undefined,
         expires: expiresAt,
         signed: true,
       });
