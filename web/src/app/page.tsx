@@ -231,15 +231,15 @@ export default function HomePage() {
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <Link
                   href="/login"
-                  className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition"
+                  className="px-2 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition"
                 >
                   Log In
                 </Link>
                 <Link
                   href="/register"
-                  className="rounded-xl bg-blue-600 hover:bg-blue-700 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-white shadow-xs transition active:scale-95 whitespace-nowrap"
+                  className="rounded-xl bg-blue-600 hover:bg-blue-700 px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-white shadow-xs transition active:scale-95 whitespace-nowrap"
                 >
-                  <span>Get Started<span className="hidden sm:inline"> Free</span></span>
+                  <span><span className="sm:hidden">Start Free</span><span className="hidden sm:inline">Get Started Free</span></span>
                 </Link>
               </div>
             )}
@@ -765,70 +765,91 @@ export default function HomePage() {
         <div className="max-w-6xl mx-auto relative z-10">
           <div className="text-center max-w-2xl mx-auto mb-16">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold mb-3">
-              <Code2 className="h-3.5 w-3.5" /> Built for the Community
+              <Sparkles className="h-3.5 w-3.5" /> Next Goal: 97+ GB Free Storage Pool
             </div>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-              100% Free & Open Source
+              Upcoming Free Cloud Storage Adapters
             </h2>
             <p className="mt-3 text-sm sm:text-base text-slate-300 leading-relaxed">
-              Fuze is an independent, community-driven open-source project
-              released under the permissive MIT license. We invite open-source
-              developers, cloud enthusiasts, and contributors worldwide to
-              collaborate with us.
+              Fuze is all about aggregating free cloud storage. Our top roadmap
+              focus is adding connectors for every major free cloud provider so
+              you can expand your personal storage pool from 42 GB to nearly 100
+              GB without paying a dime:
             </p>
           </div>
 
-          {/* Contribution Pillars */}
+          {/* Contribution Pillars: Free Cloud Adapters */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-10 sm:mb-12">
             <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-4 sm:p-5 hover:border-blue-500/50 transition">
-              <div className="h-10 w-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-3.5">
-                <Cloud className="h-5 w-5" />
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="h-10 w-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                  <Cloud className="h-5 w-5" />
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                  +20 GB Free
+                </span>
               </div>
               <h3 className="text-sm font-bold text-white mb-1.5">
-                Free Cloud Adapters
+                Mega.nz Adapter
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Build new provider connectors for Mega (20 GB), Proton Drive,
-                MediaFire, or IceDrive to expand our free pooled storage.
+                Connect Mega’s generous 20 GB free tier using direct client-side
+                chunk streaming to push your free pool to 62 GB instantly.
               </p>
             </div>
 
             <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-4 sm:p-5 hover:border-emerald-500/50 transition">
-              <div className="h-10 w-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-3.5">
-                <Lock className="h-5 w-5" />
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="h-10 w-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                  <ShieldCheck className="h-5 w-5" />
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  +5 GB Free
+                </span>
               </div>
               <h3 className="text-sm font-bold text-white mb-1.5">
-                Zero-Knowledge Crypto
+                Proton Drive Adapter
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Help enhance client-side WebCrypto encryption so chunks are
-                ciphered before touching any cloud provider.
-              </p>
-            </div>
-
-            <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-4 sm:p-5 hover:border-purple-500/50 transition">
-              <div className="h-10 w-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 mb-3.5">
-                <HardDrive className="h-5 w-5" />
-              </div>
-              <h3 className="text-sm font-bold text-white mb-1.5">
-                S3 & Self-Hosted Buckets
-              </h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Add connectors for Nextcloud, MinIO, WebDAV, Backblaze B2, and
-                Cloudflare R2 for users bringing private object storage.
+                Integrate Proton’s Swiss-based encrypted free tier for
+                confidential document backups and high-privacy zero-knowledge
+                files.
               </p>
             </div>
 
             <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-4 sm:p-5 hover:border-amber-500/50 transition">
-              <div className="h-10 w-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-3.5">
-                <GitPullRequest className="h-5 w-5" />
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="h-10 w-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                  <Zap className="h-5 w-5" />
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  +10 GB Free
+                </span>
               </div>
               <h3 className="text-sm font-bold text-white mb-1.5">
-                Submit PRs & Ideas
+                MediaFire Adapter
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Improve UI accessibility, optimize chunk packing heuristics,
-                report bugs, or submit new architectural proposals.
+                Harness MediaFire’s 10 GB free bandwidth-optimized tier for
+                fast, direct streaming of large video and multimedia archives.
+              </p>
+            </div>
+
+            <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-4 sm:p-5 hover:border-purple-500/50 transition">
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="h-10 w-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                  <Layers className="h-5 w-5" />
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  +20 GB Free
+                </span>
+              </div>
+              <h3 className="text-sm font-bold text-white mb-1.5">
+                IceDrive & Yandex Disk
+              </h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Add IceDrive (10 GB) and Yandex Disk (10 GB) free quotas to
+                achieve the ultimate 97+ GB unified personal storage drive.
               </p>
             </div>
           </div>
@@ -842,15 +863,15 @@ export default function HomePage() {
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="text-base sm:text-lg font-bold text-white">
-                    CodeItAftab / fuze
+                    Help Build a Free Cloud Adapter
                   </h3>
-                  <span className="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold border border-blue-500/30">
-                    Active Development
+                  <span className="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
+                    Contributors Welcome
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 mt-1">
-                  Read the code, submit pull requests, report issues, and star
-                  our repository on GitHub.
+                  Implement our simple TypeScript <code>BaseStorageAdapter</code>{" "}
+                  interface to connect a new free cloud provider and open a PR!
                 </p>
               </div>
             </div>

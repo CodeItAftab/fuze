@@ -499,10 +499,16 @@ We welcome contributions from developers worldwide!
 5. Open a **Pull Request**.
 
 ### Roadmap:
-- [ ] Client-side zero-knowledge encryption using WebCrypto AES-GCM
-- [ ] Additional free cloud adapters (Mega 20 GB, Proton Drive, MediaFire, IceDrive)
-- [ ] Self-hosted & object storage connectors (Nextcloud, MinIO, WebDAV, Backblaze B2, Cloudflare R2)
-- [ ] Automated end-to-end integration test suite with GitHub Actions CI
+* **Priority 1: Expanding Free Cloud Storage Adapters (Target: 97+ GB Free Pool)**
+  - [ ] **Mega.nz Adapter** (+20 GB free tier, pushing unified pool to 62 GB)
+  - [ ] **MediaFire Adapter** (+10 GB free tier)
+  - [ ] **Proton Drive Adapter** (+5 GB free tier, Swiss zero-knowledge privacy)
+  - [ ] **IceDrive & Yandex Disk Adapters** (+20 GB combined free tiers)
+* **Priority 2: Client Encryption & Privacy**
+  - [ ] Client-side zero-knowledge encryption using WebCrypto AES-GCM
+* **Priority 3: Secondary Object Stores & CI**
+  - [ ] S3-compatible and self-hosted connectors (Nextcloud, MinIO, WebDAV, Cloudflare R2)
+  - [ ] Automated end-to-end integration test suite with GitHub Actions CI
 
 ---
 
