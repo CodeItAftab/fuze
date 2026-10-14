@@ -2,13 +2,15 @@
 
 > **Decentralized, Zero-Proxy Personal Cloud Storage Aggregator** — Pool free storage tiers across **Google Drive, Box, pCloud, OneDrive, and Dropbox** into a unified **42 GB** high-speed virtual drive with **100% direct client-to-cloud transfers** and **zero server bandwidth proxying**.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Next.js 16](https://img.shields.io/badge/Next.js-16.4-black.svg)](https://nextjs.org)
-[![Fastify](https://img.shields.io/badge/Fastify-5.2-white.svg)](https://fastify.dev)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791.svg)](https://www.postgresql.org)
-[![Drizzle ORM](https://img.shields.io/badge/Drizzle-ORM-C5F74F.svg)](https://orm.drizzle.team)
-[![Redis](https://img.shields.io/badge/Redis-Cache%20%26%20Locks-DC382D.svg)](https://redis.io)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6.svg)](https://www.typescriptlang.org)
+<p align="left">
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" height="20" /></a>&nbsp;
+  <a href="https://nextjs.org"><img src="https://img.shields.io/badge/Next.js-16.4-black.svg" alt="Next.js 16" height="20" /></a>&nbsp;
+  <a href="https://fastify.dev"><img src="https://img.shields.io/badge/Fastify-5.2-white.svg" alt="Fastify" height="20" /></a>&nbsp;
+  <a href="https://www.postgresql.org"><img src="https://img.shields.io/badge/PostgreSQL-16-336791.svg" alt="PostgreSQL" height="20" /></a>&nbsp;
+  <a href="https://orm.drizzle.team"><img src="https://img.shields.io/badge/Drizzle-ORM-C5F74F.svg" alt="Drizzle ORM" height="20" /></a>&nbsp;
+  <a href="https://redis.io"><img src="https://img.shields.io/badge/Redis-Cache%20%26%20Locks-DC382D.svg" alt="Redis" height="20" /></a>&nbsp;
+  <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-5.0-3178C6.svg" alt="TypeScript" height="20" /></a>
+</p>
 
 ---
 
@@ -52,7 +54,7 @@ Every major cloud provider offers a modest free storage tier:
 Individually, these quotas are easily exhausted. Managing files scattered across 5 distinct logins and interfaces creates fragmentation. Worse, commercial multi-cloud aggregators charge $10–$25/month and proxy all your private files through their proprietary servers.
 
 **Fuze** solves this permanently:
-* **Combines Free Quotas**: Connect accounts via standard OAuth2 to instantly aggregate **42 GB** of free personal storage ($15 + 10 + 10 + 5 + 2\text{ GB}$).
+* **Combines Free Quotas**: Connect accounts via standard OAuth2 to instantly aggregate **42 GB** of free personal storage (15 GB + 10 GB + 10 GB + 5 GB + 2 GB = 42 GB).
 * **Zero-Proxy Architecture**: Files stream **directly** between your browser and cloud provider endpoints via presigned resumable URLs. The Fuze server never touches, buffers, or hosts your raw data.
 * **Smart Allocation**: Files are prioritized to upload intact as single objects to the fastest provider. Multi-cloud chunking is strictly reserved as a fallback when individual quotas are exceeded.
 * **100% Free & Open Source**: Released under the MIT license with zero commercial lock-in.
@@ -380,6 +382,7 @@ CLIENT_ORIGIN=http://localhost:3000
 
 # Authentication & Encryption Secrets
 JWT_SECRET=your_generated_jwt_secret_at_least_32_characters
+COOKIE_SECRET=your_cookie_signing_secret_32_bytes_hex
 ENCRYPTION_KEY=your_generated_64_character_hex_key_for_aes_256_gcm
 
 # Database & Cache Connections
@@ -387,7 +390,7 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/fuze
 REDIS_URL=redis://localhost:6379
 
 # Google Drive OAuth (Google Cloud Console)
-GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_URI=http://localhost:4000/providers/google/callback
 
@@ -410,14 +413,23 @@ BOX_REDIRECT_URI=http://localhost:4000/providers/box/callback
 PCLOUD_CLIENT_ID=your_pcloud_client_id
 PCLOUD_CLIENT_SECRET=your_pcloud_client_secret
 PCLOUD_REDIRECT_URI=http://localhost:4000/providers/pcloud/callback
+
+# Optional: Email Notifications (Resend / Brevo)
+EMAIL_FROM="Fuze Cloud <onboarding@resend.dev>"
+RESEND_API_KEY=your_resend_api_key
+
+# Optional: Thumbnail LRU Disk Cache Configuration
+THUMBNAIL_CACHE_MAX_MB=150
+THUMBNAIL_CACHE_DIR=.cache/thumbnails
+THUMBNAIL_CACHE_TTL_DAYS=14
 ```
 
 #### 2. Web Configuration (`web/.env.local`)
-Create `web/.env.local`:
+Create `web/.env.local` based on `web/.env.example`:
 
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:4000
-NEXT_PUBLIC_WS_URL=ws://localhost:4000
+NEXT_PUBLIC_WS_URL=ws://localhost:4000/ws
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
