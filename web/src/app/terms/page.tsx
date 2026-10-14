@@ -103,10 +103,10 @@ export default function TermsOfServicePage() {
               <p>
                 For questions regarding these Terms, please contact us at:{" "}
                 <a
-                  href="mailto:aftabalam01072004@gmail.com"
+                  href="mailto:aftabalamdlm@gmail.com"
                   className="text-blue-600 hover:underline font-medium"
                 >
-                  aftabalam01072004@gmail.com
+                  aftabalamdlm@gmail.com
                 </a>
               </p>
             </section>
