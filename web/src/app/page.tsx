@@ -264,7 +264,7 @@ export default function HomePage() {
 
         <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-slate-900 leading-[1.12]">
           Unify all your free cloud storage into{" "}
-          <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-500 bg-clip-text text-transparent">
+          <span className="bg-linear-to-r from-blue-600 via-indigo-600 to-sky-500 bg-clip-text text-transparent">
             one 42 GB personal drive
           </span>
           .
@@ -834,7 +834,7 @@ export default function HomePage() {
           </div>
 
           {/* GitHub Action Box */}
-          <div className="bg-gradient-to-r from-slate-800 to-slate-800/80 border border-slate-700 rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6">
+          <div className="bg-linear-to-r from-slate-800 to-slate-800/80 border border-slate-700 rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-4">
               <div className="h-14 w-14 rounded-2xl bg-white text-slate-950 flex items-center justify-center shrink-0 shadow-lg">
                 <GithubIcon className="h-8 w-8" />

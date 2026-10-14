@@ -199,7 +199,7 @@ function FileThumbnail({
   // Fallback for Video if failed or still processing
   if (isVideo) {
     return (
-      <div className="w-full h-full bg-gradient-to-br from-slate-900 to-indigo-950 rounded-lg flex flex-col items-center justify-center relative overflow-hidden p-3 group-hover:from-slate-850 group-hover:to-indigo-900 transition">
+      <div className="w-full h-full bg-linear-to-br from-slate-900 to-indigo-950 rounded-lg flex flex-col items-center justify-center relative overflow-hidden p-3 group-hover:from-slate-850 group-hover:to-indigo-900 transition">
         <div className="w-11 h-11 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shadow-inner group-hover:scale-110 transition">
           <Video className="w-5 h-5 text-indigo-400" />
         </div>
@@ -1517,7 +1517,7 @@ export function DriveView({
                             </div>
                             <div className="flex items-center justify-between gap-1.5 mt-1.5 text-[10px] text-slate-400">
                               <span
-                                className={`px-1.5 py-0.5 rounded-full font-medium text-[9px] truncate max-w-[120px] ${getProviderBadgeStyle(
+                                className={`px-1.5 py-0.5 rounded-full font-medium text-[9px] truncate max-w-30 ${getProviderBadgeStyle(
                                   badge,
                                 )}`}
                               >

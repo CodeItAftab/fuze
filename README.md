@@ -245,24 +245,148 @@ Fuze utilizes **PostgreSQL** with **Drizzle ORM**:
 ## 7. Getting Started & Local Development
 
 ### Prerequisites
-* **Node.js**: v20.x or higher
-* **PostgreSQL**: v15.x or higher
-* **Redis**: v7.x or higher
+
+To run Fuze locally, you need the following dependencies:
+* **Node.js**: v20.x or higher (`node -v`)
+* **npm** or **pnpm**
+* **PostgreSQL Database**: v15.x or higher
+* **Redis Server**: v7.x or higher (Required for distributed locks, BullMQ queue, and session revocation)
+
+---
+
+### Infrastructure Setup: PostgreSQL & Redis
+
+Fuze relies on **PostgreSQL** for relational VFS metadata and **Redis** for distributed token refresh locks, session invalidation, and background upload queue processing. You can set them up locally via Docker or use free cloud tiers with zero local installation.
+
+#### Option A: Quickstart via Docker (Recommended for Local Dev)
+If you have Docker installed, you can spin up both PostgreSQL and Redis with a single command:
+
+```bash
+# Run PostgreSQL 16 container
+docker run -d --name fuze-postgres -p 5432:5432 -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=fuze postgres:16-alpine
+
+# Run Redis 7 container
+docker run -d --name fuze-redis -p 6379:6379 redis:7-alpine
+```
+
+Alternatively, create a `docker-compose.yml` in your project root:
+```yaml
+version: '3.8'
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fuze-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fuze
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: fuze-redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:
+```
+Then start them with:
+```bash
+docker compose up -d
+```
+
+#### Option B: Standalone Native Installation
+
+* **Redis Setup**:
+  * **Why Fuze needs Redis**: When multiple chunk uploads fire in parallel and an OAuth token expires, Fuze acquires a distributed Redis lock (`SET lock:token:refresh:<id> EX 10 NX`) to ensure only one worker refreshes the token, preventing OAuth `invalid_grant` token revocation errors.
+  * **macOS (Homebrew)**:
+    ```bash
+    brew install redis
+    brew services start redis
+    ```
+  * **Linux (Ubuntu / Debian)**:
+    ```bash
+    sudo apt update && sudo apt install redis-server -y
+    sudo systemctl enable --now redis-server
+    ```
+  * **Windows**:
+    * Run via **WSL 2** (`sudo apt install redis-server && sudo service redis-server start`)
+    * Or use [Memurai for Windows](https://www.memurai.com) (native Redis-compatible Windows daemon).
+
+* **PostgreSQL Setup**:
+  * Download and install PostgreSQL 15+ from [postgresql.org](https://www.postgresql.org/download/).
+  * Create a database named `fuze` using `psql` or pgAdmin:
+    ```sql
+    CREATE DATABASE fuze;
+    ```
+
+#### Option C: 100% Free Cloud Managed Services (Zero Local Installation)
+If you do not want to install databases locally, you can use generous free cloud tiers:
+* **Database (PostgreSQL)**: Create a free PostgreSQL instance on [Neon](https://neon.tech) or [Supabase](https://supabase.com). Copy the pooled connection string into `DATABASE_URL`.
+* **Redis**: Create a free serverless Redis database on [Upstash](https://upstash.com) (free 10,000 commands/day). Copy the `rediss://default:...@...upstash.io:6379` connection string into `REDIS_URL`. Both local development and production work seamlessly with Upstash TLS URIs.
+
+---
+
+### Generating Cryptographic Secrets
+
+Fuze requires two cryptographically secure secret keys:
+1. `JWT_SECRET`: For signing and verifying user access and refresh tokens.
+2. `ENCRYPTION_KEY`: A **32-byte (64 hex characters)** key used by AES-256-GCM to encrypt provider OAuth access and refresh tokens at rest in the database.
+
+Generate them in your terminal using `openssl` or Node.js:
+```bash
+# Generate JWT_SECRET (32-byte Base64)
+openssl rand -base64 32
+
+# Generate ENCRYPTION_KEY (32-byte Hex for AES-256-GCM)
+openssl rand -hex 32
+```
+*(Or via Node.js: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)*
+
+---
+
+### Cloud Provider OAuth App Setup
+
+To link cloud drives, create free developer apps in each provider's portal:
+
+| Provider | Developer Portal | Required Scopes / Permissions | Authorized Redirect URI |
+| :--- | :--- | :--- | :--- |
+| **Google Drive** | [Google Cloud Console](https://console.cloud.google.com/apis/credentials) | `.../auth/drive.file` | `http://localhost:4000/providers/google/callback` |
+| **OneDrive** | [Microsoft Azure Portal](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps) | `Files.ReadWrite.All`, `offline_access` | `http://localhost:4000/providers/onedrive/callback` |
+| **Dropbox** | [Dropbox App Console](https://www.dropbox.com/developers/apps) | `files.content.write`, `files.content.read` | `http://localhost:4000/providers/dropbox/callback` |
+| **Box** | [Box Developer Console](https://app.box.com/developers/console) | `Manage an enterprise`, `Read/write all files` | `http://localhost:4000/providers/box/callback` |
+| **pCloud** | [pCloud App Portal](https://docs.pcloud.com/my_apps/) | Default file permissions | `http://localhost:4000/providers/pcloud/callback` |
+
+> [!TIP]
+> You do **not** need to configure all 5 providers to start development. You can configure just one (e.g. Google Drive) and add others later.
+
+---
 
 ### Environment Variables
 
 #### 1. Server Configuration (`server/.env`)
+Create `server/.env` based on `server/.env.example`:
+
 ```bash
 PORT=4000
 NODE_ENV=development
 CLIENT_ORIGIN=http://localhost:3000
-JWT_SECRET=your_super_secret_jwt_key_at_least_32_chars
-ENCRYPTION_KEY=32_byte_hex_string_for_aes_256_gcm_token_encryption
 
-DATABASE_URL=postgresql://postgres:password@localhost:5432/fuze
+# Authentication & Encryption Secrets
+JWT_SECRET=your_generated_jwt_secret_at_least_32_characters
+ENCRYPTION_KEY=your_generated_64_character_hex_key_for_aes_256_gcm
+
+# Database & Cache Connections
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/fuze
 REDIS_URL=redis://localhost:6379
 
-# Google Drive OAuth (Credentials from Google Cloud Console)
+# Google Drive OAuth (Google Cloud Console)
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_URI=http://localhost:4000/providers/google/callback
@@ -282,45 +406,51 @@ BOX_CLIENT_ID=your_box_client_id
 BOX_CLIENT_SECRET=your_box_client_secret
 BOX_REDIRECT_URI=http://localhost:4000/providers/box/callback
 
-# pCloud OAuth (pCloud App Portal)
+# pCloud OAuth (pCloud Developer Portal)
 PCLOUD_CLIENT_ID=your_pcloud_client_id
 PCLOUD_CLIENT_SECRET=your_pcloud_client_secret
 PCLOUD_REDIRECT_URI=http://localhost:4000/providers/pcloud/callback
 ```
 
 #### 2. Web Configuration (`web/.env.local`)
+Create `web/.env.local`:
+
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:4000
 NEXT_PUBLIC_WS_URL=ws://localhost:4000
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-### Installation & Startup
+---
+
+### Step-by-Step Installation & Startup
 
 ```bash
 # 1. Clone the repository
 git clone https://github.com/CodeItAftab/fuze.git
 cd fuze
 
-# 2. Install dependencies
-cd server && npm install
-cd ../web && npm install
-
-# 3. Push Database Schema
-cd ../server
-npx drizzle-kit push
-
-# 4. Start Development Servers
-# Terminal 1: Backend API
+# 2. Install backend dependencies
 cd server
+npm install
+
+# 3. Push Database Schema to PostgreSQL
+npm run db:push
+
+# 4. Start the Backend API Server
 npm run dev
 
-# Terminal 2: Web Dashboard
-cd web
+# 5. (Optional) In another terminal, start the BullMQ Worker
+cd server
+npm run dev:worker
+
+# 6. In a new terminal, install frontend dependencies and start web app
+cd ../web
+npm install
 npm run dev
 ```
 
-Visit `http://localhost:3000` to launch your local Fuze dashboard.
+Visit **`http://localhost:3000`** in your browser. Create an account, connect your cloud drives in **Settings**, and start managing your pooled 42 GB personal drive!
 
 ---
 
