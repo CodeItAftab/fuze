@@ -160,10 +160,10 @@ export default function HomePage() {
 
       {/* Navigation */}
       <header className="border-b border-slate-200/80 bg-white/90 backdrop-blur sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto flex h-16 items-center justify-between px-4 sm:px-6">
+        <div className="max-w-7xl mx-auto flex h-14 sm:h-16 items-center justify-between px-3 sm:px-6">
           <div className="flex items-center gap-8">
-            <Link href="/" className="flex items-center gap-2.5">
-              <FuzeLogo variant="full" height={28} />
+            <Link href="/" className="flex items-center gap-2.5 shrink-0">
+              <FuzeLogo variant="full" height={26} />
             </Link>
 
             <nav className="hidden lg:flex items-center gap-6 text-sm font-medium text-slate-600">
@@ -197,7 +197,7 @@ export default function HomePage() {
             </nav>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {/* GitHub Star Pill */}
             <a
               href={GITHUB_REPO_URL}
@@ -216,30 +216,30 @@ export default function HomePage() {
 
             {/* Dynamic Auth State Navigation */}
             {isLoading ? (
-              <div className="h-9 w-24 rounded-xl bg-slate-100 animate-pulse" />
+              <div className="h-8 sm:h-9 w-20 sm:w-24 rounded-xl bg-slate-100 animate-pulse" />
             ) : user ? (
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <Link
                   href="/dashboard"
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-xs transition active:scale-95"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-white shadow-xs transition active:scale-95"
                 >
                   <span>Go to Drive</span>
-                  <ArrowRight className="h-4 w-4" />
+                  <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </Link>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <Link
                   href="/login"
-                  className="px-3.5 py-2 text-sm font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition"
+                  className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition"
                 >
                   Log In
                 </Link>
                 <Link
                   href="/register"
-                  className="rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-xs transition active:scale-95"
+                  className="rounded-xl bg-blue-600 hover:bg-blue-700 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-white shadow-xs transition active:scale-95 whitespace-nowrap"
                 >
-                  Get Started Free
+                  <span>Get Started<span className="hidden sm:inline"> Free</span></span>
                 </Link>
               </div>
             )}
@@ -262,7 +262,7 @@ export default function HomePage() {
           </span>
         </div>
 
-        <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-slate-900 leading-[1.12]">
+        <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-slate-900 leading-[1.14]">
           Unify all your free cloud storage into{" "}
           <span className="bg-linear-to-r from-blue-600 via-indigo-600 to-sky-500 bg-clip-text text-transparent">
             one 42 GB personal drive
@@ -270,7 +270,7 @@ export default function HomePage() {
           .
         </h1>
 
-        <p className="mt-6 text-base sm:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
+        <p className="mt-4 sm:mt-6 text-sm sm:text-lg md:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
           Fuze aggregates your free storage across{" "}
           <strong>Google Drive, Box, pCloud, OneDrive, and Dropbox</strong>.
           Enjoy zero server data transit, whole-file priority, and native video
@@ -278,7 +278,7 @@ export default function HomePage() {
         </p>
 
         {/* Dynamic Hero CTAs */}
-        <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3.5">
+        <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-3.5">
           {isLoading ? (
             <div className="h-12 w-48 rounded-xl bg-slate-100 animate-pulse" />
           ) : user ? (
@@ -326,29 +326,29 @@ export default function HomePage() {
         </div>
 
         {/* Metric Badges */}
-        <div className="mt-14 pt-8 border-t border-slate-200/90 grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-3xl mx-auto text-left">
-          <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-100">
-            <div className="text-2xl font-bold text-slate-900">42 GB</div>
-            <div className="text-xs text-slate-500 mt-0.5">
-              5-Cloud Combined Free Pool
+        <div className="mt-12 sm:mt-14 pt-8 border-t border-slate-200/90 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-6 max-w-3xl mx-auto text-left">
+          <div className="bg-slate-50/70 p-3 sm:p-4 rounded-xl border border-slate-100">
+            <div className="text-xl sm:text-2xl font-bold text-slate-900">42 GB</div>
+            <div className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+              5-Cloud Free Pool
             </div>
           </div>
-          <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-100">
-            <div className="text-2xl font-bold text-slate-900">0 KB</div>
-            <div className="text-xs text-slate-500 mt-0.5">
-              Server Transit (Zero-Proxy)
+          <div className="bg-slate-50/70 p-3 sm:p-4 rounded-xl border border-slate-100">
+            <div className="text-xl sm:text-2xl font-bold text-slate-900">0 KB</div>
+            <div className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+              Zero Server Transit
             </div>
           </div>
-          <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-100">
-            <div className="text-2xl font-bold text-slate-900">Native</div>
-            <div className="text-xs text-slate-500 mt-0.5">
-              Video & Document Previews
+          <div className="bg-slate-50/70 p-3 sm:p-4 rounded-xl border border-slate-100">
+            <div className="text-xl sm:text-2xl font-bold text-slate-900">Native</div>
+            <div className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+              Video & Doc Previews
             </div>
           </div>
-          <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-100">
-            <div className="text-2xl font-bold text-emerald-600">100% Free</div>
-            <div className="text-xs text-slate-500 mt-0.5">
-              Open Source (MIT License)
+          <div className="bg-slate-50/70 p-3 sm:p-4 rounded-xl border border-slate-100">
+            <div className="text-xl sm:text-2xl font-bold text-emerald-600">100% Free</div>
+            <div className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+              Open Source (MIT)
             </div>
           </div>
         </div>
@@ -358,17 +358,17 @@ export default function HomePage() {
       <section className="px-4 sm:px-6 pb-20 max-w-6xl mx-auto">
         <div className="rounded-2xl border border-slate-200/90 bg-white shadow-xl shadow-slate-200/50 overflow-hidden">
           {/* Browser Window Header */}
-          <div className="bg-slate-100 border-b border-slate-200 px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded-full bg-rose-400" />
-              <div className="h-3 w-3 rounded-full bg-amber-400" />
-              <div className="h-3 w-3 rounded-full bg-emerald-400" />
+          <div className="bg-slate-100 border-b border-slate-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <div className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-rose-400" />
+              <div className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-amber-400" />
+              <div className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-emerald-400" />
             </div>
-            <div className="bg-white border border-slate-200 rounded-lg px-4 py-1 text-xs text-slate-500 font-mono flex items-center gap-2 w-72 justify-center shadow-2xs">
-              <Lock className="h-3 w-3 text-emerald-600" />{" "}
-              https://fuze.aftabalam.me/dashboard
+            <div className="bg-white border border-slate-200 rounded-lg px-2.5 sm:px-4 py-1 text-[11px] sm:text-xs text-slate-500 font-mono flex items-center gap-1.5 sm:gap-2 max-w-[210px] sm:max-w-72 truncate justify-center shadow-2xs">
+              <Lock className="h-3 w-3 text-emerald-600 shrink-0" />{" "}
+              <span className="truncate">https://fuze.aftabalam.me/dashboard</span>
             </div>
-            <div className="text-[11px] font-semibold text-slate-400 hidden sm:block">
+            <div className="text-[11px] font-semibold text-slate-400 hidden sm:block shrink-0">
               Fuze v1.0
             </div>
           </div>
@@ -376,7 +376,7 @@ export default function HomePage() {
           {/* Drive App Canvas */}
           <div className="grid grid-cols-12 min-h-105 text-xs">
             {/* Sidebar Mock */}
-            <div className="col-span-12 md:col-span-3 border-b md:border-b-0 md:border-r border-slate-200 bg-slate-50/60 p-4 flex flex-col justify-between gap-4">
+            <div className="col-span-12 md:col-span-3 border-b md:border-b-0 md:border-r border-slate-200 bg-slate-50/60 p-3.5 sm:p-4 flex flex-col justify-between gap-4">
               <div className="space-y-4">
                 <button className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 font-semibold text-white shadow-2xs cursor-default">
                   <span>+ Upload Files</span>
@@ -396,7 +396,7 @@ export default function HomePage() {
 
               {/* Storage Meter */}
               <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs">
-                <div className="flex justify-between font-semibold text-slate-700 mb-1.5">
+                <div className="flex justify-between font-semibold text-slate-700 mb-1.5 text-xs">
                   <span>Storage Pool</span>
                   <span className="text-blue-600 font-bold">
                     18.4 / 42.0 GB
@@ -434,16 +434,16 @@ export default function HomePage() {
             </div>
 
             {/* File List Mock */}
-            <div className="col-span-12 md:col-span-9 p-4 sm:p-6 bg-white">
+            <div className="col-span-12 md:col-span-9 p-3.5 sm:p-6 bg-white min-w-0">
               {/* Search Bar */}
               <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
                 <div className="flex items-center gap-2 text-slate-400 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl w-full sm:w-80">
-                  <Search className="h-3.5 w-3.5" />
-                  <span className="text-slate-400">
+                  <Search className="h-3.5 w-3.5 shrink-0" />
+                  <span className="text-slate-400 truncate">
                     Search files, videos, docs...
                   </span>
                 </div>
-                <div className="text-slate-500 font-medium text-[11px] hidden sm:block">
+                <div className="text-slate-500 font-medium text-[11px] hidden sm:block shrink-0 ml-3">
                   Prioritizing Whole Files
                 </div>
               </div>
@@ -453,29 +453,29 @@ export default function HomePage() {
                 <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
                   Folders
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
                   <div className="border border-slate-200 rounded-xl p-3 flex items-center gap-3 bg-white hover:border-slate-300">
-                    <Folder className="h-6 w-6 text-amber-500 fill-amber-100" />
-                    <div>
-                      <div className="font-semibold text-slate-800">
+                    <Folder className="h-6 w-6 text-amber-500 fill-amber-100 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-slate-800 truncate">
                         Financial Reports
                       </div>
                       <div className="text-[10px] text-slate-400">12 items</div>
                     </div>
                   </div>
                   <div className="border border-slate-200 rounded-xl p-3 flex items-center gap-3 bg-white hover:border-slate-300">
-                    <Folder className="h-6 w-6 text-blue-500 fill-blue-100" />
-                    <div>
-                      <div className="font-semibold text-slate-800">
+                    <Folder className="h-6 w-6 text-blue-500 fill-blue-100 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-slate-800 truncate">
                         Product Assets
                       </div>
                       <div className="text-[10px] text-slate-400">48 items</div>
                     </div>
                   </div>
                   <div className="border border-slate-200 rounded-xl p-3 flex items-center gap-3 bg-white hover:border-slate-300">
-                    <Folder className="h-6 w-6 text-indigo-500 fill-indigo-100" />
-                    <div>
-                      <div className="font-semibold text-slate-800">
+                    <Folder className="h-6 w-6 text-indigo-500 fill-indigo-100 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-slate-800 truncate">
                         Raw 4K Footage
                       </div>
                       <div className="text-[10px] text-slate-400">
@@ -493,106 +493,106 @@ export default function HomePage() {
                 </div>
                 <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 bg-white">
                   {/* File 1: Whole video with native thumbnail */}
-                  <div className="p-3 flex items-center justify-between hover:bg-slate-50 transition">
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                  <div className="p-2.5 sm:p-3 flex items-center justify-between hover:bg-slate-50 transition gap-2">
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                      <div className="h-8 w-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
                         <Film className="h-4 w-4" />
                       </div>
-                      <div>
-                        <div className="font-medium text-slate-800">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-slate-800 text-xs sm:text-sm truncate">
                           Demo_Walkthrough_1080p.mp4
                         </div>
-                        <div className="text-[10px] text-slate-400">
+                        <div className="text-[10px] text-slate-400 truncate">
                           Instant Native Video Thumbnail
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                        Google Drive (Whole)
+                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                      <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
+                        Google Drive <span className="hidden sm:inline">(Whole)</span>
                       </span>
-                      <span className="text-slate-500 w-16 text-right font-medium">
+                      <span className="text-slate-500 text-[10px] sm:text-xs text-right font-medium shrink-0">
                         84.2 MB
                       </span>
-                      <MoreVertical className="h-3.5 w-3.5 text-slate-400" />
+                      <MoreVertical className="h-3.5 w-3.5 text-slate-400 shrink-0 hidden sm:block" />
                     </div>
                   </div>
 
                   {/* File 2: Whole Box Doc */}
-                  <div className="p-3 flex items-center justify-between hover:bg-slate-50 transition">
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+                  <div className="p-2.5 sm:p-3 flex items-center justify-between hover:bg-slate-50 transition gap-2">
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                      <div className="h-8 w-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
                         <FileText className="h-4 w-4" />
                       </div>
-                      <div>
-                        <div className="font-medium text-slate-800">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-slate-800 text-xs sm:text-sm truncate">
                           Engineering_RFC_v2.pdf
                         </div>
-                        <div className="text-[10px] text-slate-400">
+                        <div className="text-[10px] text-slate-400 truncate">
                           Box 120+ Format Preview
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                        Box (Whole)
+                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                      <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">
+                        Box <span className="hidden sm:inline">(Whole)</span>
                       </span>
-                      <span className="text-slate-500 w-16 text-right font-medium">
+                      <span className="text-slate-500 text-[10px] sm:text-xs text-right font-medium shrink-0">
                         12.6 MB
                       </span>
-                      <MoreVertical className="h-3.5 w-3.5 text-slate-400" />
+                      <MoreVertical className="h-3.5 w-3.5 text-slate-400 shrink-0 hidden sm:block" />
                     </div>
                   </div>
 
                   {/* File 3: Multi-Cloud Chunked Archive */}
-                  <div className="p-3 flex items-center justify-between hover:bg-slate-50 transition">
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-lg bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600">
+                  <div className="p-2.5 sm:p-3 flex items-center justify-between hover:bg-slate-50 transition gap-2">
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                      <div className="h-8 w-8 rounded-lg bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 shrink-0">
                         <ImageIcon className="h-4 w-4" />
                       </div>
-                      <div>
-                        <div className="font-medium text-slate-800">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-slate-800 text-xs sm:text-sm truncate">
                           Dataset_AI_Training.tar.gz
                         </div>
-                        <div className="text-[10px] text-slate-400">
+                        <div className="text-[10px] text-slate-400 truncate">
                           Merkle Verified • Fallback Chunked
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
-                        Multi-Cloud (3 Providers)
+                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                      <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 whitespace-nowrap">
+                        Multi-Cloud <span className="hidden sm:inline">(3 Clouds)</span><span className="sm:hidden">(3x)</span>
                       </span>
-                      <span className="text-slate-500 w-16 text-right font-medium">
+                      <span className="text-slate-500 text-[10px] sm:text-xs text-right font-medium shrink-0">
                         18.4 GB
                       </span>
-                      <MoreVertical className="h-3.5 w-3.5 text-slate-400" />
+                      <MoreVertical className="h-3.5 w-3.5 text-slate-400 shrink-0 hidden sm:block" />
                     </div>
                   </div>
 
                   {/* File 4: pCloud Whole Spreadsheet */}
-                  <div className="p-3 flex items-center justify-between hover:bg-slate-50 transition">
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
+                  <div className="p-2.5 sm:p-3 flex items-center justify-between hover:bg-slate-50 transition gap-2">
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                      <div className="h-8 w-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
                         <FileSpreadsheet className="h-4 w-4" />
                       </div>
-                      <div>
-                        <div className="font-medium text-slate-800">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-slate-800 text-xs sm:text-sm truncate">
                           Q3_Quarterly_Financials.xlsx
                         </div>
-                        <div className="text-[10px] text-slate-400">
+                        <div className="text-[10px] text-slate-400 truncate">
                           pCloud EU High-Speed Storage
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-sky-50 text-sky-700 border border-sky-200">
-                        pCloud (Whole)
+                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                      <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-sky-50 text-sky-700 border border-sky-200 whitespace-nowrap">
+                        pCloud <span className="hidden sm:inline">(Whole)</span>
                       </span>
-                      <span className="text-slate-500 w-16 text-right font-medium">
+                      <span className="text-slate-500 text-[10px] sm:text-xs text-right font-medium shrink-0">
                         4.8 MB
                       </span>
-                      <MoreVertical className="h-3.5 w-3.5 text-slate-400" />
+                      <MoreVertical className="h-3.5 w-3.5 text-slate-400 shrink-0 hidden sm:block" />
                     </div>
                   </div>
                 </div>
@@ -779,72 +779,72 @@ export default function HomePage() {
           </div>
 
           {/* Contribution Pillars */}
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-            <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-5 hover:border-blue-500/50 transition">
-              <div className="h-10 w-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-10 sm:mb-12">
+            <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-4 sm:p-5 hover:border-blue-500/50 transition">
+              <div className="h-10 w-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-3.5">
                 <Cloud className="h-5 w-5" />
               </div>
-              <h3 className="text-sm font-bold text-white mb-2">
-                Add Storage Adapters
+              <h3 className="text-sm font-bold text-white mb-1.5">
+                Free Cloud Adapters
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Build new provider connectors for Mega, Proton Drive, Nextcloud,
-                WebDAV, or S3 backends.
+                Build new provider connectors for Mega (20 GB), Proton Drive,
+                MediaFire, or IceDrive to expand our free pooled storage.
               </p>
             </div>
 
-            <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-5 hover:border-emerald-500/50 transition">
-              <div className="h-10 w-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-4">
+            <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-4 sm:p-5 hover:border-emerald-500/50 transition">
+              <div className="h-10 w-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-3.5">
                 <Lock className="h-5 w-5" />
               </div>
-              <h3 className="text-sm font-bold text-white mb-2">
+              <h3 className="text-sm font-bold text-white mb-1.5">
                 Zero-Knowledge Crypto
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed">
                 Help enhance client-side WebCrypto encryption so chunks are
-                ciphered before touching any cloud.
+                ciphered before touching any cloud provider.
               </p>
             </div>
 
-            <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-5 hover:border-purple-500/50 transition">
-              <div className="h-10 w-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 mb-4">
-                <Terminal className="h-5 w-5" />
+            <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-4 sm:p-5 hover:border-purple-500/50 transition">
+              <div className="h-10 w-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 mb-3.5">
+                <HardDrive className="h-5 w-5" />
               </div>
-              <h3 className="text-sm font-bold text-white mb-2">
-                CLI & Sync Scripts
+              <h3 className="text-sm font-bold text-white mb-1.5">
+                S3 & Self-Hosted Buckets
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Help build TypeScript CLI tools and background directory sync
-                scripts for automated local backups.
+                Add connectors for Nextcloud, MinIO, WebDAV, Backblaze B2, and
+                Cloudflare R2 for users bringing private object storage.
               </p>
             </div>
 
-            <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-5 hover:border-amber-500/50 transition">
-              <div className="h-10 w-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-4">
+            <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-4 sm:p-5 hover:border-amber-500/50 transition">
+              <div className="h-10 w-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-3.5">
                 <GitPullRequest className="h-5 w-5" />
               </div>
-              <h3 className="text-sm font-bold text-white mb-2">
+              <h3 className="text-sm font-bold text-white mb-1.5">
                 Submit PRs & Ideas
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Improve UI accessibility, optimize chunk packing heuristics, or
-                submit feature proposals.
+                Improve UI accessibility, optimize chunk packing heuristics,
+                report bugs, or submit new architectural proposals.
               </p>
             </div>
           </div>
 
           {/* GitHub Action Box */}
-          <div className="bg-linear-to-r from-slate-800 to-slate-800/80 border border-slate-700 rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <div className="h-14 w-14 rounded-2xl bg-white text-slate-950 flex items-center justify-center shrink-0 shadow-lg">
-                <GithubIcon className="h-8 w-8" />
+          <div className="bg-linear-to-r from-slate-800 to-slate-800/80 border border-slate-700 rounded-2xl p-5 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 sm:gap-6">
+            <div className="flex items-center gap-3.5 sm:gap-4">
+              <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-white text-slate-950 flex items-center justify-center shrink-0 shadow-lg">
+                <GithubIcon className="h-7 w-7 sm:h-8 sm:w-8" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-bold text-white">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base sm:text-lg font-bold text-white">
                     CodeItAftab / fuze
                   </h3>
-                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold border border-blue-500/30">
+                  <span className="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold border border-blue-500/30">
                     Active Development
                   </span>
                 </div>
@@ -855,12 +855,12 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
               <a
                 href={GITHUB_REPO_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md transition"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md transition text-center"
               >
                 <GithubIcon className="h-4 w-4" />
                 <span>Star on GitHub</span>
@@ -869,7 +869,7 @@ export default function HomePage() {
                 href={`${GITHUB_REPO_URL}/issues`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold text-xs transition border border-slate-600"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold text-xs transition border border-slate-600 text-center"
               >
                 <GitBranch className="h-4 w-4" />
                 <span>Issues & Roadmap</span>
@@ -957,7 +957,8 @@ export default function HomePage() {
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
-            <table className="w-full text-left text-xs sm:text-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs sm:text-sm min-w-[540px]">
               <thead className="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-600 uppercase tracking-wider">
                 <tr>
                   <th className="p-4 sm:p-5">Feature</th>
@@ -1017,6 +1018,7 @@ export default function HomePage() {
                 </tr>
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       </section>

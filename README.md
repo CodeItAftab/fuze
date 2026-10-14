@@ -500,8 +500,8 @@ We welcome contributions from developers worldwide!
 
 ### Roadmap:
 - [ ] Client-side zero-knowledge encryption using WebCrypto AES-GCM
-- [ ] Desktop background sync daemon (TypeScript CLI)
-- [ ] Additional storage adapters (Mega, Proton Drive, Nextcloud, WebDAV, AWS S3)
+- [ ] Additional free cloud adapters (Mega 20 GB, Proton Drive, MediaFire, IceDrive)
+- [ ] Self-hosted & object storage connectors (Nextcloud, MinIO, WebDAV, Backblaze B2, Cloudflare R2)
 - [ ] Automated end-to-end integration test suite with GitHub Actions CI
 
 ---
