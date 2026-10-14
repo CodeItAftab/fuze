@@ -856,47 +856,67 @@ export default function HomePage() {
           </div>
 
           {/* GitHub Action Box: Invitation */}
-          <div className="bg-linear-to-r from-slate-800 to-slate-800/80 border border-slate-700 rounded-2xl p-5 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 sm:gap-6">
-            <div className="flex items-center gap-3.5 sm:gap-4">
-              <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-white text-slate-950 flex items-center justify-center shrink-0 shadow-lg">
-                <GithubIcon className="h-7 w-7 sm:h-8 sm:w-8" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-base sm:text-lg font-bold text-white">
-                    Ready to Build an Adapter With Us?
-                  </h3>
-                  <span className="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
-                    Beginners & Pros Welcome
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 mt-1">
-                  Every adapter in Fuze is a single TypeScript file implementing{" "}
-                  <code>BaseStorageAdapter</code>. Fork the repo, build a
-                  connector, and submit your pull request!
-                </p>
-              </div>
-            </div>
+          <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-slate-700/80 bg-linear-to-b from-slate-800/90 via-slate-800/60 to-slate-900/95 p-5 sm:p-7 shadow-2xl backdrop-blur-xl">
+            {/* Ambient Background Glows */}
+            <div className="absolute -top-20 -right-20 h-56 w-56 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-20 -left-20 h-56 w-56 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
-              <a
-                href={GITHUB_REPO_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md transition text-center"
-              >
-                <GithubIcon className="h-4 w-4" />
-                <span>Fork & Star on GitHub</span>
-              </a>
-              <a
-                href={`${GITHUB_REPO_URL}/issues`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold text-xs transition border border-slate-600 text-center"
-              >
-                <GitBranch className="h-4 w-4" />
-                <span>Adapter Issues & PRs</span>
-              </a>
+            <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+              {/* Left Column: Icon + Text Content */}
+              <div className="flex items-start sm:items-center gap-4 sm:gap-4.5 max-w-2xl min-w-0">
+                <div className="h-12 w-12 sm:h-13 sm:w-13 rounded-2xl bg-slate-950/90 border border-slate-700/80 text-white flex items-center justify-center shrink-0 shadow-lg shadow-black/40">
+                  <GithubIcon className="h-6 w-6 sm:h-7 sm:w-7 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                      Ready to Build an Adapter With Us?
+                    </h3>
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Good First Issues Open
+                    </span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed">
+                    Every adapter in Fuze is an isolated TypeScript class implementing{" "}
+                    <a
+                      href={`${GITHUB_REPO_URL}/blob/main/server/src/adapters/BaseStorageAdapter.ts`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-blue-300 hover:text-blue-200 font-mono text-[11px] sm:text-xs bg-slate-950/70 hover:bg-slate-950 px-1.5 py-0.5 rounded border border-slate-700/80 hover:border-blue-500/40 transition"
+                      title="Inspect BaseStorageAdapter.ts on GitHub"
+                    >
+                      <code>BaseStorageAdapter</code>
+                      <ExternalLink className="h-2.5 w-2.5 text-blue-400" />
+                    </a>
+                    . Fork the repository, plug in a new free provider, and open a PR!
+                  </p>
+                </div>
+              </div>
+
+              {/* Right Column: Matched, Balanced, High-Contrast Action Buttons */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full lg:w-auto shrink-0">
+                <a
+                  href={GITHUB_REPO_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-white hover:bg-slate-100 text-slate-950 font-semibold text-xs tracking-tight shadow-md hover:shadow-lg transition-all active:scale-95 shrink-0 whitespace-nowrap"
+                >
+                  <GithubIcon className="h-4 w-4 text-slate-950" />
+                  <span>Fork & Star on GitHub</span>
+                </a>
+
+                <a
+                  href={`${GITHUB_REPO_URL}/issues`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-600/80 hover:border-slate-500 font-medium text-xs tracking-tight shadow-sm transition-all active:scale-95 shrink-0 whitespace-nowrap"
+                >
+                  <GitPullRequest className="h-4 w-4 text-emerald-400" />
+                  <span>View Adapter Issues</span>
+                  <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
+                </a>
+              </div>
             </div>
           </div>
         </div>
