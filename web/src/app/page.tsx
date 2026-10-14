@@ -1311,6 +1311,12 @@ export default function HomePage() {
             <a href="#faq" className="hover:text-slate-900 transition">
               FAQ
             </a>
+            <Link href="/privacy" className="hover:text-slate-900 transition">
+              Privacy Policy
+            </Link>
+            <Link href="/terms" className="hover:text-slate-900 transition">
+              Terms of Service
+            </Link>
             <a
               href={GITHUB_REPO_URL}
               target="_blank"
