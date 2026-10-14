@@ -765,20 +765,21 @@ export default function HomePage() {
         <div className="max-w-6xl mx-auto relative z-10">
           <div className="text-center max-w-2xl mx-auto mb-16">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold mb-3">
-              <Sparkles className="h-3.5 w-3.5" /> Next Goal: 97+ GB Free Storage Pool
+              <Users className="h-3.5 w-3.5" /> Call for Open Source Collaborators
             </div>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-              Upcoming Free Cloud Storage Adapters
+              Build With Us: Help Add More Free Cloud Adapters
             </h2>
             <p className="mt-3 text-sm sm:text-base text-slate-300 leading-relaxed">
-              Fuze is all about aggregating free cloud storage. Our top roadmap
-              focus is adding connectors for every major free cloud provider so
-              you can expand your personal storage pool from 42 GB to nearly 100
-              GB without paying a dime:
+              Fuze is 100% community-driven and MIT licensed. We want to expand
+              our free storage pool from 42 GB to 100+ GB—and we invite you to
+              collaborate with us! Whether you are an experienced TypeScript
+              developer or a first-time contributor, help us build connectors
+              for the world&apos;s best free clouds:
             </p>
           </div>
 
-          {/* Contribution Pillars: Free Cloud Adapters */}
+          {/* Collaboration Opportunities */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-10 sm:mb-12">
             <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-4 sm:p-5 hover:border-blue-500/50 transition">
               <div className="flex items-center justify-between mb-3.5">
@@ -786,15 +787,15 @@ export default function HomePage() {
                   <Cloud className="h-5 w-5" />
                 </div>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                  +20 GB Free
+                  Help Build
                 </span>
               </div>
               <h3 className="text-sm font-bold text-white mb-1.5">
-                Mega.nz Adapter
+                Mega & MediaFire Adapters
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Connect Mega’s generous 20 GB free tier using direct client-side
-                chunk streaming to push your free pool to 62 GB instantly.
+                Help us write connectors for Mega.nz (20 GB free) and MediaFire
+                (10 GB free) using our typed <code>BaseStorageAdapter</code>.
               </p>
             </div>
 
@@ -804,34 +805,15 @@ export default function HomePage() {
                   <ShieldCheck className="h-5 w-5" />
                 </div>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  +5 GB Free
+                  Help Build
                 </span>
               </div>
               <h3 className="text-sm font-bold text-white mb-1.5">
-                Proton Drive Adapter
+                Proton Drive & IceDrive
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Integrate Proton’s Swiss-based encrypted free tier for
-                confidential document backups and high-privacy zero-knowledge
-                files.
-              </p>
-            </div>
-
-            <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-4 sm:p-5 hover:border-amber-500/50 transition">
-              <div className="flex items-center justify-between mb-3.5">
-                <div className="h-10 w-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-                  <Zap className="h-5 w-5" />
-                </div>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  +10 GB Free
-                </span>
-              </div>
-              <h3 className="text-sm font-bold text-white mb-1.5">
-                MediaFire Adapter
-              </h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Harness MediaFire’s 10 GB free bandwidth-optimized tier for
-                fast, direct streaming of large video and multimedia archives.
+                Collaborate on adding privacy-first Swiss and EU free cloud
+                providers (Proton 5 GB, IceDrive 10 GB) with client-side safety.
               </p>
             </div>
 
@@ -841,20 +823,39 @@ export default function HomePage() {
                   <Layers className="h-5 w-5" />
                 </div>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                  +20 GB Free
+                  Help Build
                 </span>
               </div>
               <h3 className="text-sm font-bold text-white mb-1.5">
-                IceDrive & Yandex Disk
+                Nextcloud, WebDAV & MinIO
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Add IceDrive (10 GB) and Yandex Disk (10 GB) free quotas to
-                achieve the ultimate 97+ GB unified personal storage drive.
+                Want to mount your own private server? Help us author
+                self-hosted connectors for Nextcloud, MinIO, or S3-compatible
+                buckets.
+              </p>
+            </div>
+
+            <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-4 sm:p-5 hover:border-amber-500/50 transition">
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="h-10 w-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                  <Zap className="h-5 w-5" />
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  Collaborate
+                </span>
+              </div>
+              <h3 className="text-sm font-bold text-white mb-1.5">
+                Engine & Chunk Optimizations
+              </h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Optimize multi-stream browser transfer speeds, improve mobile
+                accessibility, fix bugs, or suggest architectural enhancements.
               </p>
             </div>
           </div>
 
-          {/* GitHub Action Box */}
+          {/* GitHub Action Box: Invitation */}
           <div className="bg-linear-to-r from-slate-800 to-slate-800/80 border border-slate-700 rounded-2xl p-5 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 sm:gap-6">
             <div className="flex items-center gap-3.5 sm:gap-4">
               <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-white text-slate-950 flex items-center justify-center shrink-0 shadow-lg">
@@ -863,15 +864,16 @@ export default function HomePage() {
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="text-base sm:text-lg font-bold text-white">
-                    Help Build a Free Cloud Adapter
+                    Ready to Build an Adapter With Us?
                   </h3>
                   <span className="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
-                    Contributors Welcome
+                    Beginners & Pros Welcome
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 mt-1">
-                  Implement our simple TypeScript <code>BaseStorageAdapter</code>{" "}
-                  interface to connect a new free cloud provider and open a PR!
+                  Every adapter in Fuze is a single TypeScript file implementing{" "}
+                  <code>BaseStorageAdapter</code>. Fork the repo, build a
+                  connector, and submit your pull request!
                 </p>
               </div>
             </div>
@@ -884,7 +886,7 @@ export default function HomePage() {
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md transition text-center"
               >
                 <GithubIcon className="h-4 w-4" />
-                <span>Star on GitHub</span>
+                <span>Fork & Star on GitHub</span>
               </a>
               <a
                 href={`${GITHUB_REPO_URL}/issues`}
@@ -893,7 +895,7 @@ export default function HomePage() {
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold text-xs transition border border-slate-600 text-center"
               >
                 <GitBranch className="h-4 w-4" />
-                <span>Issues & Roadmap</span>
+                <span>Adapter Issues & PRs</span>
               </a>
             </div>
           </div>
