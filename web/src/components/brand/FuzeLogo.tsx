@@ -25,7 +25,7 @@ export function FuzeLogo({
   theme = "light",
   className = "",
   style,
-  alt = "Fuze",
+  alt = "Fuze Drive",
   height,
   width,
 }: FuzeLogoProps) {
@@ -58,9 +58,9 @@ export function FuzeLogo({
       theme === "dark"
         ? "/brand/svg/fuze-logo-stacked-for-dark-bg.svg"
         : "/brand/svg/fuze-logo-stacked-for-light-bg.svg";
-    // viewBox 232.06 x 360 (ratio ~ 0.6446)
-    const h = height || (width ? Math.round((width * 360) / 232.06) : 48);
-    const w = width || Math.round((h * 232.06) / 360);
+    // viewBox 240 x 360 (ratio 2/3)
+    const h = height || (width ? Math.round((width * 3) / 2) : 48);
+    const w = width || Math.round((h * 2) / 3);
     return (
       <Image
         src={src}
@@ -86,9 +86,9 @@ export function FuzeLogo({
     theme === "dark"
       ? "/brand/svg/fuze-logo-horizontal-for-dark-bg.svg"
       : "/brand/svg/fuze-logo-horizontal-for-light-bg.svg";
-  // viewBox 360.6 x 120 (ratio ~ 3.005)
-  const h = height || (width ? Math.round(width / 3.005) : 26);
-  const w = width || Math.round(h * 3.005);
+  // viewBox 570 x 120 (ratio ~ 4.75)
+  const h = height || (width ? Math.round(width / 4.75) : 26);
+  const w = width || Math.round(h * 4.75);
 
   return (
     <Image

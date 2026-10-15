@@ -30,6 +30,8 @@ async function main() {
   const allowedOrigins = [
     process.env.CLIENT_ORIGIN,
     process.env.CLIENT_URL,
+    "https://fuzedrive.tech",
+    "https://dashboard.fuzedrive.tech",
     "https://fuze.aftabalam.me",
     "http://localhost:3000",
   ].filter(Boolean) as string[];
@@ -40,6 +42,8 @@ async function main() {
       if (!origin) return cb(null, true);
       if (
         allowedOrigins.includes(origin) ||
+        origin.endsWith(".fuzedrive.tech") ||
+        origin === "https://fuzedrive.tech" ||
         origin.endsWith(".aftabalam.me") ||
         origin.endsWith(".vercel.app") ||
         origin === "http://localhost:3000"

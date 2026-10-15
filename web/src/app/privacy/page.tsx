@@ -11,13 +11,13 @@ import {
 } from "lucide-react";
 
 export const metadata = {
-  title: "Privacy Policy | Fuze Storage",
+  title: "Privacy Policy | Fuze Drive",
   description:
     "Comprehensive Privacy Policy and Third-Party API compliance statement for Google Drive, Microsoft OneDrive, Dropbox, Box, and pCloud.",
 };
 
 export default function PrivacyPolicyPage() {
-  const lastUpdated = "October 14, 2026";
+  const lastUpdated = "October 15, 2026";
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 antialiased">
@@ -58,7 +58,7 @@ export default function PrivacyPolicyPage() {
                 1. Introduction
               </h2>
               <p>
-                Fuze Storage (&quot;Fuze&quot;, &quot;we&quot;, &quot;us&quot;, or &quot;our&quot;) is an open-source multi-cloud storage aggregator designed to empower users to unify their personal free cloud storage quotas into a single virtual drive. We support integration with multiple third-party storage providers, including <strong>Google Drive, Microsoft OneDrive, Dropbox, Box, and pCloud</strong>, as well as community-authored open-source connectors.
+                Fuze Drive (&quot;Fuze Drive&quot;, &quot;we&quot;, &quot;us&quot;, or &quot;our&quot;) is an open-source multi-cloud storage aggregator designed to empower users to unify their personal free cloud storage quotas into a single virtual drive. We support integration with multiple third-party storage providers, including <strong>Google Drive, Microsoft OneDrive, Dropbox, Box, and pCloud</strong>, as well as community-authored open-source connectors.
               </p>
             </section>
 

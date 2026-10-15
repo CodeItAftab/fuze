@@ -3,12 +3,12 @@ import { FuzeLogo } from "@/components/brand/FuzeLogo";
 import { FileText, ArrowLeft, Shield } from "lucide-react";
 
 export const metadata = {
-  title: "Terms of Service | Fuze Storage",
-  description: "Terms of Service and conditions for using the Fuze multi-cloud storage platform.",
+  title: "Terms of Service | Fuze Drive",
+  description: "Terms of Service and conditions for using the Fuze Drive multi-cloud storage platform.",
 };
 
 export default function TermsOfServicePage() {
-  const lastUpdated = "October 14, 2026";
+  const lastUpdated = "October 15, 2026";
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 antialiased">

@@ -3,27 +3,47 @@ import type { NextRequest } from "next/server";
 
 export function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get("fuze_session");
-  const isDashboardRoute = request.nextUrl.pathname.startsWith("/dashboard");
+  const host =
+    request.headers.get("x-forwarded-host") ||
+    request.headers.get("host") ||
+    "";
+  const hostname = host.split(":")[0].toLowerCase();
+  const isDashboardSubdomain =
+    hostname.startsWith("dashboard.") || hostname.startsWith("drive.");
+
+  const { pathname } = request.nextUrl;
+  const isRootPath = pathname === "/";
+  const isDashboardRoute = pathname.startsWith("/dashboard");
   const isAuthRoute =
-    request.nextUrl.pathname.startsWith("/login") ||
-    request.nextUrl.pathname.startsWith("/register");
+    pathname.startsWith("/login") || pathname.startsWith("/register");
   const isRevoked = request.nextUrl.searchParams.get("revoked") === "true";
 
-  // If user arrived at an auth page with revoked=true, force clear the cookie and stay on login
+  // 1. Force clear cookie if explicitly arriving with revoked=true
   if (isAuthRoute && isRevoked) {
     const response = NextResponse.next();
     response.cookies.delete("fuze_session");
     return response;
   }
 
-  // If visiting dashboard without session cookie -> Instant redirect to /login
+  // 2. Subdomain routing: if accessing dashboard subdomain root (dashboard.fuzedrive.tech/)
+  if (isDashboardSubdomain && isRootPath) {
+    if (sessionCookie) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    } else {
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("redirect", "/dashboard");
+      return NextResponse.redirect(loginUrl);
+    }
+  }
+
+  // 3. If visiting /dashboard without session cookie -> Instant redirect to /login
   if (isDashboardRoute && !sessionCookie) {
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("redirect", request.nextUrl.pathname);
+    loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // If already authenticated and visiting /login or /register -> Instant redirect to /dashboard
+  // 4. If already authenticated and visiting /login or /register -> Instant redirect to /dashboard
   if (isAuthRoute && sessionCookie && !isRevoked) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
@@ -32,5 +52,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login", "/register"],
+  matcher: ["/", "/dashboard/:path*", "/login", "/register"],
 };
