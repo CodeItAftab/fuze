@@ -33,7 +33,6 @@ async function main() {
     "https://fuzedrive.tech",
     "https://app.fuzedrive.tech",
     "https://dashboard.fuzedrive.tech",
-    "https://fuze.aftabalam.me",
     "http://localhost:3000",
   ].filter(Boolean) as string[];
 
@@ -45,8 +44,6 @@ async function main() {
         allowedOrigins.includes(origin) ||
         origin.endsWith(".fuzedrive.tech") ||
         origin === "https://fuzedrive.tech" ||
-        origin.endsWith(".aftabalam.me") ||
-        origin === "https://aftabalam.me" ||
         origin.endsWith(".vercel.app") ||
         origin === "http://localhost:3000"
       ) {

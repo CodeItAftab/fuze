@@ -62,9 +62,6 @@ function getCookieDomain(request: FastifyRequest): string | undefined {
   if (host.endsWith("fuzedrive.tech") || origin.includes("fuzedrive.tech")) {
     return ".fuzedrive.tech";
   }
-  if (host.endsWith("aftabalam.me") || origin.includes("aftabalam.me")) {
-    return ".aftabalam.me";
-  }
   return undefined;
 }
 
@@ -72,9 +69,7 @@ function getRequestClientOrigin(request: FastifyRequest): string {
   const origin = request.headers.origin as string;
   if (
     origin &&
-    (origin.includes("fuzedrive.tech") ||
-      origin.includes("aftabalam.me") ||
-      origin.includes("localhost"))
+    (origin.includes("fuzedrive.tech") || origin.includes("localhost"))
   ) {
     return origin;
   }

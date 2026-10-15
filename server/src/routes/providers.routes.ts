@@ -24,9 +24,7 @@ function getClientOrigin(request: FastifyRequest): string {
   const origin = request.headers.origin as string;
   if (
     origin &&
-    (origin.includes("fuzedrive.tech") ||
-      origin.includes("aftabalam.me") ||
-      origin.includes("localhost"))
+    (origin.includes("fuzedrive.tech") || origin.includes("localhost"))
   ) {
     return origin;
   }
@@ -36,7 +34,6 @@ function getClientOrigin(request: FastifyRequest): string {
       const refOrigin = new URL(referer).origin;
       if (
         refOrigin.includes("fuzedrive.tech") ||
-        refOrigin.includes("aftabalam.me") ||
         refOrigin.includes("localhost")
       ) {
         return refOrigin;
