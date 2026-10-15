@@ -118,6 +118,30 @@ export async function validateLegitimateEmail(
           "The email domain does not have valid mail exchange (MX) records. Please provide a working email address.",
       };
     }
+
+    // 5. MX Exchange Host Verification:
+    // Catches brand-new, unlisted temporary domains whose mail servers still route
+    // back to known disposable mail infrastructure (e.g. mail.temp-mail.org, mx.mailinator.com)
+    for (const record of mxRecords) {
+      const exchange = (record.exchange || "").toLowerCase().trim();
+      const parts = exchange.split(".");
+      const exchangeDomain = parts.slice(-2).join(".");
+      if (
+        DISPOSABLE_DOMAINS.has(exchange) ||
+        DISPOSABLE_DOMAINS.has(exchangeDomain) ||
+        exchange.includes("mailinator") ||
+        exchange.includes("guerrillamail") ||
+        exchange.includes("temp-mail") ||
+        exchange.includes("10minutemail") ||
+        exchange.includes("yopmail")
+      ) {
+        return {
+          isValid: false,
+          reason:
+            "Disposable and temporary email addresses are not permitted. Please use a valid personal or business email address.",
+        };
+      }
+    }
   } catch (err: any) {
     // If domain lookup explicitly returned ENOTFOUND or ENODATA, it cannot receive emails
     if (err.code === "ENOTFOUND" || err.code === "ENODATA") {
