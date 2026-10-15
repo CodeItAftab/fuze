@@ -46,12 +46,14 @@ async function main() {
         origin.endsWith(".fuzedrive.tech") ||
         origin === "https://fuzedrive.tech" ||
         origin.endsWith(".aftabalam.me") ||
+        origin === "https://aftabalam.me" ||
         origin.endsWith(".vercel.app") ||
         origin === "http://localhost:3000"
       ) {
         return cb(null, true);
       }
-      return cb(null, true); // Fallback allow to avoid breaking production auth during domain setup
+      // Strictly reject unauthorized external origins
+      return cb(new Error(`Origin ${origin} not allowed by CORS`), false);
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
