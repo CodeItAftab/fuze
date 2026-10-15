@@ -31,6 +31,7 @@ async function main() {
     process.env.CLIENT_ORIGIN,
     process.env.CLIENT_URL,
     "https://fuzedrive.tech",
+    "https://app.fuzedrive.tech",
     "https://dashboard.fuzedrive.tech",
     "https://fuze.aftabalam.me",
     "http://localhost:3000",

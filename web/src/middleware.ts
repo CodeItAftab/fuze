@@ -9,7 +9,9 @@ export function middleware(request: NextRequest) {
     "";
   const hostname = host.split(":")[0].toLowerCase();
   const isDashboardSubdomain =
-    hostname.startsWith("dashboard.") || hostname.startsWith("drive.");
+    hostname.startsWith("app.") ||
+    hostname.startsWith("dashboard.") ||
+    hostname.startsWith("drive.");
 
   const { pathname } = request.nextUrl;
   const isRootPath = pathname === "/";
