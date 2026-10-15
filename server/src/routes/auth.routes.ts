@@ -52,6 +52,35 @@ function generateVerificationCode(): string {
   return crypto.randomInt(100000, 999999).toString();
 }
 
+function getCookieDomain(request: FastifyRequest): string | undefined {
+  if (process.env.COOKIE_DOMAIN) {
+    return process.env.COOKIE_DOMAIN;
+  }
+  const host = (request.headers.host || "").split(":")[0].toLowerCase();
+  const origin = (request.headers.origin as string) || "";
+
+  if (host.endsWith("fuzedrive.tech") || origin.includes("fuzedrive.tech")) {
+    return ".fuzedrive.tech";
+  }
+  if (host.endsWith("aftabalam.me") || origin.includes("aftabalam.me")) {
+    return ".aftabalam.me";
+  }
+  return undefined;
+}
+
+function getRequestClientOrigin(request: FastifyRequest): string {
+  const origin = request.headers.origin as string;
+  if (
+    origin &&
+    (origin.includes("fuzedrive.tech") ||
+      origin.includes("aftabalam.me") ||
+      origin.includes("localhost"))
+  ) {
+    return origin;
+  }
+  return process.env.CLIENT_ORIGIN || "https://app.fuzedrive.tech";
+}
+
 export async function authRoutes(fastify: FastifyInstance) {
   // 1. REGISTER
   fastify.post(
@@ -138,6 +167,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         to: email,
         name,
         token: rawToken,
+        clientOrigin: getRequestClientOrigin(request),
       }).catch((err) => {
         console.error("[EmailService] Background delivery error:", err);
       });
@@ -163,7 +193,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-        domain: process.env.COOKIE_DOMAIN || undefined,
+        domain: getCookieDomain(request),
         expires: sessionExpiresAt,
         signed: true,
       });
@@ -261,7 +291,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-        domain: process.env.COOKIE_DOMAIN || undefined,
+        domain: getCookieDomain(request),
         expires: sessionExpiresAt,
         signed: true,
       });
@@ -503,7 +533,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-        domain: process.env.COOKIE_DOMAIN || undefined,
+        domain: getCookieDomain(request),
         expires: expiresAt,
         signed: true,
       });
@@ -538,7 +568,10 @@ export async function authRoutes(fastify: FastifyInstance) {
           } catch {}
         }
       }
-      reply.clearCookie(COOKIE_NAME, { path: "/" });
+      reply.clearCookie(COOKIE_NAME, {
+        path: "/",
+        domain: getCookieDomain(request),
+      });
       return reply.send({ message: "Logged out" });
     },
   );
@@ -572,7 +605,10 @@ export async function authRoutes(fastify: FastifyInstance) {
         );
 
       if (!session) {
-        reply.clearCookie(COOKIE_NAME, { path: "/" });
+        reply.clearCookie(COOKIE_NAME, {
+          path: "/",
+          domain: getCookieDomain(request),
+        });
         return reply.status(401).send({ error: "Session revoked" });
       }
 
@@ -733,7 +769,10 @@ export async function authRoutes(fastify: FastifyInstance) {
       // 3. Deleting user cascades to sessions, identities, vfs_nodes, and chunks
       await db.delete(users).where(eq(users.id, userId));
 
-      reply.clearCookie(COOKIE_NAME, { path: "/" });
+      reply.clearCookie(COOKIE_NAME, {
+        path: "/",
+        domain: getCookieDomain(request),
+      });
       return reply.send({
         success: true,
         message: deleteCloudFiles
@@ -852,7 +891,10 @@ export async function authRoutes(fastify: FastifyInstance) {
       }
 
       if (targetSession.token === sessionToken) {
-        reply.clearCookie(COOKIE_NAME, { path: "/" });
+        reply.clearCookie(COOKIE_NAME, {
+          path: "/",
+          domain: getCookieDomain(request),
+        });
       }
 
       return reply.send({ success: true, message: "Session revoked successfully." });

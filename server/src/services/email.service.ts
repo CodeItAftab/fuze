@@ -38,8 +38,9 @@ export class EmailService {
     to: string;
     name: string;
     token: string;
+    clientOrigin?: string;
   }): Promise<{ success: boolean; devLink?: string }> {
-    const origin = this.getClientOrigin();
+    const origin = params.clientOrigin || this.getClientOrigin();
     const verificationUrl = `${origin}/verify-email?token=${encodeURIComponent(params.token)}&email=${encodeURIComponent(params.to)}`;
 
     const subject = "Verify your email address for Fuze";
@@ -131,8 +132,9 @@ export class EmailService {
     to: string;
     name: string;
     token: string;
+    clientOrigin?: string;
   }): Promise<{ success: boolean; devLink?: string }> {
-    const origin = this.getClientOrigin();
+    const origin = params.clientOrigin || this.getClientOrigin();
     const resetUrl = `${origin}/reset-password?token=${encodeURIComponent(params.token)}&email=${encodeURIComponent(params.to)}`;
 
     const subject = "Reset your Fuze account password";

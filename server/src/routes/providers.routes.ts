@@ -20,6 +20,32 @@ import { TokenService, ProviderAuthExpiredError } from "../services/token.servic
 const redis = new IORedis(process.env.REDIS_URL || "redis://localhost:6379");
 const COOKIE_NAME = "fuze_session";
 
+function getClientOrigin(request: FastifyRequest): string {
+  const origin = request.headers.origin as string;
+  if (
+    origin &&
+    (origin.includes("fuzedrive.tech") ||
+      origin.includes("aftabalam.me") ||
+      origin.includes("localhost"))
+  ) {
+    return origin;
+  }
+  const referer = request.headers.referer as string;
+  if (referer) {
+    try {
+      const refOrigin = new URL(referer).origin;
+      if (
+        refOrigin.includes("fuzedrive.tech") ||
+        refOrigin.includes("aftabalam.me") ||
+        refOrigin.includes("localhost")
+      ) {
+        return refOrigin;
+      }
+    } catch {}
+  }
+  return process.env.CLIENT_ORIGIN || "https://app.fuzedrive.tech";
+}
+
 export async function providerRoutes(fastify: FastifyInstance) {
   // -------------------------------------------------------------
   // 1. LIST CONNECTED PROVIDERS & STORAGE SUMMARY
@@ -106,8 +132,9 @@ export async function providerRoutes(fastify: FastifyInstance) {
       } catch {}
     }
 
+    const clientOrigin = getClientOrigin(request);
+
     if (!userId) {
-      const clientOrigin = process.env.CLIENT_ORIGIN || "http://localhost:3000";
       return reply.redirect(
         `${clientOrigin}/login?redirect=${encodeURIComponent("/dashboard/storage")}`,
       );
@@ -119,7 +146,6 @@ export async function providerRoutes(fastify: FastifyInstance) {
       .from(users)
       .where(eq(users.id, userId));
 
-    const clientOrigin = process.env.CLIENT_ORIGIN || "http://localhost:3000";
     if (!dbUser || !dbUser.emailVerified) {
       return reply.redirect(
         `${clientOrigin}/dashboard/storage?error=${encodeURIComponent(
@@ -175,6 +201,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
       JSON.stringify({
         userId,
         provider,
+        clientOrigin,
         returnUrl: "/dashboard/storage",
         isReconnect,
         existingEmail: existingProvider?.accountEmail,
@@ -299,30 +326,32 @@ export async function providerRoutes(fastify: FastifyInstance) {
       }>,
       reply: FastifyReply,
     ) => {
-      const clientOrigin = process.env.CLIENT_ORIGIN || "http://localhost:3000";
+      const fallbackOrigin = getClientOrigin(request);
       const { provider } = request.params;
       const { code, state, error: oauthError } = request.query;
 
       if (oauthError || !code || !state) {
         return reply.redirect(
-          `${clientOrigin}/dashboard/storage?error=${encodeURIComponent(oauthError || "Authorization was denied or canceled.")}`,
+          `${fallbackOrigin}/dashboard/storage?error=${encodeURIComponent(oauthError || "Authorization was denied or canceled.")}`,
         );
       }
 
       const stateDataRaw = await redis.get(`oauth_state:${state}`);
       if (!stateDataRaw) {
         return reply.redirect(
-          `${clientOrigin}/dashboard/storage?error=${encodeURIComponent("Authorization session expired. Please try connecting again.")}`,
+          `${fallbackOrigin}/dashboard/storage?error=${encodeURIComponent("Authorization session expired. Please try connecting again.")}`,
         );
       }
       await redis.del(`oauth_state:${state}`);
 
       const stateObj = JSON.parse(stateDataRaw) as {
         userId: string;
+        clientOrigin?: string;
         returnUrl?: string;
         isReconnect?: boolean;
         existingEmail?: string;
       };
+      const clientOrigin = stateObj.clientOrigin || fallbackOrigin;
       const { userId } = stateObj;
 
       let accessToken = "";
