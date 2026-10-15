@@ -21,25 +21,23 @@ const redis = new IORedis(process.env.REDIS_URL || "redis://localhost:6379");
 const COOKIE_NAME = "fuze_session";
 
 function getClientOrigin(request: FastifyRequest): string {
-  const rootDomain = process.env.APP_DOMAIN || "fuzedrive.tech";
-  const origin = request.headers.origin as string;
-  if (
-    origin &&
-    (origin.endsWith(`.${rootDomain}`) ||
-      origin === `https://${rootDomain}` ||
-      (process.env.NODE_ENV !== "production" && origin.includes("localhost")))
-  ) {
+  const rootDomain = (process.env.APP_DOMAIN || "fuzedrive.tech").toLowerCase().trim();
+  const allowed = new Set([
+    `https://${rootDomain}`,
+    `https://www.${rootDomain}`,
+    process.env.CLIENT_ORIGIN,
+    process.env.NODE_ENV !== "production" ? "http://localhost:3000" : null,
+  ].filter(Boolean) as string[]);
+
+  const origin = ((request.headers.origin as string) || "").trim();
+  if (allowed.has(origin)) {
     return origin;
   }
   const referer = request.headers.referer as string;
   if (referer) {
     try {
       const refOrigin = new URL(referer).origin;
-      if (
-        refOrigin.endsWith(`.${rootDomain}`) ||
-        refOrigin === `https://${rootDomain}` ||
-        (process.env.NODE_ENV !== "production" && refOrigin.includes("localhost"))
-      ) {
+      if (allowed.has(refOrigin)) {
         return refOrigin;
       }
     } catch {}

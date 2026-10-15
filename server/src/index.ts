@@ -27,28 +27,25 @@ const app = Fastify({
 
 async function main() {
   // 1. CORS with credentials
-  const rootDomain = process.env.APP_DOMAIN || "fuzedrive.tech";
-  const allowedOrigins = [
+  const rootDomain = (process.env.APP_DOMAIN || "fuzedrive.tech").toLowerCase().trim();
+  const allowedOrigins = new Set([
     process.env.CLIENT_ORIGIN,
     process.env.CLIENT_URL,
     `https://${rootDomain}`,
-    `https://app.${rootDomain}`,
-    `https://dashboard.${rootDomain}`,
-    process.env.NODE_ENV !== "production" ? "http://localhost:3000" : undefined,
-  ].filter(Boolean) as string[];
+    `https://www.${rootDomain}`,
+    process.env.NODE_ENV !== "production" ? "http://localhost:3000" : null,
+  ].filter(Boolean) as string[]);
 
   await app.register(cors, {
     origin: (origin, cb) => {
       // Allow requests with no origin (like mobile apps, curl, or same-origin server-to-server)
       if (!origin) return cb(null, true);
-      if (
-        allowedOrigins.includes(origin) ||
-        origin.endsWith(`.${rootDomain}`) ||
-        origin === `https://${rootDomain}` ||
-        (process.env.NODE_ENV !== "production" && origin === "http://localhost:3000")
-      ) {
+
+      // Strict exact match - blocks lookalike domains like tempfuzedrive.tech
+      if (allowedOrigins.has(origin)) {
         return cb(null, true);
       }
+
       // Strictly reject unauthorized external origins
       return cb(new Error(`Origin ${origin} not allowed by CORS`), false);
     },

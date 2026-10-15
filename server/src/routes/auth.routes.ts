@@ -56,25 +56,27 @@ function getCookieDomain(request: FastifyRequest): string | undefined {
   if (process.env.COOKIE_DOMAIN) {
     return process.env.COOKIE_DOMAIN;
   }
-  const rootDomain = process.env.APP_DOMAIN || "fuzedrive.tech";
-  const host = (request.headers.host || "").split(":")[0].toLowerCase();
-  const origin = (request.headers.origin as string) || "";
+  const rootDomain = (process.env.APP_DOMAIN || "fuzedrive.tech").toLowerCase().trim();
+  const host = (request.headers.host || "").split(":")[0].toLowerCase().trim();
 
-  if (host.endsWith(rootDomain) || origin.includes(rootDomain)) {
+  // Exact match on the domain or its official subdomains
+  if (host === rootDomain || host === `www.${rootDomain}` || host === `api.${rootDomain}`) {
     return `.${rootDomain}`;
   }
   return undefined;
 }
 
 function getRequestClientOrigin(request: FastifyRequest): string {
-  const rootDomain = process.env.APP_DOMAIN || "fuzedrive.tech";
-  const origin = request.headers.origin as string;
-  if (
-    origin &&
-    (origin.endsWith(`.${rootDomain}`) ||
-      origin === `https://${rootDomain}` ||
-      (process.env.NODE_ENV !== "production" && origin.includes("localhost")))
-  ) {
+  const rootDomain = (process.env.APP_DOMAIN || "fuzedrive.tech").toLowerCase().trim();
+  const origin = ((request.headers.origin as string) || "").trim();
+  const allowed = new Set([
+    `https://${rootDomain}`,
+    `https://www.${rootDomain}`,
+    process.env.CLIENT_ORIGIN,
+    process.env.NODE_ENV !== "production" ? "http://localhost:3000" : null,
+  ].filter(Boolean) as string[]);
+
+  if (allowed.has(origin)) {
     return origin;
   }
   return process.env.CLIENT_ORIGIN || `https://${rootDomain}`;
