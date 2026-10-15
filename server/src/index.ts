@@ -27,13 +27,14 @@ const app = Fastify({
 
 async function main() {
   // 1. CORS with credentials
+  const rootDomain = process.env.APP_DOMAIN || "fuzedrive.tech";
   const allowedOrigins = [
     process.env.CLIENT_ORIGIN,
     process.env.CLIENT_URL,
-    "https://fuzedrive.tech",
-    "https://app.fuzedrive.tech",
-    "https://dashboard.fuzedrive.tech",
-    "http://localhost:3000",
+    `https://${rootDomain}`,
+    `https://app.${rootDomain}`,
+    `https://dashboard.${rootDomain}`,
+    process.env.NODE_ENV !== "production" ? "http://localhost:3000" : undefined,
   ].filter(Boolean) as string[];
 
   await app.register(cors, {
@@ -42,10 +43,9 @@ async function main() {
       if (!origin) return cb(null, true);
       if (
         allowedOrigins.includes(origin) ||
-        origin.endsWith(".fuzedrive.tech") ||
-        origin === "https://fuzedrive.tech" ||
-        origin.endsWith(".vercel.app") ||
-        origin === "http://localhost:3000"
+        origin.endsWith(`.${rootDomain}`) ||
+        origin === `https://${rootDomain}` ||
+        (process.env.NODE_ENV !== "production" && origin === "http://localhost:3000")
       ) {
         return cb(null, true);
       }
@@ -54,6 +54,15 @@ async function main() {
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Origin",
+      "X-Requested-With",
+      "Content-Type",
+      "Accept",
+      "Authorization",
+      "Cookie",
+    ],
+    exposedHeaders: ["Set-Cookie"],
   });
 
   // 2. Cookie parser for signed HttpOnly session cookies

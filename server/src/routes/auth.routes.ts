@@ -56,24 +56,28 @@ function getCookieDomain(request: FastifyRequest): string | undefined {
   if (process.env.COOKIE_DOMAIN) {
     return process.env.COOKIE_DOMAIN;
   }
+  const rootDomain = process.env.APP_DOMAIN || "fuzedrive.tech";
   const host = (request.headers.host || "").split(":")[0].toLowerCase();
   const origin = (request.headers.origin as string) || "";
 
-  if (host.endsWith("fuzedrive.tech") || origin.includes("fuzedrive.tech")) {
-    return ".fuzedrive.tech";
+  if (host.endsWith(rootDomain) || origin.includes(rootDomain)) {
+    return `.${rootDomain}`;
   }
   return undefined;
 }
 
 function getRequestClientOrigin(request: FastifyRequest): string {
+  const rootDomain = process.env.APP_DOMAIN || "fuzedrive.tech";
   const origin = request.headers.origin as string;
   if (
     origin &&
-    (origin.includes("fuzedrive.tech") || origin.includes("localhost"))
+    (origin.endsWith(`.${rootDomain}`) ||
+      origin === `https://${rootDomain}` ||
+      (process.env.NODE_ENV !== "production" && origin.includes("localhost")))
   ) {
     return origin;
   }
-  return process.env.CLIENT_ORIGIN || "https://app.fuzedrive.tech";
+  return process.env.CLIENT_ORIGIN || `https://app.${rootDomain}`;
 }
 
 export async function authRoutes(fastify: FastifyInstance) {

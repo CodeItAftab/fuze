@@ -21,10 +21,13 @@ const redis = new IORedis(process.env.REDIS_URL || "redis://localhost:6379");
 const COOKIE_NAME = "fuze_session";
 
 function getClientOrigin(request: FastifyRequest): string {
+  const rootDomain = process.env.APP_DOMAIN || "fuzedrive.tech";
   const origin = request.headers.origin as string;
   if (
     origin &&
-    (origin.includes("fuzedrive.tech") || origin.includes("localhost"))
+    (origin.endsWith(`.${rootDomain}`) ||
+      origin === `https://${rootDomain}` ||
+      (process.env.NODE_ENV !== "production" && origin.includes("localhost")))
   ) {
     return origin;
   }
@@ -33,14 +36,15 @@ function getClientOrigin(request: FastifyRequest): string {
     try {
       const refOrigin = new URL(referer).origin;
       if (
-        refOrigin.includes("fuzedrive.tech") ||
-        refOrigin.includes("localhost")
+        refOrigin.endsWith(`.${rootDomain}`) ||
+        refOrigin === `https://${rootDomain}` ||
+        (process.env.NODE_ENV !== "production" && refOrigin.includes("localhost"))
       ) {
         return refOrigin;
       }
     } catch {}
   }
-  return process.env.CLIENT_ORIGIN || "https://app.fuzedrive.tech";
+  return process.env.CLIENT_ORIGIN || `https://app.${rootDomain}`;
 }
 
 export async function providerRoutes(fastify: FastifyInstance) {
