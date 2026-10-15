@@ -1,98 +1,34 @@
 import dns from "node:dns/promises";
+import bundledDisposableDomains from "./disposable-domains.json";
 
-// Curated blocklist of well-known disposable, temporary, and burner email domains
-const DISPOSABLE_DOMAINS = new Set<string>([
-  // Mailinator & aliases
-  "mailinator.com",
-  "mailin8r.com",
-  "mailinator2.com",
-  "suremail.info",
-  "spamherelots.com",
-  "binkmail.com",
-  "safetymail.info",
+// Comprehensive in-memory blocklist of 97,000+ disposable domains (O(1) lookup time)
+const DISPOSABLE_DOMAINS = new Set<string>(bundledDisposableDomains);
 
-  // Guerrilla Mail & aliases
-  "guerrillamail.com",
-  "guerrillamail.net",
-  "guerrillamail.biz",
-  "guerrillamail.org",
-  "guerrillamailblock.com",
-  "sharklasers.com",
-  "grr.la",
-  "pokemail.net",
-  "spam4.me",
+// Periodically refresh list from upstream community blocklists non-blockingly
+async function refreshBlocklist(): Promise<void> {
+  try {
+    const res = await fetch(
+      "https://raw.githubusercontent.com/disposable-email-domains/disposable-email-domains/master/disposable_email_blocklist.conf",
+      { signal: AbortSignal.timeout(6000) },
+    );
+    if (!res.ok) return;
+    const text = await res.text();
+    const domains = text.split("\n").map((d) => d.trim().toLowerCase()).filter(Boolean);
+    for (const d of domains) {
+      DISPOSABLE_DOMAINS.add(d);
+    }
+  } catch {
+    // Non-fatal; fallback to bundled blocklist
+  }
+}
 
-  // 10 Minute Mail & aliases
-  "10minutemail.com",
-  "10minutemail.net",
-  "10minutemail.org",
-  "10minemail.com",
-  "minuteinbox.com",
-  "20minutemail.it",
-
-  // TempMail & variants
-  "tempmail.com",
-  "temp-mail.org",
-  "temp-mail.io",
-  "tempail.com",
-  "dispostable.com",
-  "throwawaymail.com",
-  "throwaway.email",
-  "trashmail.com",
-  "trashmail.net",
-  "trashmail.me",
-  "trash-mail.com",
-
-  // YOPmail & aliases
-  "yopmail.com",
-  "yopmail.fr",
-  "yopmail.net",
-  "cool.fr.nf",
-  "jetable.fr.nf",
-  "nospam.ze.tc",
-  "nomail.xl.cx",
-  "mega.zik.dj",
-  "speed.1s.fr",
-  "courriel.fr.nf",
-  "moncourrier.fr.nf",
-  "monemail.fr.nf",
-  "monmail.fr.nf",
-
-  // Other major disposable services
-  "getairmail.com",
-  "mohmal.com",
-  "emailondeck.com",
-  "crazymailing.com",
-  "generator.email",
-  "dropmail.me",
-  "fakeinbox.com",
-  "burnermail.io",
-  "nada.ltd",
-  "getnada.com",
-  "inboxkitten.com",
-  "mytemp.email",
-  "tempinbox.com",
-  "harakirimail.com",
-  "maildrop.cc",
-  "mailcatch.com",
-  "fakemailgenerator.com",
-  "armyspy.com",
-  "cuvox.de",
-  "dayrep.com",
-  "fleckens.hu",
-  "gustr.com",
-  "jourrapide.com",
-  "rhyta.com",
-  "superrito.com",
-  "teleworm.us",
-  "einrot.com",
-  "meltmail.com",
-  "disposablemail.com",
-  "chacuo.net",
-  "0815.ru",
-  "bccto.me",
-  "mytemp.email",
-]);
+// Background initial refresh after 15s, then every 24 hours
+setTimeout(() => {
+  refreshBlocklist().catch(() => {});
+  setInterval(() => {
+    refreshBlocklist().catch(() => {});
+  }, 24 * 60 * 60 * 1000).unref();
+}, 15000).unref();
 
 // Trusted major providers that bypass DNS checks for maximum speed
 const TRUSTED_DOMAINS = new Set<string>([
