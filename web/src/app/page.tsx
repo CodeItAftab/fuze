@@ -187,6 +187,9 @@ export default function HomePage() {
               <a href="#about" className="hover:text-slate-900 transition">
                 About Us
               </a>
+              <Link href="/how-it-works" className="hover:text-slate-900 transition">
+                How It Works
+              </Link>
               <a href="#faq" className="hover:text-slate-900 transition">
                 FAQ
               </a>
@@ -1161,6 +1164,16 @@ export default function HomePage() {
                 </tbody>
               </table>
             </div>
+
+            <div className="mt-6 text-center">
+              <Link
+                href="/compare/multcloud-alternative"
+                className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-blue-600 hover:text-blue-800 transition bg-blue-50/70 hover:bg-blue-100/70 px-4 py-2 rounded-xl border border-blue-200"
+              >
+                <span>Compare: Why Fuze Drive is the Free, Open-Source MultCloud Alternative</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
           </div>
         </div>
       </section>
@@ -1294,9 +1307,39 @@ export default function HomePage() {
             <a href="#about" className="hover:text-slate-900 transition">
               About Us
             </a>
-            <a href="#faq" className="hover:text-slate-900 transition">
+            <Link href="/faq" className="hover:text-slate-900 transition">
               FAQ
-            </a>
+            </Link>
+            <Link
+              href="/compare/multcloud-alternative"
+              className="hover:text-slate-900 transition"
+            >
+              MultCloud Alternative
+            </Link>
+            <Link
+              href="/guides/combine-google-drive-onedrive-dropbox"
+              className="hover:text-slate-900 transition"
+            >
+              Combine Cloud Storage
+            </Link>
+            <Link
+              href="/guides/free-cloud-storage-comparison-2026"
+              className="hover:text-slate-900 transition"
+            >
+              Best Free Cloud Storage 2026
+            </Link>
+            <Link
+              href="/guides/open-source-cloud-storage-aggregator"
+              className="hover:text-slate-900 transition"
+            >
+              Open Source Aggregator
+            </Link>
+            <Link
+              href="/how-it-works"
+              className="hover:text-slate-900 transition"
+            >
+              How It Works
+            </Link>
             <Link href="/privacy" className="hover:text-slate-900 transition">
               Privacy Policy
             </Link>
