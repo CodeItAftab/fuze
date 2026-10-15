@@ -19,26 +19,11 @@ export const metadata: Metadata = {
     process.env.NEXT_PUBLIC_APP_URL || "https://fuzedrive.tech",
   ),
   title: {
-    default: "Fuze Drive | Unify 42 GB Free Cloud Storage into One Personal Drive",
+    default: "Combine Free Cloud Storage into One 42 GB Drive | Fuze Drive",
     template: "%s | Fuze Drive",
   },
   description:
-    "Combine your free Google Drive (15 GB), Box (10 GB), pCloud (10 GB), OneDrive (5 GB), and Dropbox (2 GB) into a single 42 GB high-speed personal cloud. Zero server transit, whole-file priority, and 100% free open-source.",
-  keywords: [
-    "fuze drive",
-    "combine cloud storage",
-    "free cloud storage aggregator",
-    "merge google drive and onedrive",
-    "unify free cloud storage",
-    "multi cloud storage aggregator",
-    "zero proxy cloud storage",
-    "open source personal cloud drive",
-    "combine box dropbox pcloud google drive",
-    "cloud drive merger free",
-    "distributed cloud storage",
-    "virtual file system multi cloud",
-    "free 42gb cloud storage",
-  ],
+    "Combine free Google Drive, OneDrive, Dropbox, Box and pCloud storage into one 42 GB drive. Open source, free, files stream directly from your browser.",
   authors: [{ name: "Aftab Alam", url: "https://aftabalam.me" }],
   creator: "Aftab Alam",
   publisher: "Aftab Alam",
@@ -59,11 +44,10 @@ export const metadata: Metadata = {
       { rel: "mask-icon", url: "/safari-pinned-tab.svg", color: "#2563EB" },
     ],
   },
-  manifest: "/site.webmanifest",
   openGraph: {
-    title: "Fuze Drive | Unify 42 GB Free Cloud Storage into One Personal Drive",
+    title: "Combine Free Cloud Storage into One 42 GB Drive | Fuze Drive",
     description:
-      "Combine Google Drive, Box, pCloud, OneDrive, and Dropbox into one ultra-fast personal cloud with zero server proxy and native previews.",
+      "Combine free Google Drive, OneDrive, Dropbox, Box and pCloud storage into one 42 GB drive. Open source, free, files stream directly from your browser.",
     url: "https://fuzedrive.tech",
     siteName: "Fuze Drive",
     images: [
@@ -71,7 +55,7 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Fuze Drive — Unify All Your Free Cloud Storage into One 42 GB Drive",
+        alt: "Fuze Drive — Combine Free Cloud Storage into One 42 GB Drive",
       },
     ],
     locale: "en_US",
@@ -79,9 +63,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Fuze Drive | Unify 42 GB Free Cloud Storage into One Personal Drive",
+    title: "Combine Free Cloud Storage into One 42 GB Drive | Fuze Drive",
     description:
-      "Combine Google Drive, Box, pCloud, OneDrive, and Dropbox into one personal cloud. 100% Free & Open Source.",
+      "Combine free Google Drive, OneDrive, Dropbox, Box and pCloud storage into one 42 GB drive. Open source, free, files stream directly from your browser.",
     creator: "@CodeItAftab",
     site: "@CodeItAftab",
     images: ["/twitter-card.png"],
@@ -103,6 +87,45 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   const structuredData = [
     {
       "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: "Fuze Drive",
+      url: "https://fuzedrive.tech",
+      description:
+        "Combine free Google Drive, OneDrive, Dropbox, Box and pCloud storage into one 42 GB drive.",
+      potentialAction: {
+        "@type": "SearchAction",
+        target: "https://fuzedrive.tech/?q={search_term_string}",
+        "query-input": "required name=search_term_string",
+      },
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      name: "Fuze Drive",
+      applicationCategory: "UtilitiesApplication, ProductivityApplication, CloudStorage",
+      operatingSystem: "Web, Windows, macOS, Linux, iOS, Android",
+      offers: {
+        "@type": "Offer",
+        price: "0.00",
+        priceCurrency: "USD",
+      },
+      description:
+        "Combine free Google Drive, OneDrive, Dropbox, Box and pCloud storage into one 42 GB drive. Open source, free, files stream directly from your browser.",
+      author: {
+        "@type": "Person",
+        name: "Aftab Alam",
+        url: "https://aftabalam.me",
+      },
+      creator: {
+        "@type": "Person",
+        name: "Aftab Alam",
+        url: "https://aftabalam.me",
+      },
+      softwareVersion: "1.0",
+      license: "https://opensource.org/licenses/MIT",
+    },
+    {
+      "@context": "https://schema.org",
       "@type": "WebApplication",
       name: "Fuze Drive",
       alternateName: "Fuze Cloud Drive",
@@ -116,7 +139,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         priceCurrency: "USD",
       },
       description:
-        "Combine your free storage across Google Drive (15 GB), Box (10 GB), pCloud (10 GB), OneDrive (5 GB), and Dropbox (2 GB) into one unified 42 GB personal drive. Direct-to-cloud zero-proxy streaming, whole file priority, and 100% free open-source.",
+        "Combine free Google Drive, OneDrive, Dropbox, Box and pCloud storage into one 42 GB drive. Direct-to-cloud zero-proxy streaming, whole file priority, and 100% free open-source.",
       author: {
         "@type": "Person",
         name: "Aftab Alam",
@@ -147,7 +170,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           name: "Is Fuze Drive really 100% free with no monthly subscription?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Yes, Fuze Drive is 100% free and open-source under the MIT license. Because Fuze Drive uses a zero-proxy architecture where files stream directly between your browser and cloud provider APIs, Fuze Drive incurs virtually zero storage transit costs and passes that savings directly to you with no credit card required.",
+            text: "Yes, Fuze Drive is 100% free and open-source under the MIT license. Because Fuze Drive uses a direct browser-to-cloud architecture where files stream directly between your browser and cloud provider APIs, Fuze Drive incurs virtually zero storage transit costs and passes that savings directly to you with no credit card required.",
           },
         },
         {
@@ -155,7 +178,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           name: "Does Fuze Drive see, proxy, or store my personal files on its servers?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "No. Fuze Drive utilizes direct-to-cloud presigned resumable URLs. Your raw files travel directly between your browser and the respective cloud provider endpoints (Google, Microsoft, Box, Dropbox, pCloud). Fuze Drive never buffers, intercepts, or hosts your file contents.",
+            text: "No. Files stream directly between your browser and the respective cloud endpoints via authorized resumable sessions. Fuze servers only store file metadata, folder hierarchies, and cached previews.",
           },
         },
         {
@@ -203,7 +226,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <link rel="alternate icon" href="/favicon.ico" sizes="any" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/site.webmanifest" />
-        <meta name="msapplication-config" content="/browserconfig.xml" />
         <meta name="theme-color" content="#0F172A" />
         <script
           type="application/ld+json"

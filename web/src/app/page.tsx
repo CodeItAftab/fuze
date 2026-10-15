@@ -115,7 +115,6 @@ export default function HomePage() {
     "onedrive",
     "dropbox",
   ]);
-  const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   useEffect(() => {
     checkSession();
@@ -334,9 +333,9 @@ export default function HomePage() {
             </div>
           </div>
           <div className="bg-slate-50/70 p-3 sm:p-4 rounded-xl border border-slate-100">
-            <div className="text-xl sm:text-2xl font-bold text-slate-900">0 KB</div>
+            <div className="text-xl sm:text-2xl font-bold text-slate-900">Direct</div>
             <div className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
-              Zero Server Transit
+              Browser-to-Cloud Uploads
             </div>
           </div>
           <div className="bg-slate-50/70 p-3 sm:p-4 rounded-xl border border-slate-100">
@@ -732,12 +731,12 @@ export default function HomePage() {
               <ShieldCheck className="h-5 w-5" />
             </div>
             <h3 className="text-base font-bold text-slate-900 mb-2">
-              Zero-Proxy Direct Streaming
+              Direct-to-Cloud Streaming
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Files never pass through Fuze application servers. Bytes stream
-              directly between your browser and the respective cloud REST APIs
-              via authorized resumable sessions.
+              Files stream directly between your browser and cloud REST APIs via
+              authorized resumable sessions. Fuze servers only manage your
+              metadata, virtual folder tree, and cached previews.
             </p>
           </div>
 
@@ -874,19 +873,19 @@ export default function HomePage() {
                     </h3>
                     <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      Good First Issues Open
+                      Open Source & Active
                     </span>
                   </div>
                   <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed">
-                    Every adapter in Fuze is an isolated TypeScript class implementing{" "}
+                    Every adapter in Fuze Drive is an isolated TypeScript class implementing{" "}
                     <a
-                      href={`${GITHUB_REPO_URL}/blob/main/server/src/adapters/BaseStorageAdapter.ts`}
+                      href={`${GITHUB_REPO_URL}/blob/main/server/src/adapters/base.adapter.ts`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-blue-300 hover:text-blue-200 font-mono text-[11px] sm:text-xs bg-slate-950/70 hover:bg-slate-950 px-1.5 py-0.5 rounded border border-slate-700/80 hover:border-blue-500/40 transition"
-                      title="Inspect BaseStorageAdapter.ts on GitHub"
+                      title="Inspect base.adapter.ts on GitHub"
                     >
-                      <code>BaseStorageAdapter</code>
+                      <code>base.adapter.ts</code>
                       <ExternalLink className="h-2.5 w-2.5 text-blue-400" />
                     </a>
                     . Fork the repository, plug in a new free provider, and open a PR!
@@ -1033,13 +1032,13 @@ export default function HomePage() {
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between p-2.5 rounded-xl bg-blue-50/80 border border-blue-200/70">
-                  <span className="font-bold text-blue-900 text-xs">⚡ Fuze</span>
+                  <span className="font-bold text-blue-900 text-xs">⚡ Fuze Drive</span>
                   <span className="font-bold text-blue-700 text-xs">
-                    Zero-Proxy Direct
+                    Direct-to-Cloud
                   </span>
                 </div>
                 <div className="flex items-center justify-between px-2.5 py-1 text-xs text-slate-600">
-                  <span>Commercial Aggregators</span>
+                  <span>Some Commercial Aggregators</span>
                   <span className="font-medium text-rose-600 text-right">Proxies on their servers</span>
                 </div>
                 <div className="flex items-center justify-between px-2.5 py-1 text-xs text-slate-600">
@@ -1057,13 +1056,13 @@ export default function HomePage() {
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between p-2.5 rounded-xl bg-blue-50/80 border border-blue-200/70">
-                  <span className="font-bold text-blue-900 text-xs">⚡ Fuze</span>
+                  <span className="font-bold text-blue-900 text-xs">⚡ Fuze Drive</span>
                   <span className="font-extrabold text-blue-600 text-xs">
                     42 GB Free Unified
                   </span>
                 </div>
                 <div className="flex items-center justify-between px-2.5 py-1 text-xs text-slate-600">
-                  <span>Commercial Aggregators</span>
+                  <span>Some Commercial Aggregators</span>
                   <span className="font-medium text-slate-500">Paywalled tiers</span>
                 </div>
                 <div className="flex items-center justify-between px-2.5 py-1 text-xs text-slate-600">
@@ -1081,13 +1080,13 @@ export default function HomePage() {
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between p-2.5 rounded-xl bg-blue-50/80 border border-blue-200/70">
-                  <span className="font-bold text-blue-900 text-xs">⚡ Fuze</span>
+                  <span className="font-bold text-blue-900 text-xs">⚡ Fuze Drive</span>
                   <span className="font-extrabold text-emerald-700 text-xs px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200">
                     MIT License
                   </span>
                 </div>
                 <div className="flex items-center justify-between px-2.5 py-1 text-xs text-slate-600">
-                  <span>Commercial Aggregators</span>
+                  <span>Some Commercial Aggregators</span>
                   <span className="font-medium text-slate-500">Proprietary</span>
                 </div>
                 <div className="flex items-center justify-between px-2.5 py-1 text-xs text-slate-600">
@@ -1106,9 +1105,9 @@ export default function HomePage() {
                   <tr>
                     <th className="p-4 sm:p-5">Feature</th>
                     <th className="p-4 sm:p-5 text-blue-600 font-extrabold bg-blue-50/50">
-                      Fuze Personal Cloud
+                      Fuze Drive
                     </th>
-                    <th className="p-4 sm:p-5">Commercial Aggregators</th>
+                    <th className="p-4 sm:p-5">Some Commercial Aggregators (e.g. MultCloud)</th>
                     <th className="p-4 sm:p-5">Single Cloud Provider</th>
                   </tr>
                 </thead>
@@ -1207,33 +1206,20 @@ export default function HomePage() {
               q: "Can other users connect to the same cloud account?",
               a: "No. Fuze enforces strict cross-user account collision protection. Once a cloud account email is linked to your Fuze profile, no other user can link that same account, protecting your files against unauthorized access.",
             },
-          ].map((faq, idx) => {
-            const isOpen = openFaq === idx;
-            return (
-              <div
-                key={idx}
-                className="border border-slate-200 rounded-2xl bg-white overflow-hidden transition-all shadow-2xs"
-              >
-                <button
-                  type="button"
-                  onClick={() => setOpenFaq(isOpen ? null : idx)}
-                  className="w-full p-5 text-left flex items-center justify-between gap-4 font-semibold text-slate-900 hover:text-blue-600 transition cursor-pointer text-sm sm:text-base"
-                >
-                  <span>{faq.q}</span>
-                  <ChevronDown
-                    className={`h-4 w-4 text-slate-400 shrink-0 transition-transform duration-200 ${
-                      isOpen ? "rotate-180 text-blue-600" : ""
-                    }`}
-                  />
-                </button>
-                {isOpen && (
-                  <div className="px-5 pb-5 text-xs sm:text-sm text-slate-600 leading-relaxed border-t border-slate-100 pt-3">
-                    {faq.a}
-                  </div>
-                )}
+          ].map((faq, idx) => (
+            <details
+              key={idx}
+              className="group border border-slate-200 rounded-2xl bg-white overflow-hidden transition-all shadow-2xs"
+            >
+              <summary className="w-full p-5 text-left flex items-center justify-between gap-4 font-semibold text-slate-900 hover:text-blue-600 transition cursor-pointer text-sm sm:text-base list-none select-none">
+                <span>{faq.q}</span>
+                <ChevronDown className="h-4 w-4 text-slate-400 shrink-0 transition-transform duration-200 group-open:rotate-180 group-open:text-blue-600" />
+              </summary>
+              <div className="px-5 pb-5 text-xs sm:text-sm text-slate-600 leading-relaxed border-t border-slate-100 pt-3">
+                {faq.a}
               </div>
-            );
-          })}
+            </details>
+          ))}
         </div>
       </section>
 

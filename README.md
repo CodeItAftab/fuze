@@ -1,6 +1,8 @@
-# Fuze ⚡📁
+# Fuze Drive ⚡📁
 
-> **Decentralized, Zero-Proxy Personal Cloud Storage Aggregator** — Pool free storage tiers across **Google Drive, Box, pCloud, OneDrive, and Dropbox** into a unified **42 GB** high-speed virtual drive with **100% direct client-to-cloud transfers** and **zero server bandwidth proxying**.
+> **Open-Source, Direct-to-Cloud Personal Storage Aggregator** — Pool free storage tiers across **Google Drive, Box, pCloud, OneDrive, and Dropbox** into a unified **42 GB** high-speed virtual drive with **direct client-to-cloud transfers** and zero server bandwidth proxying.
+
+🌐 **Live Demo & Web App**: [https://fuzedrive.tech](https://fuzedrive.tech)
 
 <p align="left">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" height="20" /></a>&nbsp;
@@ -169,8 +171,8 @@ All Virtual File System actions (file creation, folder nesting, renaming, moving
 | **Box** | **10 GB** | 250 MB | 120+ Formats (Images, Office, Code) | Box Chunked Upload API |
 | **pCloud** | **10 GB** | 10 GB | Images, Videos, PDFs, Audio | pCloud Direct REST Multipart (EU & US) |
 | **Microsoft OneDrive** | **5 GB** | 250 GB | Images, Videos, Office 365 Previews | Graph API Resumable Upload Session |
-| **Dropbox** | **2 GB** | 150 MB | Images, Videos, Docs | Dropbox Upload Sessions v2 |
-| **Total Unified Pool** | **42 GB** | — | **Universal** | **Direct Browser-to-Cloud Zero Transit** |
+| **Dropbox** | **2 GB** | 2 GB (Free quota limit; 350 GB via API) | Images, Videos, Docs | Dropbox Upload Sessions v2 |
+| **Total Unified Pool** | **42 GB** | — | **Universal** | **Direct Browser-to-Cloud Uploads** |
 
 ---
 
@@ -472,11 +474,11 @@ Fuze is designed for **zero-cost, 24/7 deployment** with no credit card required
 
 1. **Frontend (`web`)**:
    * Deploy to **Vercel** (Hobby plan, 100% free forever).
-   * Set custom domain to `fuze.aftabalam.me`.
+   * Set custom domain to `fuzedrive.tech`.
    * Configure environment variables:
-     * `NEXT_PUBLIC_API_URL=https://api.fuze.aftabalam.me`
-     * `NEXT_PUBLIC_WS_URL=wss://api.fuze.aftabalam.me`
-     * `NEXT_PUBLIC_APP_URL=https://fuze.aftabalam.me`
+     * `NEXT_PUBLIC_API_URL=https://api.fuzedrive.tech`
+     * `NEXT_PUBLIC_WS_URL=wss://api.fuzedrive.tech`
+     * `NEXT_PUBLIC_APP_URL=https://fuzedrive.tech`
 2. **Backend (`server`)**:
    * Deploy to **Render** (Free Web Service) or a container host.
    * Add a free keep-alive monitor via [cron-job.org](https://cron-job.org) hitting `/health` every 10 minutes to prevent sleeping.
