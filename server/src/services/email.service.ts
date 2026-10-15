@@ -28,7 +28,7 @@ export class EmailService {
   }
 
   private static getSenderEmail(): string {
-    return process.env.EMAIL_FROM || "Fuze Cloud <onboarding@resend.dev>";
+    return process.env.EMAIL_FROM || "Fuze Drive <noreply@fuzedrive.tech>";
   }
 
   /**

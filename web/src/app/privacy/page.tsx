@@ -251,10 +251,17 @@ export default function PrivacyPolicyPage() {
                 <p className="text-xs text-slate-700 mt-1">
                   Email:{" "}
                   <a
-                    href="mailto:aftabalamdlm@gmail.com"
+                    href="mailto:privacy@fuzedrive.tech"
                     className="text-blue-600 hover:underline font-semibold"
                   >
-                    aftabalamdlm@gmail.com
+                    privacy@fuzedrive.tech
+                  </a>{" "}
+                  or{" "}
+                  <a
+                    href="mailto:support@fuzedrive.tech"
+                    className="text-blue-600 hover:underline font-semibold"
+                  >
+                    support@fuzedrive.tech
                   </a>
                 </p>
               </div>

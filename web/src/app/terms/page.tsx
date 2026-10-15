@@ -103,10 +103,10 @@ export default function TermsOfServicePage() {
               <p>
                 For questions regarding these Terms, please contact us at:{" "}
                 <a
-                  href="mailto:aftabalamdlm@gmail.com"
+                  href="mailto:support@fuzedrive.tech"
                   className="text-blue-600 hover:underline font-medium"
                 >
-                  aftabalamdlm@gmail.com
+                  support@fuzedrive.tech
                 </a>
               </p>
             </section>
