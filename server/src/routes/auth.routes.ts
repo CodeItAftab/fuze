@@ -77,7 +77,7 @@ function getRequestClientOrigin(request: FastifyRequest): string {
   ) {
     return origin;
   }
-  return process.env.CLIENT_ORIGIN || `https://app.${rootDomain}`;
+  return process.env.CLIENT_ORIGIN || `https://${rootDomain}`;
 }
 
 export async function authRoutes(fastify: FastifyInstance) {

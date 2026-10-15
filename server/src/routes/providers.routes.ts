@@ -44,7 +44,7 @@ function getClientOrigin(request: FastifyRequest): string {
       }
     } catch {}
   }
-  return process.env.CLIENT_ORIGIN || `https://app.${rootDomain}`;
+  return process.env.CLIENT_ORIGIN || `https://${rootDomain}`;
 }
 
 export async function providerRoutes(fastify: FastifyInstance) {

@@ -8,13 +8,19 @@ export function middleware(request: NextRequest) {
     request.headers.get("host") ||
     "";
   const hostname = host.split(":")[0].toLowerCase();
-  const isDashboardSubdomain =
+
+  // If someone visits old app/dashboard subdomains, redirect them to main domain
+  if (
     hostname.startsWith("app.") ||
     hostname.startsWith("dashboard.") ||
-    hostname.startsWith("drive.");
+    hostname.startsWith("drive.")
+  ) {
+    const targetUrl = new URL(request.nextUrl.pathname, "https://fuzedrive.tech");
+    targetUrl.search = request.nextUrl.search;
+    return NextResponse.redirect(targetUrl, 308);
+  }
 
   const { pathname } = request.nextUrl;
-  const isRootPath = pathname === "/";
   const isDashboardRoute = pathname.startsWith("/dashboard");
   const isAuthRoute =
     pathname.startsWith("/login") || pathname.startsWith("/register");
@@ -27,25 +33,14 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  // 2. Subdomain routing: if accessing dashboard subdomain root (dashboard.fuzedrive.tech/)
-  if (isDashboardSubdomain && isRootPath) {
-    if (sessionCookie) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    } else {
-      const loginUrl = new URL("/login", request.url);
-      loginUrl.searchParams.set("redirect", "/dashboard");
-      return NextResponse.redirect(loginUrl);
-    }
-  }
-
-  // 3. If visiting /dashboard without session cookie -> Instant redirect to /login
+  // 2. If visiting /dashboard without session cookie -> Instant redirect to /login
   if (isDashboardRoute && !sessionCookie) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // 4. If already authenticated and visiting /login or /register -> Instant redirect to /dashboard
+  // 3. If already authenticated and visiting /login or /register -> Instant redirect to /dashboard
   if (isAuthRoute && sessionCookie && !isRevoked) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }

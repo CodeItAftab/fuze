@@ -366,7 +366,7 @@ export default function HomePage() {
             </div>
             <div className="bg-white border border-slate-200 rounded-lg px-2.5 sm:px-4 py-1 text-[11px] sm:text-xs text-slate-500 font-mono flex items-center gap-1.5 sm:gap-2 max-w-[210px] sm:max-w-72 truncate justify-center shadow-2xs">
               <Lock className="h-3 w-3 text-emerald-600 shrink-0" />{" "}
-              <span className="truncate">https://dashboard.fuzedrive.tech</span>
+              <span className="truncate">https://fuzedrive.tech/dashboard</span>
             </div>
             <div className="text-[11px] font-semibold text-slate-400 hidden sm:block shrink-0">
               Fuze Drive v1.0
