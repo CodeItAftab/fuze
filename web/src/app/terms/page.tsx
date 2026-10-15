@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { FuzeLogo } from "@/components/brand/FuzeLogo";
-import { FileText, ArrowLeft, Shield } from "lucide-react";
+import { MarketingHeader } from "@/components/marketing/MarketingHeader";
+import { MarketingFooter } from "@/components/marketing/MarketingFooter";
+import { FileText, Shield } from "lucide-react";
 
 export const metadata = {
   title: "Terms of Service | Fuze Drive",
@@ -11,22 +12,8 @@ export default function TermsOfServicePage() {
   const lastUpdated = "October 15, 2026";
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 antialiased">
-      {/* Header */}
-      <header className="border-b border-slate-200 bg-white/80 backdrop-blur-md sticky top-0 z-30">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <FuzeLogo height={28} />
-          </Link>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 transition"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            <span>Back to Home</span>
-          </Link>
-        </div>
-      </header>
+    <div className="min-h-screen bg-slate-50 text-slate-800 antialiased flex flex-col justify-between">
+      <MarketingHeader />
 
       {/* Main Content */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-12">
@@ -113,6 +100,8 @@ export default function TermsOfServicePage() {
           </div>
         </div>
       </main>
+
+      <MarketingFooter />
     </div>
   );
 }

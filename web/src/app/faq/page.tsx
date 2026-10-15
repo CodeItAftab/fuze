@@ -1,15 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { FuzeLogo } from "@/components/brand/FuzeLogo";
+import { MarketingHeader } from "@/components/marketing/MarketingHeader";
+import { MarketingFooter } from "@/components/marketing/MarketingFooter";
+import { MarketingCta } from "@/components/marketing/MarketingCta";
 import {
-  ArrowLeft,
-  CheckCircle2,
   HelpCircle,
-  Shield,
-  Zap,
-  HardDrive,
-  Lock,
-  ArrowRight,
   Clock,
   ChevronDown,
 } from "lucide-react";
@@ -90,30 +85,7 @@ export default function FaqPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 antialiased flex flex-col justify-between">
-      {/* Navigation */}
-      <header className="border-b border-slate-200 bg-white/80 backdrop-blur-md sticky top-0 z-30">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <FuzeLogo height={28} />
-          </Link>
-
-          <div className="flex items-center gap-4">
-            <Link
-              href="/"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 transition"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Back to Home</span>
-            </Link>
-            <Link
-              href="/register"
-              className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition shadow-xs"
-            >
-              Get Started Free
-            </Link>
-          </div>
-        </div>
-      </header>
+      <MarketingHeader />
 
       {/* Main Container */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-12 flex-1">
@@ -180,50 +152,17 @@ export default function FaqPage() {
         </div>
 
         {/* CTA Box */}
-        <div className="mt-12 p-8 rounded-3xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg space-y-5 text-center">
-          <h3 className="text-2xl sm:text-3xl font-extrabold m-0">
-            Still Have Questions?
-          </h3>
-          <p className="text-blue-100 text-sm sm:text-base max-w-xl mx-auto m-0">
-            Experience Fuze Drive for yourself. Set up your unified 42 GB personal cloud in under 3 minutes with zero obligation.
-          </p>
-          <div className="pt-2">
-            <Link
-              href="/register"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-blue-700 font-bold text-sm hover:bg-blue-50 transition shadow-sm"
-            >
-              <span>Get Started Free</span>
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
+        <div className="mt-12">
+          <MarketingCta
+            title="Still Have Questions?"
+            description="Experience Fuze Drive for yourself. Set up your unified 42 GB personal cloud in under 3 minutes with zero obligation."
+            buttonText="Get Started Free"
+            buttonHref="/register"
+          />
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200 py-8 px-4 sm:px-6 text-xs text-slate-500 bg-white mt-12">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <FuzeLogo variant="icon" height={20} />
-            <span className="font-semibold text-slate-700">Fuze Drive</span>
-            <span>• MIT Licensed Open Source</span>
-          </div>
-
-          <div className="flex items-center gap-4 text-slate-600 font-medium">
-            <Link href="/" className="hover:text-slate-900 transition">
-              Home
-            </Link>
-            <Link href="/how-it-works" className="hover:text-slate-900 transition">
-              How It Works
-            </Link>
-            <Link href="/compare/multcloud-alternative" className="hover:text-slate-900 transition">
-              MultCloud Alternative
-            </Link>
-            <Link href="/privacy" className="hover:text-slate-900 transition">
-              Privacy Policy
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <MarketingFooter />
     </div>
   );
 }

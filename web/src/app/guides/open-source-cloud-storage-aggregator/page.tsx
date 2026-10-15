@@ -1,21 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { FuzeLogo } from "@/components/brand/FuzeLogo";
 import {
-  ArrowLeft,
-  CheckCircle2,
-  HardDrive,
-  Cloud,
-  Zap,
   Shield,
-  ArrowRight,
+  Zap,
+  HardDrive,
   Clock,
-  Layers,
-  Sparkles,
   Code2,
   Terminal,
-  Cpu,
 } from "lucide-react";
+import { MarketingHeader } from "@/components/marketing/MarketingHeader";
+import { MarketingFooter } from "@/components/marketing/MarketingFooter";
+import { MarketingCta } from "@/components/marketing/MarketingCta";
 
 export const metadata: Metadata = {
   title: "Open-Source Cloud Storage Aggregator: The Complete Guide (2026) | Fuze Drive",
@@ -39,32 +34,8 @@ export default function OpenSourceAggregatorGuidePage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 antialiased flex flex-col justify-between">
-      {/* Navigation */}
-      <header className="border-b border-slate-200 bg-white/80 backdrop-blur-md sticky top-0 z-30">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <FuzeLogo height={28} />
-          </Link>
+      <MarketingHeader />
 
-          <div className="flex items-center gap-4">
-            <Link
-              href="/"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 transition"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Back to Home</span>
-            </Link>
-            <Link
-              href="/register"
-              className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition shadow-xs"
-            >
-              Get Started Free
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Container */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-12 flex-1">
         {/* Breadcrumb */}
         <nav className="flex items-center gap-2 text-xs text-slate-500 mb-6 font-medium">
@@ -239,51 +210,18 @@ export default function OpenSourceAggregatorGuidePage() {
           </section>
 
           {/* CTA Box */}
-          <div className="mt-12 p-8 rounded-3xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg space-y-5 text-center">
-            <h3 className="text-2xl sm:text-3xl font-extrabold m-0">
-              Experience Modern Open-Source Cloud Aggregation
-            </h3>
-            <p className="text-blue-100 text-sm sm:text-base max-w-xl mx-auto m-0">
-              42 GB of free personal cloud storage. Zero proxy servers, zero data caps, and 100% open-source transparency.
-            </p>
-            <div className="pt-2">
-              <Link
-                href="/register"
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-blue-700 font-bold text-sm hover:bg-blue-50 transition shadow-sm"
-              >
-                <span>Launch Fuze Drive Free</span>
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
+          <div className="mt-12">
+            <MarketingCta
+              title="Experience Modern Open-Source Cloud Aggregation"
+              description="42 GB of free personal cloud storage. Zero proxy servers, zero data caps, and 100% open-source transparency."
+              buttonText="Launch Fuze Drive Free"
+              buttonHref="/register"
+            />
           </div>
         </article>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200 py-8 px-4 sm:px-6 text-xs text-slate-500 bg-white mt-12">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <FuzeLogo variant="icon" height={20} />
-            <span className="font-semibold text-slate-700">Fuze Drive</span>
-            <span>• MIT Licensed Open Source</span>
-          </div>
-
-          <div className="flex items-center gap-4 text-slate-600 font-medium">
-            <Link href="/" className="hover:text-slate-900 transition">
-              Home
-            </Link>
-            <Link href="/compare/multcloud-alternative" className="hover:text-slate-900 transition">
-              MultCloud Alternative
-            </Link>
-            <Link href="/guides/combine-google-drive-onedrive-dropbox" className="hover:text-slate-900 transition">
-              Combine Clouds
-            </Link>
-            <Link href="/privacy" className="hover:text-slate-900 transition">
-              Privacy Policy
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <MarketingFooter />
     </div>
   );
 }
