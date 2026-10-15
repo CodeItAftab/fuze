@@ -197,57 +197,59 @@ export function SettingsView() {
           </div>
         </div>
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 max-w-4xl w-full mx-auto space-y-6">
-          <div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-              Account Settings
-            </h1>
-            <p className="text-xs text-slate-500 mt-1">
-              Manage your personal profile, credentials, and active sessions.
-            </p>
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-24 sm:pb-8 w-full">
+          <div className="max-w-3xl xl:max-w-4xl space-y-6">
+            <div>
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+                Account Settings
+              </h1>
+              <p className="text-xs text-slate-500 mt-1">
+                Manage your personal profile, credentials, and active sessions.
+              </p>
+            </div>
+
+            <ProfileSection
+              user={user}
+              onUpdateProfile={handleUpdateProfile}
+              onResendVerification={handleResendVerification}
+            />
+
+            <PasswordSection
+              onChangePassword={handleChangePassword}
+            />
+
+            <SessionsSection
+              sessions={sessions}
+              isLoading={isLoadingSessions}
+              revokingSessionId={revokingSessionId}
+              isRevokingAll={isRevokingSessions}
+              sessionMsg={sessionMsg}
+              onClearSessionMsg={() => setSessionMsg(null)}
+              onRevokeSession={handleRevokeSession}
+              onRevokeOtherSessions={handleRevokeAllSessions}
+              onSignOut={logout}
+            />
+
+            <DangerZoneSection
+              onOpenDeleteModal={() => setShowDeleteModal(true)}
+            />
+
+            <DeleteAccountModal
+              isOpen={showDeleteModal}
+              deleteConfirmation={deleteConfirmation}
+              deleteCloudFiles={deleteCloudFiles}
+              isDeleting={isDeletingAccount}
+              deleteError={deleteError}
+              onConfirmationChange={setDeleteConfirmation}
+              onDeleteCloudFilesChange={setDeleteCloudFiles}
+              onClose={() => {
+                setShowDeleteModal(false);
+                setDeleteConfirmation("");
+                setDeleteError(null);
+              }}
+              onDelete={handleDeleteAccount}
+            />
           </div>
-
-          <ProfileSection
-            user={user}
-            onUpdateProfile={handleUpdateProfile}
-            onResendVerification={handleResendVerification}
-          />
-
-          <PasswordSection
-            onChangePassword={handleChangePassword}
-          />
-
-          <SessionsSection
-            sessions={sessions}
-            isLoading={isLoadingSessions}
-            revokingSessionId={revokingSessionId}
-            isRevokingAll={isRevokingSessions}
-            sessionMsg={sessionMsg}
-            onClearSessionMsg={() => setSessionMsg(null)}
-            onRevokeSession={handleRevokeSession}
-            onRevokeOtherSessions={handleRevokeAllSessions}
-            onSignOut={logout}
-          />
-
-          <DangerZoneSection
-            onOpenDeleteModal={() => setShowDeleteModal(true)}
-          />
-
-          <DeleteAccountModal
-            isOpen={showDeleteModal}
-            deleteConfirmation={deleteConfirmation}
-            deleteCloudFiles={deleteCloudFiles}
-            isDeleting={isDeletingAccount}
-            deleteError={deleteError}
-            onConfirmationChange={setDeleteConfirmation}
-            onDeleteCloudFilesChange={setDeleteCloudFiles}
-            onClose={() => {
-              setShowDeleteModal(false);
-              setDeleteConfirmation("");
-              setDeleteError(null);
-            }}
-            onDelete={handleDeleteAccount}
-          />
         </main>
       </div>
     </div>

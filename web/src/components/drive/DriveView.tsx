@@ -484,7 +484,7 @@ export function DriveView({
               clearSelection();
             }
           }}
-          className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-28 sm:pb-28 lg:pb-8 w-full max-w-7xl"
+          className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-28 sm:pb-28 lg:pb-8 w-full"
         >
           <DriveToolbar
             searchQuery={searchQuery}

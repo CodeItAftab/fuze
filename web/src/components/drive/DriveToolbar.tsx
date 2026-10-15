@@ -99,7 +99,7 @@ export function DriveToolbar({
           <FuzeLogo variant="icon" height={24} />
         </div>
 
-        <div className="h-8 flex items-center gap-2 text-slate-400 bg-slate-100/70 border border-slate-200/80 px-3 rounded-lg flex-1 sm:max-w-xs md:max-w-sm transition-all focus-within:bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/10 min-w-0">
+        <div className="h-8 flex items-center gap-2 text-slate-400 bg-slate-100/70 border border-slate-200/80 px-3 rounded-lg flex-1 sm:max-w-sm md:max-w-md lg:max-w-lg transition-all focus-within:bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/10 min-w-0">
           <Search className="h-3.5 w-3.5 text-slate-400 shrink-0" />
           <input
             ref={searchInputRef}
