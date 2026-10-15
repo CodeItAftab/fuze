@@ -309,74 +309,8 @@ export class EmailService {
       }
     }
 
-    // 3. Fallback: Gmail REST API via HTTPS Port 443 (if explicitly configured)
-    const gmailUser = process.env.GMAIL_USER;
-    const gmailClientId = process.env.GMAIL_CLIENT_ID;
-    const gmailClientSecret = process.env.GMAIL_CLIENT_SECRET;
-    const gmailRefreshToken = process.env.GMAIL_REFRESH_TOKEN;
 
-    if (gmailUser && gmailClientId && gmailClientSecret && gmailRefreshToken) {
-      try {
-        const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            client_id: gmailClientId,
-            client_secret: gmailClientSecret,
-            refresh_token: gmailRefreshToken,
-            grant_type: "refresh_token",
-          }),
-          signal: AbortSignal.timeout(TIMEOUT_MS),
-        });
-
-        if (tokenRes.ok) {
-          const tokenData = (await tokenRes.json()) as { access_token?: string };
-          if (tokenData.access_token) {
-            const utf8Subject = `=?utf-8?B?${Buffer.from(opts.subject).toString("base64")}?=`;
-            const rawMessage = [
-              `From: "Fuze Drive" <${gmailUser}>`,
-              `To: ${opts.to}`,
-              `Subject: ${utf8Subject}`,
-              `MIME-Version: 1.0`,
-              `Content-Type: text/html; charset=utf-8`,
-              ``,
-              opts.html,
-            ].join("\r\n");
-
-            const encodedMessage = Buffer.from(rawMessage)
-              .toString("base64")
-              .replace(/\+/g, "-")
-              .replace(/\//g, "_")
-              .replace(/=+$/, "");
-
-            const sendRes = await fetch(
-              `https://gmail.googleapis.com/gmail/v1/users/me/messages/send`,
-              {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${tokenData.access_token}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ raw: encodedMessage }),
-                signal: AbortSignal.timeout(TIMEOUT_MS),
-              },
-            );
-
-            if (sendRes.ok) {
-              console.log(
-                `[EmailService] Gmail REST API delivered ${opts.devLabel} to ${opts.to}`,
-              );
-              return { success: true };
-            }
-          }
-        }
-      } catch (err: any) {
-        console.warn(`[EmailService] Gmail REST API call failed:`, err?.message);
-      }
-    }
-
-
-    // 4. Fallback / Dev Mode: Clean terminal preview with actionable link
+    // 3. Dev Mode / Local Fallback: Clean terminal preview with actionable link
     console.log(`\n======================================================`);
     console.log(`📨 [FUZE EMAIL SERVICE] ${opts.devLabel}`);
     console.log(`To:      ${opts.to}`);
@@ -385,9 +319,7 @@ export class EmailService {
       console.log(`Code:    👉 ${opts.devCode} 👈`);
     }
     console.log(`Link:    🔗 ${opts.devLink}`);
-    console.log(
-      `(Set GMAIL_USER & GMAIL_REFRESH_TOKEN or RESEND_API_KEY in .env to deliver real emails)`,
-    );
+    console.log(`(Set RESEND_API_KEY in .env to deliver real emails to inboxes)`);
     console.log(`======================================================\n`);
 
     return {
