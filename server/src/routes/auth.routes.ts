@@ -7,6 +7,7 @@ import { z } from "zod";
 import { EmailService } from "../services/email.service.js";
 import { VfsService } from "../services/vfs.service.js";
 import { socketManager } from "../websocket/socket-manager.js";
+import { validateLegitimateEmail } from "../utils/disposable-email.js";
 
 const registerSchema = z.object({
   name: z.string().trim().min(2).max(50),
@@ -87,6 +88,14 @@ export async function authRoutes(fastify: FastifyInstance) {
       }
 
       const { name, email, password } = parse.data;
+
+      // Validate that the email is from a genuine provider (blocks temporary/burner/fake domains)
+      const emailCheck = await validateLegitimateEmail(email);
+      if (!emailCheck.isValid) {
+        return reply.status(400).send({
+          error: emailCheck.reason || "Please provide a valid, permanent email address from a recognized provider.",
+        });
+      }
 
       const [existing] = await db
         .select({ id: users.id, emailVerified: users.emailVerified })

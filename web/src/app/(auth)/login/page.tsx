@@ -345,11 +345,33 @@ function LoginForm() {
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <>
-                      <span>{isRegister ? "Create Free Account" : "Sign In to Fuze"}</span>
+                      <span>{isRegister ? "Create Free Account" : "Sign In to Fuze Drive"}</span>
                       <ArrowRight className="h-4 w-4" />
                     </>
                   )}
                 </button>
+
+                {isRegister && (
+                  <p className="mt-3 text-center text-[11px] text-slate-500 leading-relaxed">
+                    By creating an account, you agree to our{" "}
+                    <Link
+                      href="/terms"
+                      target="_blank"
+                      className="font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                    >
+                      Terms of Service
+                    </Link>{" "}
+                    and{" "}
+                    <Link
+                      href="/privacy"
+                      target="_blank"
+                      className="font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                    >
+                      Privacy Policy
+                    </Link>
+                    .
+                  </p>
+                )}
               </form>
 
               <div className="mt-6 pt-5 border-t border-slate-100 flex items-center justify-center gap-2 text-[11px] text-slate-500">
