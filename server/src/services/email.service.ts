@@ -28,7 +28,11 @@ export class EmailService {
   }
 
   private static getSenderEmail(): string {
-    return process.env.EMAIL_FROM || "Fuze Drive <noreply@fuzedrive.tech>";
+    const envFrom = process.env.EMAIL_FROM?.trim();
+    if (envFrom && !envFrom.includes("onboarding@resend.dev")) {
+      return envFrom;
+    }
+    return "Fuze Drive <noreply@fuzedrive.tech>";
   }
 
   /**
@@ -238,89 +242,11 @@ export class EmailService {
   }): Promise<{ success: boolean; devLink?: string }> {
     const TIMEOUT_MS = 6000; // 6-second hard timeout for external network calls
 
-    // 1. Try Gmail REST API via HTTPS Port 443 (Zero custom domain required!)
-    const gmailUser = process.env.GMAIL_USER;
-    const gmailClientId = process.env.GMAIL_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
-    const gmailClientSecret = process.env.GMAIL_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET;
-    const gmailRefreshToken = process.env.GMAIL_REFRESH_TOKEN;
-
-    if (gmailUser && gmailClientId && gmailClientSecret && gmailRefreshToken) {
-      try {
-        // Exchange refresh token for fresh access token via HTTPS
-        const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            client_id: gmailClientId,
-            client_secret: gmailClientSecret,
-            refresh_token: gmailRefreshToken,
-            grant_type: "refresh_token",
-          }),
-          signal: AbortSignal.timeout(TIMEOUT_MS),
-        });
-
-        if (tokenRes.ok) {
-          const tokenData = (await tokenRes.json()) as { access_token?: string };
-          if (tokenData.access_token) {
-            // Build RFC 2822 email payload and base64url encode it
-            const utf8Subject = `=?utf-8?B?${Buffer.from(opts.subject).toString("base64")}?=`;
-            const rawMessage = [
-              `From: "Fuze Cloud" <${gmailUser}>`,
-              `To: ${opts.to}`,
-              `Subject: ${utf8Subject}`,
-              `MIME-Version: 1.0`,
-              `Content-Type: text/html; charset=utf-8`,
-              ``,
-              opts.html,
-            ].join("\r\n");
-
-            const encodedMessage = Buffer.from(rawMessage)
-              .toString("base64")
-              .replace(/\+/g, "-")
-              .replace(/\//g, "_")
-              .replace(/=+$/, "");
-
-            // Dispatch directly through Google's official Gmail REST API (Port 443)
-            const sendRes = await fetch(
-              `https://gmail.googleapis.com/gmail/v1/users/me/messages/send`,
-              {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${tokenData.access_token}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ raw: encodedMessage }),
-                signal: AbortSignal.timeout(TIMEOUT_MS),
-              },
-            );
-
-            if (sendRes.ok) {
-              console.log(
-                `[EmailService] Gmail REST API delivered ${opts.devLabel} to ${opts.to}`,
-              );
-              return { success: true };
-            } else {
-              const sendErr = await sendRes.text();
-              console.warn(
-                `[EmailService] Gmail API error (${sendRes.status}): ${sendErr}`,
-              );
-            }
-          }
-        } else {
-          const tokenErr = await tokenRes.text();
-          console.warn(
-            `[EmailService] Gmail OAuth token refresh failed (${tokenRes.status}): ${tokenErr}`,
-          );
-        }
-      } catch (err: any) {
-        console.warn(`[EmailService] Gmail REST API call failed:`, err?.message);
-      }
-    }
-
-    // 2. Try Resend via HTTPS (Port 443)
+    // 1. Primary Production Dispatcher: Resend via HTTPS (Port 443)
     const resendApiKey = process.env.RESEND_API_KEY;
     if (resendApiKey) {
       try {
+        const sender = this.getSenderEmail();
         const res = await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: {
@@ -328,7 +254,7 @@ export class EmailService {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: this.getSenderEmail(),
+            from: sender,
             to: [opts.to],
             subject: opts.subject,
             html: opts.html,
@@ -337,7 +263,7 @@ export class EmailService {
         });
 
         if (res.ok) {
-          console.log(`[EmailService] Resend delivered ${opts.devLabel} to ${opts.to}`);
+          console.log(`[EmailService] Resend delivered ${opts.devLabel} to ${opts.to} from ${sender}`);
           return { success: true };
         } else {
           const err = await res.text();
@@ -348,10 +274,11 @@ export class EmailService {
       }
     }
 
-    // 3. Try Brevo via HTTPS (Port 443)
+    // 2. Secondary Fallback: Brevo via HTTPS (Port 443)
     const brevoApiKey = process.env.BREVO_API_KEY;
     if (brevoApiKey) {
       try {
+        const sender = this.getSenderEmail();
         const res = await fetch("https://api.brevo.com/v3/smtp/email", {
           method: "POST",
           headers: {
@@ -359,7 +286,10 @@ export class EmailService {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            sender: { email: "no-reply@fuze.cloud", name: "Fuze" },
+            sender: {
+              name: "Fuze Drive",
+              email: "noreply@fuzedrive.tech",
+            },
             to: [{ email: opts.to }],
             subject: opts.subject,
             htmlContent: opts.html,
@@ -378,6 +308,73 @@ export class EmailService {
         console.warn(`[EmailService] Brevo request failed:`, err?.message);
       }
     }
+
+    // 3. Fallback: Gmail REST API via HTTPS Port 443 (if explicitly configured)
+    const gmailUser = process.env.GMAIL_USER;
+    const gmailClientId = process.env.GMAIL_CLIENT_ID;
+    const gmailClientSecret = process.env.GMAIL_CLIENT_SECRET;
+    const gmailRefreshToken = process.env.GMAIL_REFRESH_TOKEN;
+
+    if (gmailUser && gmailClientId && gmailClientSecret && gmailRefreshToken) {
+      try {
+        const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: gmailClientId,
+            client_secret: gmailClientSecret,
+            refresh_token: gmailRefreshToken,
+            grant_type: "refresh_token",
+          }),
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+        });
+
+        if (tokenRes.ok) {
+          const tokenData = (await tokenRes.json()) as { access_token?: string };
+          if (tokenData.access_token) {
+            const utf8Subject = `=?utf-8?B?${Buffer.from(opts.subject).toString("base64")}?=`;
+            const rawMessage = [
+              `From: "Fuze Drive" <${gmailUser}>`,
+              `To: ${opts.to}`,
+              `Subject: ${utf8Subject}`,
+              `MIME-Version: 1.0`,
+              `Content-Type: text/html; charset=utf-8`,
+              ``,
+              opts.html,
+            ].join("\r\n");
+
+            const encodedMessage = Buffer.from(rawMessage)
+              .toString("base64")
+              .replace(/\+/g, "-")
+              .replace(/\//g, "_")
+              .replace(/=+$/, "");
+
+            const sendRes = await fetch(
+              `https://gmail.googleapis.com/gmail/v1/users/me/messages/send`,
+              {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${tokenData.access_token}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ raw: encodedMessage }),
+                signal: AbortSignal.timeout(TIMEOUT_MS),
+              },
+            );
+
+            if (sendRes.ok) {
+              console.log(
+                `[EmailService] Gmail REST API delivered ${opts.devLabel} to ${opts.to}`,
+              );
+              return { success: true };
+            }
+          }
+        }
+      } catch (err: any) {
+        console.warn(`[EmailService] Gmail REST API call failed:`, err?.message);
+      }
+    }
+
 
     // 4. Fallback / Dev Mode: Clean terminal preview with actionable link
     console.log(`\n======================================================`);
