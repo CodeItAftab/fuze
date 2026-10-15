@@ -53,33 +53,25 @@ function generateVerificationCode(): string {
 }
 
 function getCookieDomain(request: FastifyRequest): string | undefined {
-  if (process.env.COOKIE_DOMAIN) {
-    return process.env.COOKIE_DOMAIN;
-  }
-  const rootDomain = (process.env.APP_DOMAIN || "fuzedrive.tech").toLowerCase().trim();
-  const host = (request.headers.host || "").split(":")[0].toLowerCase().trim();
-
-  // Exact match on the domain or its official subdomains
-  if (host === rootDomain || host === `www.${rootDomain}` || host === `api.${rootDomain}`) {
-    return `.${rootDomain}`;
-  }
-  return undefined;
+  // Strictly read from environment variable (e.g. .fuzedrive.tech)
+  return process.env.COOKIE_DOMAIN || undefined;
 }
 
 function getRequestClientOrigin(request: FastifyRequest): string {
-  const rootDomain = (process.env.APP_DOMAIN || "fuzedrive.tech").toLowerCase().trim();
   const origin = ((request.headers.origin as string) || "").trim();
-  const allowed = new Set([
-    `https://${rootDomain}`,
-    `https://www.${rootDomain}`,
+  const envOrigins = new Set([
     process.env.CLIENT_ORIGIN,
+    process.env.CLIENT_URL,
+    ...(process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(",").map((s) => s.trim())
+      : []),
     process.env.NODE_ENV !== "production" ? "http://localhost:3000" : null,
   ].filter(Boolean) as string[]);
 
-  if (allowed.has(origin)) {
+  if (envOrigins.has(origin)) {
     return origin;
   }
-  return process.env.CLIENT_ORIGIN || `https://${rootDomain}`;
+  return process.env.CLIENT_ORIGIN || "http://localhost:3000";
 }
 
 export async function authRoutes(fastify: FastifyInstance) {

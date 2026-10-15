@@ -26,22 +26,24 @@ const app = Fastify({
 });
 
 async function main() {
-  // 1. CORS with credentials
-  const rootDomain = (process.env.APP_DOMAIN || "fuzedrive.tech").toLowerCase().trim();
-  const allowedOrigins = new Set([
+  // 1. CORS with credentials - Strictly configured from environment variables
+  const envOrigins = [
     process.env.CLIENT_ORIGIN,
     process.env.CLIENT_URL,
-    `https://${rootDomain}`,
-    `https://www.${rootDomain}`,
+    ...(process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(",").map((s) => s.trim())
+      : []),
     process.env.NODE_ENV !== "production" ? "http://localhost:3000" : null,
-  ].filter(Boolean) as string[]);
+  ].filter(Boolean) as string[];
+
+  const allowedOrigins = new Set(envOrigins);
 
   await app.register(cors, {
     origin: (origin, cb) => {
       // Allow requests with no origin (like mobile apps, curl, or same-origin server-to-server)
       if (!origin) return cb(null, true);
 
-      // Strict exact match - blocks lookalike domains like tempfuzedrive.tech
+      // Strict exact match against environment whitelist only
       if (allowedOrigins.has(origin)) {
         return cb(null, true);
       }
