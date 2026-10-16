@@ -28,6 +28,7 @@ import { AudioPreview } from "@/components/preview/AudioPreview";
 import { CodePreview } from "@/components/preview/CodePreview";
 import { SpreadsheetPreview } from "@/components/preview/SpreadsheetPreview";
 import { PdfPreview } from "@/components/preview/PdfPreview";
+import { DocxPreview } from "@/components/preview/DocxPreview";
 
 interface FilePreviewModalProps {
   item: VfsItem | { id: string; name: string; size: number; mimeType?: string };
@@ -88,6 +89,19 @@ export function FilePreviewModal({
     [mime, ext],
   );
 
+  const isDocx = useMemo(
+    () => ext === "docx" || mime.includes("wordprocessingml"),
+    [ext, mime],
+  );
+
+  const isExcel = useMemo(
+    () =>
+      ["xlsx", "xls", "xlsm", "xlsb"].includes(ext) ||
+      mime.includes("spreadsheetml") ||
+      mime.includes("ms-excel"),
+    [ext, mime],
+  );
+
   const isCsv = useMemo(
     () => ["csv", "tsv"].includes(ext) || mime.includes("csv"),
     [ext, mime],
@@ -110,8 +124,6 @@ export function FilePreviewModal({
         "md",
         "markdown",
         "xml",
-        "csv",
-        "tsv",
         "log",
         "sql",
         "sh",
@@ -149,12 +161,55 @@ export function FilePreviewModal({
 
         const targetStream = plan.streamUrl || plan.downloadUrl;
 
-        if ((isImage || isVideo || isAudio || isPdf) && targetStream) {
+        // Direct streams for audio/video/image
+        if ((isImage || isVideo || isAudio) && targetStream) {
           if (isMounted) {
             setObjectUrl(targetStream);
             setLoading(false);
           }
           return;
+        }
+
+        // For PDF, fetch blob or use targetStream
+        if (isPdf && targetStream) {
+          try {
+            const res = await fetch(targetStream, {
+              credentials: "include",
+              signal: controller.signal,
+            });
+            if (res.ok) {
+              const b = await res.blob();
+              if (isMounted) {
+                setBlob(b);
+                setObjectUrl(targetStream);
+                setLoading(false);
+              }
+              return;
+            }
+          } catch {
+            if (controller.signal.aborted) return;
+          }
+        }
+
+        // For DOCX or Excel, fetch blob from stream
+        if ((isDocx || isExcel) && targetStream) {
+          try {
+            const res = await fetch(targetStream, {
+              credentials: "include",
+              signal: controller.signal,
+            });
+            if (res.ok) {
+              const b = await res.blob();
+              if (isMounted) {
+                setBlob(b);
+                setObjectUrl(targetStream);
+                setLoading(false);
+              }
+              return;
+            }
+          } catch {
+            if (controller.signal.aborted) return;
+          }
         }
 
         if (isTextOrCode && targetStream) {
@@ -176,6 +231,7 @@ export function FilePreviewModal({
           }
         }
 
+        // Chunked assembly fallback (multi-cloud storage chunks)
         const { blob: downloadedBlob, objectUrl: createdUrl } =
           await downloadAndAssembleChunks(plan, {
             signal: controller.signal,
@@ -195,7 +251,7 @@ export function FilePreviewModal({
           setBlob(downloadedBlob);
           setObjectUrl(createdUrl);
 
-          if (isTextOrCode) {
+          if (isTextOrCode || isCsv) {
             const text = await downloadedBlob.text();
             setTextContent(text);
           }
@@ -215,7 +271,19 @@ export function FilePreviewModal({
       isMounted = false;
       controller.abort();
     };
-  }, [item.id, shareToken, password, isTextOrCode, isImage, isVideo, isAudio, isPdf]);
+  }, [
+    item.id,
+    shareToken,
+    password,
+    isTextOrCode,
+    isImage,
+    isVideo,
+    isAudio,
+    isPdf,
+    isDocx,
+    isExcel,
+    isCsv,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -241,7 +309,10 @@ export function FilePreviewModal({
     if (isImage) return <ImageIcon className="w-5 h-5 text-emerald-400" />;
     if (isVideo) return <VideoIcon className="w-5 h-5 text-indigo-400" />;
     if (isAudio) return <Music className="w-5 h-5 text-purple-400" />;
-    if (isCsv) return <FileSpreadsheet className="w-5 h-5 text-emerald-400" />;
+    if (isCsv || isExcel)
+      return <FileSpreadsheet className="w-5 h-5 text-emerald-400" />;
+    if (isDocx) return <FileText className="w-5 h-5 text-blue-400" />;
+    if (isPdf) return <FileText className="w-5 h-5 text-rose-400" />;
     if (isTextOrCode) return <FileCode className="w-5 h-5 text-blue-400" />;
     return <FileText className="w-5 h-5 text-slate-400" />;
   };
@@ -258,7 +329,10 @@ export function FilePreviewModal({
             {renderIcon()}
           </div>
           <div className="min-w-0">
-            <h3 className="font-semibold text-xs sm:text-sm truncate max-w-xs sm:max-w-md text-white" title={item.name}>
+            <h3
+              className="font-semibold text-xs sm:text-sm truncate max-w-xs sm:max-w-md text-white"
+              title={item.name}
+            >
               {item.name}
             </h3>
             <span className="text-[11px] text-slate-400 block font-mono">
@@ -314,7 +388,8 @@ export function FilePreviewModal({
               />
             </div>
             <span className="text-[10px] font-mono text-slate-400">
-              {formatBytes(progress.loaded)} of {formatBytes(progress.total)} ({progress.percent}%)
+              {formatBytes(progress.loaded)} of {formatBytes(progress.total)} (
+              {progress.percent}%)
             </span>
           </div>
         )}
@@ -350,20 +425,41 @@ export function FilePreviewModal({
             )}
 
             {isVideo && objectUrl && (
-              <VideoPreview src={objectUrl} mimeType={item.mimeType || undefined} />
+              <VideoPreview
+                src={objectUrl}
+                mimeType={item.mimeType || undefined}
+              />
             )}
 
             {isAudio && objectUrl && (
-              <AudioPreview src={objectUrl} fileName={item.name} mimeType={item.mimeType || undefined} />
+              <AudioPreview
+                src={objectUrl}
+                fileName={item.name}
+                mimeType={item.mimeType || undefined}
+              />
             )}
 
-            {isPdf && objectUrl && (
-              <PdfPreview src={objectUrl} fileName={item.name} />
+            {isPdf && (objectUrl || blob) && (
+              <PdfPreview
+                src={objectUrl || ""}
+                blob={blob}
+                fileName={item.name}
+              />
             )}
 
-            {isCsv && textContent !== null && (
+            {isDocx && (objectUrl || blob) && (
+              <DocxPreview
+                src={objectUrl || undefined}
+                blob={blob}
+                fileName={item.name}
+              />
+            )}
+
+            {(isCsv || isExcel) && (textContent !== null || blob || objectUrl) && (
               <SpreadsheetPreview
                 content={textContent}
+                blob={blob}
+                src={objectUrl || undefined}
                 fileName={item.name}
                 isTsv={ext === "tsv"}
               />
@@ -377,27 +473,36 @@ export function FilePreviewModal({
               />
             )}
 
-            {!isImage && !isVideo && !isAudio && !isPdf && !isTextOrCode && (
-              <div className="p-8 bg-slate-900 border border-slate-800 rounded-2xl text-center max-w-md space-y-4 shadow-2xl">
-                <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mx-auto">
-                  <FileText className="w-8 h-8" />
+            {!isImage &&
+              !isVideo &&
+              !isAudio &&
+              !isPdf &&
+              !isDocx &&
+              !isExcel &&
+              !isTextOrCode && (
+                <div className="p-8 bg-slate-900 border border-slate-800 rounded-2xl text-center max-w-md space-y-4 shadow-2xl">
+                  <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mx-auto">
+                    <FileText className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-white">
+                      {item.name}
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-1">
+                      No browser preview available for this file type (
+                      {formatBytes(item.size)})
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDownload}
+                    className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl transition cursor-pointer shadow-xs inline-flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download File
+                  </button>
                 </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-white">{item.name}</h4>
-                  <p className="text-xs text-slate-400 mt-1">
-                    No browser preview available for this file type ({formatBytes(item.size)})
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleDownload}
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl transition cursor-pointer shadow-xs inline-flex items-center gap-2"
-                >
-                  <Download className="w-4 h-4" />
-                  Download File
-                </button>
-              </div>
-            )}
+              )}
           </>
         )}
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { FuzeLogo } from "@/components/brand/FuzeLogo";
@@ -11,6 +11,7 @@ import { AudioPreview } from "@/components/preview/AudioPreview";
 import { CodePreview } from "@/components/preview/CodePreview";
 import { SpreadsheetPreview } from "@/components/preview/SpreadsheetPreview";
 import { PdfPreview } from "@/components/preview/PdfPreview";
+import { DocxPreview } from "@/components/preview/DocxPreview";
 import { FileDetailsDrawer } from "@/components/preview/FileDetailsDrawer";
 import {
   ArrowLeft,
@@ -70,19 +71,26 @@ export function FilePreviewClient() {
     mime.startsWith("audio/") ||
     ["mp3", "wav", "ogg", "m4a", "flac", "aac"].includes(ext);
   const isPdf = mime.includes("pdf") || ext === "pdf";
+  const isDocx = ext === "docx" || mime.includes("wordprocessingml");
+  const isExcel =
+    ["xlsx", "xls", "xlsm", "xlsb"].includes(ext) ||
+    mime.includes("spreadsheetml") ||
+    mime.includes("ms-excel");
   const isCsv = ["csv", "tsv"].includes(ext) || mime.includes("csv");
   const isTextOrCode =
     mime.startsWith("text/") ||
     [
-      "txt", "json", "js", "ts", "tsx", "jsx", "py", "html", "css",
-      "md", "markdown", "xml", "csv", "tsv", "log", "sql", "sh", "yaml", "yml",
+      "txt", "json", "js", "ts", "tsx", "jsx", "py", "html", "css", "scss",
+      "md", "markdown", "xml", "log", "sql", "sh", "bash", "yaml", "yml",
+      "c", "cpp", "rs", "go", "java", "env", "dockerfile",
     ].includes(ext);
 
   const renderIcon = () => {
     if (isImage) return <ImageIcon className="w-5 h-5 text-emerald-600" />;
     if (isVideo) return <VideoIcon className="w-5 h-5 text-blue-600" />;
     if (isAudio) return <Music className="w-5 h-5 text-purple-600" />;
-    if (isCsv) return <FileSpreadsheet className="w-5 h-5 text-amber-600" />;
+    if (isCsv || isExcel) return <FileSpreadsheet className="w-5 h-5 text-amber-600" />;
+    if (isDocx) return <FileText className="w-5 h-5 text-blue-600" />;
     if (isPdf) return <FileText className="w-5 h-5 text-rose-600" />;
     if (isTextOrCode) return <FileCode className="w-5 h-5 text-blue-600" />;
     return <FileText className="w-5 h-5 text-slate-500" />;
@@ -101,15 +109,19 @@ export function FilePreviewClient() {
 
         let previewUrl = data.streamUrl || data.downloadUrl;
 
-        if (!previewUrl && data.strategy === "chunked") {
+        // When chunked across multiple clouds or for DOCX/Excel/PDF, assemble chunks
+        const isDocOrSheet = isDocx || isExcel;
+        if (!previewUrl || isDocOrSheet || data.strategy === "chunked") {
           try {
             const assembled = await downloadAndAssembleChunks(data);
             if (!isMounted) return;
             setBlob(assembled.blob);
-            previewUrl = URL.createObjectURL(assembled.blob);
+            previewUrl = assembled.objectUrl;
           } catch (assembleErr: unknown) {
-            console.error("Chunk assembly failed:", assembleErr);
-            throw new Error("Unable to decrypt and reassemble file chunks.");
+            console.error("Chunk assembly fallback:", assembleErr);
+            if (!previewUrl) {
+              throw new Error("Unable to decrypt and reassemble file chunks.");
+            }
           }
         }
 
@@ -119,9 +131,10 @@ export function FilePreviewClient() {
 
         const shouldFetchText =
           data.file.mimeType?.startsWith("text/") ||
-          ["txt", "json", "js", "ts", "tsx", "jsx", "py", "html", "css", "md", "csv", "tsv", "log", "sql", "sh", "yaml", "yml"].includes(
-            data.file.name.split(".").pop()?.toLowerCase() || "",
-          );
+          [
+            "txt", "json", "js", "ts", "tsx", "jsx", "py", "html", "css", "scss",
+            "md", "csv", "tsv", "log", "sql", "sh", "yaml", "yml",
+          ].includes(data.file.name.split(".").pop()?.toLowerCase() || "");
 
         if (shouldFetchText && previewUrl) {
           try {
@@ -143,10 +156,10 @@ export function FilePreviewClient() {
         setIsLoading(false);
       });
 
-    return () => {
+  return () => {
       isMounted = false;
     };
-  }, [fileId]);
+  }, [fileId, isDocx, isExcel]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -287,23 +300,23 @@ export function FilePreviewClient() {
       </header>
 
       <div className="flex-1 flex overflow-hidden relative">
-        <main className="flex-1 flex flex-col items-center justify-center relative overflow-hidden p-4 sm:p-6 bg-[#f8fafc]">
+        <main className="flex-1 flex flex-col items-center justify-center relative overflow-hidden bg-slate-950">
           {isLoading && (
-            <div className="flex flex-col items-center justify-center gap-3 text-slate-500">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-              <div className="text-xs font-semibold text-slate-700">Connecting to cloud storage...</div>
+            <div className="flex flex-col items-center justify-center gap-3 text-slate-400">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+              <div className="text-xs font-semibold text-slate-200">Connecting to cloud storage...</div>
               <span className="text-[11px] text-slate-400">Negotiating direct media stream</span>
             </div>
           )}
 
           {error && (
-            <div className="p-8 bg-white border border-rose-200 rounded-2xl text-center max-w-md space-y-4 shadow-md">
-              <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+            <div className="p-8 bg-slate-900 border border-rose-500/30 rounded-2xl text-center max-w-md space-y-4 shadow-md m-auto">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
                 <AlertCircle className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="font-bold text-slate-900 text-sm">Preview Unavailable</h3>
-                <p className="text-xs text-slate-500 leading-relaxed mt-1">{error}</p>
+                <h3 className="font-bold text-white text-sm">Preview Unavailable</h3>
+                <p className="text-xs text-slate-400 leading-relaxed mt-1">{error}</p>
               </div>
               <button
                 type="button"
@@ -331,12 +344,18 @@ export function FilePreviewClient() {
               )}
 
               {isPdf && (
-                <PdfPreview src={streamSrc} fileName={plan.file.name} />
+                <PdfPreview src={streamSrc} blob={blob} fileName={plan.file.name} />
               )}
 
-              {isCsv && textContent !== null && (
+              {isDocx && (
+                <DocxPreview src={streamSrc} blob={blob} fileName={plan.file.name} />
+              )}
+
+              {(isCsv || isExcel) && (
                 <SpreadsheetPreview
                   content={textContent}
+                  blob={blob}
+                  src={streamSrc}
                   fileName={plan.file.name}
                   isTsv={ext === "tsv"}
                 />
@@ -350,14 +369,14 @@ export function FilePreviewClient() {
                 />
               )}
 
-              {!isImage && !isVideo && !isAudio && !isPdf && !isTextOrCode && (
-                <div className="p-8 sm:p-10 bg-white border border-slate-200 rounded-3xl text-center max-w-md space-y-4 shadow-xl">
-                  <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center mx-auto">
+              {!isImage && !isVideo && !isAudio && !isPdf && !isDocx && !isExcel && !isTextOrCode && (
+                <div className="p-8 sm:p-10 bg-slate-900 border border-slate-800 rounded-3xl text-center max-w-md space-y-4 shadow-xl">
+                  <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center mx-auto">
                     <FileText className="w-8 h-8" />
                   </div>
                   <div>
-                    <h4 className="text-base font-bold text-slate-900">{plan.file.name}</h4>
-                    <p className="text-xs text-slate-500 mt-1">
+                    <h4 className="text-base font-bold text-white">{plan.file.name}</h4>
+                    <p className="text-xs text-slate-400 mt-1">
                       No direct browser preview for this file format ({formatBytes(plan.file.size)}).
                     </p>
                   </div>
