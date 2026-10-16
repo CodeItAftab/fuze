@@ -9,7 +9,6 @@ import {
   Download,
   Loader2,
   AlertCircle,
-  FileText,
   RotateCcw,
 } from "lucide-react";
 
@@ -85,38 +84,30 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
   const resetZoom = () => setScale(1);
 
   return (
-    <div className="w-full h-full flex flex-col bg-slate-900 text-slate-100 select-none overflow-hidden relative font-sans">
-      {/* Toolbar */}
-      <header className="h-12 px-4 bg-slate-950/90 border-b border-slate-800 backdrop-blur-md flex items-center justify-between z-20 shrink-0 text-xs">
-        <div className="flex items-center gap-2 text-slate-300">
-          <FileText className="w-4 h-4 text-blue-400" />
-          <span className="font-semibold truncate max-w-xs">{fileName}</span>
-          <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
-            DOCX
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
+    <div className="w-full h-full flex flex-col bg-slate-950 text-slate-100 select-none overflow-hidden relative font-sans">
+      {/* Floating Bottom Control Bar */}
+      {!loading && !error && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-md border border-slate-700/60 shadow-2xl text-white text-xs">
           <button
             type="button"
             onClick={zoomOut}
-            disabled={scale <= 0.5 || loading}
-            className="p-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 rounded-lg text-slate-300 hover:text-white transition cursor-pointer border border-slate-800"
-            title="Zoom Out"
+            disabled={scale <= 0.5}
+            className="p-1.5 hover:bg-white/10 disabled:opacity-30 rounded-full transition cursor-pointer"
+            title="Zoom Out (-)"
           >
             <ZoomOut className="w-4 h-4" />
           </button>
 
-          <span className="text-[11px] font-mono text-slate-300 min-w-12 text-center">
+          <span className="text-[11px] font-mono text-slate-300 min-w-10 text-center">
             {Math.round(scale * 100)}%
           </span>
 
           <button
             type="button"
             onClick={zoomIn}
-            disabled={scale >= 2.5 || loading}
-            className="p-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 rounded-lg text-slate-300 hover:text-white transition cursor-pointer border border-slate-800"
-            title="Zoom In"
+            disabled={scale >= 2.5}
+            className="p-1.5 hover:bg-white/10 disabled:opacity-30 rounded-full transition cursor-pointer"
+            title="Zoom In (+)"
           >
             <ZoomIn className="w-4 h-4" />
           </button>
@@ -125,29 +116,28 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
             <button
               type="button"
               onClick={resetZoom}
-              className="p-1.5 bg-slate-900 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition cursor-pointer border border-slate-800"
+              className="p-1.5 hover:bg-white/10 rounded-full text-slate-300 transition cursor-pointer"
               title="Reset Zoom"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
           )}
 
-          <div className="h-4 w-px bg-slate-800 mx-1" />
+          <div className="w-px h-4 bg-slate-700 mx-1" />
 
           <button
             type="button"
             onClick={() => window.print()}
-            disabled={loading}
-            className="p-1.5 bg-slate-900 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition cursor-pointer border border-slate-800"
+            className="p-1.5 hover:bg-white/10 rounded-full text-slate-300 transition cursor-pointer"
             title="Print Document"
           >
             <Printer className="w-4 h-4" />
           </button>
         </div>
-      </header>
+      )}
 
       {/* Main View Area */}
-      <main className="flex-1 overflow-auto p-4 sm:p-8 flex justify-center bg-slate-900/90 relative">
+      <main className="flex-1 overflow-auto p-4 sm:p-8 pb-24 flex justify-center bg-slate-950 relative">
         {loading && (
           <div className="flex flex-col items-center justify-center gap-3 text-slate-400 absolute inset-0">
             <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
@@ -158,7 +148,7 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
         )}
 
         {error && (
-          <div className="p-8 bg-slate-950 border border-rose-500/30 rounded-2xl max-w-md text-center space-y-3 shadow-2xl m-auto">
+          <div className="p-8 bg-slate-900 border border-rose-500/30 rounded-2xl max-w-md text-center space-y-3 shadow-2xl m-auto">
             <AlertCircle className="w-10 h-10 text-rose-500 mx-auto" />
             <h4 className="text-sm font-bold text-white">Preview unavailable</h4>
             <p className="text-xs text-slate-400 leading-relaxed">{error}</p>
