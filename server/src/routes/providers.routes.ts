@@ -17,7 +17,29 @@ import { providerMigrationQueue } from "../workers/provider-migration.worker.js"
 import IORedis from "ioredis";
 import { TokenService, ProviderAuthExpiredError } from "../services/token.service.js";
 
-const redis = new IORedis(process.env.REDIS_URL || "redis://localhost:6379");
+const redis = new IORedis(process.env.REDIS_URL || "redis://localhost:6379", {
+  lazyConnect: true,
+  maxRetriesPerRequest: 1,
+  enableOfflineQueue: false,
+});
+
+redis.on("error", (err) => {
+  console.warn(`[Redis:Providers] Warning: ${err.message}`);
+});
+
+// Dual-layer state: in-memory cache with TTL + best-effort Redis
+const localOAuthStates = new Map<string, { data: string; expiresAt: number }>();
+
+// Periodic in-memory cleanup of expired states
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of localOAuthStates.entries()) {
+    if (val.expiresAt < now) {
+      localOAuthStates.delete(key);
+    }
+  }
+}, 60 * 1000);
+
 const COOKIE_NAME = "fuze_session";
 
 function getClientOrigin(request: FastifyRequest): string {
@@ -195,20 +217,27 @@ export async function providerRoutes(fastify: FastifyInstance) {
 
     const state = crypto.randomBytes(24).toString("hex");
 
-    // Store CSRF state in Redis for 10 minutes linked to user
-    await redis.set(
-      `oauth_state:${state}`,
-      JSON.stringify({
-        userId,
-        provider,
-        clientOrigin,
-        returnUrl: "/dashboard/storage",
-        isReconnect,
-        existingEmail: existingProvider?.accountEmail,
-      }),
-      "EX",
-      600,
-    );
+    const statePayload = JSON.stringify({
+      userId,
+      provider,
+      clientOrigin,
+      returnUrl: "/dashboard/storage",
+      isReconnect,
+      existingEmail: existingProvider?.accountEmail,
+    });
+
+    // 1. Store locally in-memory with 10 min TTL
+    localOAuthStates.set(state, {
+      data: statePayload,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    });
+
+    // 2. Best-effort mirror to Redis if available
+    try {
+      await redis.set(`oauth_state:${state}`, statePayload, "EX", 600);
+    } catch (err: any) {
+      fastify.log.warn(`[OAuth] Redis state store failed (${err.message}). Using memory fallback.`);
+    }
 
     let authUrl = "";
 
@@ -336,13 +365,34 @@ export async function providerRoutes(fastify: FastifyInstance) {
         );
       }
 
-      const stateDataRaw = await redis.get(`oauth_state:${state}`);
+      let stateDataRaw: string | null = null;
+
+      // 1. Check local in-memory store
+      const local = localOAuthStates.get(state);
+      if (local) {
+        localOAuthStates.delete(state);
+        if (Date.now() < local.expiresAt) {
+          stateDataRaw = local.data;
+        }
+      }
+
+      // 2. Check Redis fallback if not found locally
+      if (!stateDataRaw) {
+        try {
+          stateDataRaw = await redis.get(`oauth_state:${state}`);
+          if (stateDataRaw) {
+            await redis.del(`oauth_state:${state}`).catch(() => {});
+          }
+        } catch (err: any) {
+          fastify.log.warn(`[OAuth] Redis state fetch failed (${err.message}).`);
+        }
+      }
+
       if (!stateDataRaw) {
         return reply.redirect(
           `${fallbackOrigin}/dashboard/storage?error=${encodeURIComponent("Authorization session expired. Please try connecting again.")}`,
         );
       }
-      await redis.del(`oauth_state:${state}`);
 
       const stateObj = JSON.parse(stateDataRaw) as {
         userId: string;

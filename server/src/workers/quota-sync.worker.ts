@@ -1,16 +1,8 @@
-import { Worker, Queue, Job } from "bullmq";
 import { db, providerIdentities } from "../db/index.js";
 import { eq } from "drizzle-orm";
 import { TokenService } from "../services/token.service.js";
 import { getStorageAdapter } from "../adapters/factory.js";
 import { socketManager } from "../websocket/socket-manager.js";
-import IORedis from "ioredis";
-
-const redis = new IORedis(process.env.REDIS_URL || "redis://localhost:6379", {
-  maxRetriesPerRequest: null,
-});
-
-export const quotaQueue = new Queue("quota-sync", { connection: redis });
 
 function formatBytes(bytes: number) {
   if (bytes === 0) return "0 B";
@@ -20,21 +12,26 @@ function formatBytes(bytes: number) {
   return `${mb.toFixed(1)} MB`;
 }
 
-export const quotaWorker = new Worker(
-  "quota-sync",
-  async (job: Job) => {
-    const startedAt = Date.now();
-    console.log(
-      `[Worker: QuotaSync] 📊 Job #${job.id} started: Scanning connected cloud providers...`,
-    );
+/**
+ * Periodically syncs storage usage across all connected cloud provider accounts.
+ * Runs on an in-memory Node timer — 0 Redis commands consumed.
+ */
+export async function runQuotaSyncTask(): Promise<{
+  syncedCount: number;
+  total: number;
+  durationMs?: number;
+}> {
+  const startedAt = Date.now();
+  console.log(`[Worker: QuotaSync] 📊 Scanning connected cloud providers...`);
 
+  try {
     const identities = await db.select().from(providerIdentities);
 
     if (identities.length === 0) {
       console.log(
         `[Worker: QuotaSync] ℹ️ No connected cloud providers found in database. (${Date.now() - startedAt}ms)`,
       );
-      return { syncedCount: 0 };
+      return { syncedCount: 0, total: 0 };
     }
 
     console.log(
@@ -84,21 +81,44 @@ export const quotaWorker = new Worker(
       total: identities.length,
       durationMs: duration,
     };
-  },
-  { connection: redis },
-);
-
-quotaWorker.on("completed", (job) => {
-  console.log(`[Worker: QuotaSync] Job #${job.id} completed.`);
-});
-
-quotaWorker.on("failed", (job, err) => {
-  console.error(`[Worker: QuotaSync] ❌ Job #${job?.id} failed:`, err.message);
-});
-
-export async function scheduleQuotaSyncJobs() {
-  await quotaQueue.upsertJobScheduler("hourly-quota-sync", {
-    every: 60 * 60 * 1000, // Sync quotas every hour
-  });
-  console.log("   - Quota Sync Scheduler: Registered (runs every 60 mins)");
+  } catch (err: any) {
+    console.error(`[Worker: QuotaSync] ❌ Error running quota sync:`, err?.message);
+    return { syncedCount: 0, total: 0 };
+  }
 }
+
+let quotaIntervalTimer: NodeJS.Timeout | null = null;
+
+export function startQuotaSyncScheduler() {
+  console.log(
+    "   - Quota Sync Scheduler: Registered (runs every 60 mins via in-memory timer, 0 Redis requests)",
+  );
+
+  // Run initial pass after 10 seconds to allow server to boot up
+  setTimeout(() => {
+    runQuotaSyncTask().catch((err) =>
+      console.error("[Worker: QuotaSync] Initial sync failed:", err),
+    );
+  }, 10000);
+
+  // Periodic hourly run
+  quotaIntervalTimer = setInterval(() => {
+    runQuotaSyncTask().catch((err) =>
+      console.error("[Worker: QuotaSync] Scheduled sync failed:", err),
+    );
+  }, 60 * 60 * 1000);
+}
+
+export function stopQuotaSyncScheduler() {
+  if (quotaIntervalTimer) {
+    clearInterval(quotaIntervalTimer);
+    quotaIntervalTimer = null;
+    console.log("[Worker: QuotaSync] Scheduler stopped.");
+  }
+}
+
+// Backward compatibility stubs for BullMQ interfaces
+export const quotaWorker = {
+  close: async () => stopQuotaSyncScheduler(),
+};
+export const scheduleQuotaSyncJobs = async () => startQuotaSyncScheduler();

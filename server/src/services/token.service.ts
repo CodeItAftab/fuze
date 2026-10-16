@@ -5,7 +5,18 @@ import { decrypt, encrypt } from "../utils/crypto.js";
 import { getStorageAdapter } from "../adapters/factory.js";
 import { socketManager } from "../websocket/socket-manager.js";
 
-const redis = new IORedis(process.env.REDIS_URL || "redis://localhost:6379");
+const redis = new IORedis(process.env.REDIS_URL || "redis://localhost:6379", {
+  lazyConnect: true,
+  maxRetriesPerRequest: 1,
+  enableOfflineQueue: false,
+});
+
+redis.on("error", (err) => {
+  // Gracefully log without crashing process when Redis is rate limited or unavailable
+  console.warn(`[Redis:TokenService] Warning: ${err.message}`);
+});
+
+const localLocks = new Set<string>();
 
 export class ProviderAuthExpiredError extends Error {
   constructor(public provider: string, originalMessage: string) {
@@ -35,19 +46,37 @@ export class TokenService {
       return decrypt(identity.encryptedAccessToken);
     }
 
-    // Token expired -> Acquire Redis distributed lock
+    // Token expired -> Acquire distributed lock with in-memory fallback
     const lockKey = `lock:token_refresh:${providerIdentityId}`;
-    const acquired = await redis.set(lockKey, "1", "PX", 10000, "NX");
+    let redisLockAcquired = false;
+    let usedRedis = false;
 
-    if (!acquired) {
+    try {
+      const acquired = await redis.set(lockKey, "1", "PX", 10000, "NX");
+      usedRedis = true;
+      redisLockAcquired = acquired === "OK";
+    } catch {
+      // Redis is over quota or disconnected — fall back to in-memory lock
+      usedRedis = false;
+    }
+
+    if (usedRedis && !redisLockAcquired) {
       await new Promise((r) => setTimeout(r, 1000));
       return this.getValidAccessToken(providerIdentityId);
+    }
+
+    if (!usedRedis) {
+      if (localLocks.has(lockKey)) {
+        await new Promise((r) => setTimeout(r, 1000));
+        return this.getValidAccessToken(providerIdentityId);
+      }
+      localLocks.add(lockKey);
     }
 
     try {
       const refreshToken = decrypt(identity.encryptedRefreshToken);
 
-      // DYNAMIC ADAPTER LOOKUP (Google, OneDrive, Dropbox, or Box)
+      // DYNAMIC ADAPTER LOOKUP (Google, OneDrive, Dropbox, Box, pCloud)
       const adapter = getStorageAdapter(identity.provider);
       const refreshed = await adapter.refreshAccessToken(refreshToken);
 
@@ -105,7 +134,13 @@ export class TokenService {
       }
       throw err;
     } finally {
-      await redis.del(lockKey);
+      if (!usedRedis) {
+        localLocks.delete(lockKey);
+      } else {
+        try {
+          await redis.del(lockKey);
+        } catch {}
+      }
     }
   }
 
