@@ -9,6 +9,7 @@ import { ImagePreview } from "@/components/preview/ImagePreview";
 import { VideoPreview } from "@/components/preview/VideoPreview";
 import { AudioPreview } from "@/components/preview/AudioPreview";
 import { CodePreview } from "@/components/preview/CodePreview";
+import { MarkdownPreview } from "@/components/preview/MarkdownPreview";
 import { SpreadsheetPreview } from "@/components/preview/SpreadsheetPreview";
 import { PdfPreview } from "@/components/preview/PdfPreview";
 import { DocxPreview } from "@/components/preview/DocxPreview";
@@ -28,6 +29,7 @@ import {
   Minimize2,
   Info,
   Share2,
+  BookOpen,
 } from "lucide-react";
 import { formatBytes } from "@/lib/format";
 import {
@@ -71,19 +73,24 @@ export function FilePreviewClient() {
     mime.startsWith("audio/") ||
     ["mp3", "wav", "ogg", "m4a", "flac", "aac"].includes(ext);
   const isPdf = mime.includes("pdf") || ext === "pdf";
-  const isDocx = ext === "docx" || mime.includes("wordprocessingml");
+  const isDocx =
+    ["docx", "doc", "dotx", "dot"].includes(ext) ||
+    mime.includes("wordprocessingml") ||
+    mime.includes("msword");
   const isExcel =
     ["xlsx", "xls", "xlsm", "xlsb"].includes(ext) ||
     mime.includes("spreadsheetml") ||
     mime.includes("ms-excel");
   const isCsv = ["csv", "tsv"].includes(ext) || mime.includes("csv");
+  const isMarkdown = ["md", "markdown"].includes(ext);
   const isTextOrCode =
-    mime.startsWith("text/") ||
-    [
-      "txt", "json", "js", "ts", "tsx", "jsx", "py", "html", "css", "scss",
-      "md", "markdown", "xml", "log", "sql", "sh", "bash", "yaml", "yml",
-      "c", "cpp", "rs", "go", "java", "env", "dockerfile",
-    ].includes(ext);
+    (mime.startsWith("text/") ||
+      [
+        "txt", "json", "js", "ts", "tsx", "jsx", "py", "html", "css", "scss",
+        "xml", "log", "sql", "sh", "bash", "yaml", "yml",
+        "c", "cpp", "rs", "go", "java", "env", "dockerfile",
+      ].includes(ext)) &&
+    !isMarkdown;
 
   const renderIcon = () => {
     if (isImage) return <ImageIcon className="w-5 h-5 text-emerald-400" />;
@@ -92,6 +99,7 @@ export function FilePreviewClient() {
     if (isCsv || isExcel) return <FileSpreadsheet className="w-5 h-5 text-emerald-400" />;
     if (isDocx) return <FileText className="w-5 h-5 text-blue-400" />;
     if (isPdf) return <FileText className="w-5 h-5 text-rose-400" />;
+    if (isMarkdown) return <BookOpen className="w-5 h-5 text-blue-400" />;
     if (isTextOrCode) return <FileCode className="w-5 h-5 text-blue-400" />;
     return <FileText className="w-5 h-5 text-slate-400" />;
   };
@@ -113,14 +121,15 @@ export function FilePreviewClient() {
         const isDocOrSheet = isDocx || isExcel;
         if (!previewUrl || isDocOrSheet || data.strategy === "chunked") {
           try {
-            const assembled = await downloadAndAssembleChunks(data);
+            const { blob: assembledBlob, objectUrl: assembledUrl } =
+              await downloadAndAssembleChunks(data);
             if (!isMounted) return;
-            setBlob(assembled.blob);
-            previewUrl = assembled.objectUrl;
-          } catch (assembleErr: unknown) {
-            console.error("Chunk assembly fallback:", assembleErr);
+            setBlob(assembledBlob);
+            previewUrl = assembledUrl;
+          } catch (e: any) {
+            console.error("Assembly failed for preview:", e);
             if (!previewUrl) {
-              throw new Error("Unable to decrypt and reassemble file chunks.");
+              throw new Error(e.message || "Failed to assemble file chunks");
             }
           }
         }
@@ -133,7 +142,7 @@ export function FilePreviewClient() {
           data.file.mimeType?.startsWith("text/") ||
           [
             "txt", "json", "js", "ts", "tsx", "jsx", "py", "html", "css", "scss",
-            "md", "csv", "tsv", "log", "sql", "sh", "yaml", "yml",
+            "md", "markdown", "csv", "tsv", "log", "sql", "sh", "yaml", "yml",
           ].includes(data.file.name.split(".").pop()?.toLowerCase() || "");
 
         if (shouldFetchText && previewUrl) {
@@ -148,71 +157,74 @@ export function FilePreviewClient() {
           }
         }
 
-        if (isMounted) setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       })
-      .catch((err: unknown) => {
-        if (!isMounted) return;
-        setError(err instanceof Error ? err.message : "Failed to load file preview");
-        setIsLoading(false);
+      .catch((err) => {
+        if (isMounted) {
+          setError(err.message || "Failed to load file preview");
+          setIsLoading(false);
+        }
       });
 
     return () => {
       isMounted = false;
+      if (streamSrc && streamSrc.startsWith("blob:")) {
+        URL.revokeObjectURL(streamSrc);
+      }
     };
   }, [fileId, isDocx, isExcel]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (isFullscreen) {
-          void document.exitFullscreen?.().catch(() => {});
-          setIsFullscreen(false);
-        } else if (shareOpen) {
-          setShareOpen(false);
-        } else {
-          router.back();
-        }
+  const handleDownload = async () => {
+    if (!plan) return;
+    try {
+      if (blob) {
+        triggerBlobDownload(blob, plan.file.name);
+      } else {
+        const { blob: assembled } = await downloadAndAssembleChunks(plan);
+        triggerBlobDownload(assembled, plan.file.name);
       }
-      if (e.key === "f" && !["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName || "")) {
-        toggleFullscreen();
+    } catch (e) {
+      console.error("Download failed:", e);
+      if (streamSrc) {
+        window.open(streamSrc, "_blank");
       }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isFullscreen, shareOpen, router]);
+    }
+  };
 
   const toggleFullscreen = () => {
+    if (!containerRef.current) return;
     if (!document.fullscreenElement) {
-      void containerRef.current?.requestFullscreen?.().catch(() => {});
+      containerRef.current.requestFullscreen().catch((err) => {
+        console.error("Error attempting to enable fullscreen:", err);
+      });
       setIsFullscreen(true);
     } else {
-      void document.exitFullscreen?.().catch(() => {});
+      document.exitFullscreen().catch((err) => {
+        console.error("Error attempting to exit fullscreen:", err);
+      });
       setIsFullscreen(false);
     }
   };
 
-  const handleDownload = () => {
-    if (blob && plan) {
-      triggerBlobDownload(blob, plan.file.name);
-    } else if (plan?.downloadUrl) {
-      window.open(plan.downloadUrl, "_blank");
-    } else if (plan?.streamUrl) {
-      window.open(plan.streamUrl.replace("inline=true", "inline=false"), "_blank");
-    } else if (plan) {
-      void downloadAndAssembleChunks(plan).then(({ blob: b }) => {
-        setBlob(b);
-        triggerBlobDownload(b, plan.file.name);
-      });
-    }
-  };
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFsChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFsChange);
+    };
+  }, []);
 
   return (
     <div
       ref={containerRef}
-      className="h-screen flex flex-col bg-slate-950 text-white font-sans select-none overflow-hidden"
+      className="h-screen flex flex-col bg-slate-950 text-white font-sans select-none overflow-hidden print:h-auto print:w-auto print:overflow-visible print:bg-white"
     >
-      {/* Unified Sleek Dark Header */}
-      <header className="h-14 bg-slate-900/90 border-b border-slate-800/80 px-3 sm:px-6 flex items-center justify-between shrink-0 z-30 backdrop-blur-md">
+      {/* Unified Sleek Dark Header - Hidden when printing */}
+      <header className="no-print print-hidden print:hidden h-14 bg-slate-900/90 border-b border-slate-800/80 px-3 sm:px-6 flex items-center justify-between shrink-0 z-30 backdrop-blur-md">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-2">
           <button
             type="button"
@@ -236,7 +248,7 @@ export function FilePreviewClient() {
               </div>
               <div className="min-w-0 flex-1">
                 <h1
-                  className="font-semibold text-xs sm:text-sm text-white truncate"
+                  className="font-semibold text-xs sm:text-sm text-white truncate max-w-[120px] xs:max-w-[160px] sm:max-w-xs md:max-w-md"
                   title={plan.file.name}
                 >
                   {plan.file.name}
@@ -300,21 +312,23 @@ export function FilePreviewClient() {
         </div>
       </header>
 
-      {/* Main Viewport */}
-      <div className="flex-1 flex overflow-hidden relative">
-        <main className="flex-1 flex flex-col items-stretch justify-start relative overflow-hidden bg-slate-950">
+      {/* Main Viewport Content - Unclipped when printing */}
+      <div className="flex-1 flex overflow-hidden relative print:overflow-visible print:h-auto print:block">
+        <main className="flex-1 flex items-center justify-center overflow-hidden relative bg-slate-950 print:overflow-visible print:h-auto print:bg-white print:block">
           {isLoading && (
-            <div className="flex flex-col items-center justify-center gap-3 text-slate-400 my-auto">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-              <div className="text-xs font-semibold text-slate-200">Connecting to cloud storage...</div>
-              <span className="text-[11px] text-slate-400">Negotiating direct media stream</span>
+            <div className="flex flex-col items-center justify-center gap-3 text-slate-400">
+              <Loader2 className="w-9 h-9 animate-spin text-blue-500" />
+              <p className="text-sm font-medium text-slate-300">Preparing preview...</p>
+              <span className="text-xs font-mono text-slate-500 max-w-xs truncate">
+                {plan?.file?.name || "Assembling file"}
+              </span>
             </div>
           )}
 
-          {error && (
-            <div className="p-8 bg-slate-900 border border-rose-500/30 rounded-2xl text-center max-w-md space-y-4 shadow-md m-auto">
-              <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
-                <AlertCircle className="w-6 h-6" />
+          {error && !isLoading && (
+            <div className="p-8 sm:p-10 bg-slate-900 border border-rose-500/30 rounded-3xl text-center max-w-md space-y-4 shadow-2xl m-4">
+              <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500 flex items-center justify-center mx-auto">
+                <AlertCircle className="w-7 h-7" />
               </div>
               <div>
                 <h3 className="font-bold text-white text-sm">Preview Unavailable</h3>
@@ -332,7 +346,7 @@ export function FilePreviewClient() {
           )}
 
           {!isLoading && !error && plan && streamSrc && (
-            <div className="w-full h-full flex items-stretch justify-center relative overflow-hidden">
+            <div className="w-full h-full flex items-stretch justify-center relative overflow-hidden print:overflow-visible print:h-auto print:block">
               {isImage && (
                 <ImagePreview src={streamSrc} fileName={plan.file.name} />
               )}
@@ -363,7 +377,11 @@ export function FilePreviewClient() {
                 />
               )}
 
-              {isTextOrCode && !isCsv && textContent !== null && (
+              {isMarkdown && textContent !== null && (
+                <MarkdownPreview content={textContent} fileName={plan.file.name} />
+              )}
+
+              {isTextOrCode && !isCsv && !isMarkdown && textContent !== null && (
                 <CodePreview
                   content={textContent}
                   fileName={plan.file.name}
@@ -371,7 +389,7 @@ export function FilePreviewClient() {
                 />
               )}
 
-              {!isImage && !isVideo && !isAudio && !isPdf && !isDocx && !isExcel && !isTextOrCode && (
+              {!isImage && !isVideo && !isAudio && !isPdf && !isDocx && !isExcel && !isTextOrCode && !isMarkdown && (
                 <div className="p-8 sm:p-10 bg-slate-900 border border-slate-800 rounded-3xl text-center max-w-md space-y-4 shadow-xl">
                   <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center mx-auto">
                     <FileText className="w-8 h-8" />

@@ -29,6 +29,8 @@ import { CodePreview } from "@/components/preview/CodePreview";
 import { SpreadsheetPreview } from "@/components/preview/SpreadsheetPreview";
 import { PdfPreview } from "@/components/preview/PdfPreview";
 import { DocxPreview } from "@/components/preview/DocxPreview";
+import { MarkdownPreview } from "@/components/preview/MarkdownPreview";
+import { BookOpen } from "lucide-react";
 
 interface FilePreviewModalProps {
   item: VfsItem | { id: string; name: string; size: number; mimeType?: string };
@@ -90,7 +92,10 @@ export function FilePreviewModal({
   );
 
   const isDocx = useMemo(
-    () => ext === "docx" || mime.includes("wordprocessingml"),
+    () =>
+      ["docx", "doc", "dotx", "dot"].includes(ext) ||
+      mime.includes("wordprocessingml") ||
+      mime.includes("msword"),
     [ext, mime],
   );
 
@@ -107,38 +112,42 @@ export function FilePreviewModal({
     [ext, mime],
   );
 
+  const isMarkdown = useMemo(
+    () => ["md", "markdown"].includes(ext),
+    [ext],
+  );
+
   const isTextOrCode = useMemo(
     () =>
-      mime.startsWith("text/") ||
-      [
-        "txt",
-        "json",
-        "js",
-        "ts",
-        "tsx",
-        "jsx",
-        "py",
-        "html",
-        "css",
-        "scss",
-        "md",
-        "markdown",
-        "xml",
-        "log",
-        "sql",
-        "sh",
-        "bash",
-        "yaml",
-        "yml",
-        "c",
-        "cpp",
-        "rs",
-        "go",
-        "java",
-        "env",
-        "dockerfile",
-      ].includes(ext),
-    [mime, ext],
+      (mime.startsWith("text/") ||
+        [
+          "txt",
+          "json",
+          "js",
+          "ts",
+          "tsx",
+          "jsx",
+          "py",
+          "html",
+          "css",
+          "scss",
+          "xml",
+          "log",
+          "sql",
+          "sh",
+          "bash",
+          "yaml",
+          "yml",
+          "c",
+          "cpp",
+          "rs",
+          "go",
+          "java",
+          "env",
+          "dockerfile",
+        ].includes(ext)) &&
+      !isMarkdown,
+    [mime, ext, isMarkdown],
   );
 
   useEffect(() => {
@@ -313,6 +322,7 @@ export function FilePreviewModal({
       return <FileSpreadsheet className="w-5 h-5 text-emerald-400" />;
     if (isDocx) return <FileText className="w-5 h-5 text-blue-400" />;
     if (isPdf) return <FileText className="w-5 h-5 text-rose-400" />;
+    if (isMarkdown) return <BookOpen className="w-5 h-5 text-blue-400" />;
     if (isTextOrCode) return <FileCode className="w-5 h-5 text-blue-400" />;
     return <FileText className="w-5 h-5 text-slate-400" />;
   };
@@ -321,9 +331,9 @@ export function FilePreviewModal({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex flex-col bg-slate-950/95 backdrop-blur-md animate-in fade-in duration-150 select-none font-sans"
+      className="fixed inset-0 z-50 flex flex-col bg-slate-950/95 backdrop-blur-md animate-in fade-in duration-150 select-none font-sans print:static print:h-auto print:bg-white print:backdrop-none print:overflow-visible"
     >
-      <div className="h-14 px-4 sm:px-6 bg-slate-900/90 border-b border-slate-800/80 flex items-center justify-between text-white shrink-0 gap-3">
+      <div className="no-print print-hidden print:hidden h-14 px-4 sm:px-6 bg-slate-900/90 border-b border-slate-800/80 flex items-center justify-between text-white shrink-0 gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="p-2 bg-slate-800/80 rounded-xl shrink-0">
             {renderIcon()}
@@ -471,7 +481,11 @@ export function FilePreviewModal({
               />
             )}
 
-            {isTextOrCode && !isCsv && textContent !== null && (
+            {isMarkdown && textContent !== null && (
+              <MarkdownPreview content={textContent} fileName={item.name} />
+            )}
+
+            {isTextOrCode && !isCsv && !isMarkdown && textContent !== null && (
               <CodePreview
                 content={textContent}
                 fileName={item.name}
@@ -485,7 +499,8 @@ export function FilePreviewModal({
               !isPdf &&
               !isDocx &&
               !isExcel &&
-              !isTextOrCode && (
+              !isTextOrCode &&
+              !isMarkdown && (
                 <div className="p-8 bg-slate-900 border border-slate-800 rounded-2xl text-center max-w-md space-y-4 shadow-2xl">
                   <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mx-auto">
                     <FileText className="w-8 h-8" />
