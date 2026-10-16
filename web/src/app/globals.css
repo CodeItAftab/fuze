@@ -36,3 +36,42 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Global Print Styles for Clean Multi-Page Document Printing */
+@media print {
+  @page {
+    margin: 10mm;
+    size: auto;
+  }
+
+  body, html {
+    background: #ffffff !important;
+    color: #000000 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Automatically hide all web navigation, headers, and floating elements */
+  header, nav, aside, footer,
+  .print-hidden,
+  [role="banner"],
+  [role="navigation"],
+  button,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Unclip all containers so full multi-page document is printed */
+  main, article, section {
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+    position: static !important;
+  }
+}
+
