@@ -35,7 +35,12 @@ const docxCustomStyles = `
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
-    gap: 28px !important;
+    gap: 20px !important;
+  }
+  @media (min-width: 640px) {
+    .fuze-docx-view .docx-wrapper {
+      gap: 28px !important;
+    }
   }
   .fuze-docx-view .docx-wrapper > section.docx {
     background: #ffffff !important;
@@ -202,6 +207,30 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
   const [fallbackHtml, setFallbackHtml] = useState<string | null>(null);
   const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
 
+  // Auto-fit document on small screens (mobile/tablet)
+  const computeResponsiveFit = useCallback(() => {
+    if (!scrollContainerRef.current) return;
+    const containerWidth = scrollContainerRef.current.clientWidth;
+    if (!containerWidth) return;
+
+    if (containerWidth < 768) {
+      const targetDocWidth = 800; // standard A4 pt/px width in docx-preview
+      const fitScale = Math.min(
+        Math.max(Math.round(((containerWidth - 24) / targetDocWidth) * 100) / 100, 0.35),
+        1.0,
+      );
+      setScale(fitScale);
+    } else {
+      setScale(1);
+    }
+  }, []);
+
+  useEffect(() => {
+    computeResponsiveFit();
+    window.addEventListener("resize", computeResponsiveFit);
+    return () => window.removeEventListener("resize", computeResponsiveFit);
+  }, [computeResponsiveFit]);
+
   // Throttled RAF scroll observer for high-performance smooth scrolling
   useEffect(() => {
     if (!containerRef.current || loading || error || fallbackHtml) return;
@@ -308,6 +337,7 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
               sections.forEach((sec) => htmls.push(sec.innerHTML));
               setPageHtmls(htmls);
 
+              computeResponsiveFit();
               setLoading(false);
               return;
             }
@@ -379,10 +409,10 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
     return () => {
       isCancelled = true;
     };
-  }, [src, blob]);
+  }, [src, blob, computeResponsiveFit]);
 
   const zoomIn = () => setScale((s) => Math.min(Math.round((s + 0.15) * 100) / 100, 2.2));
-  const zoomOut = () => setScale((s) => Math.max(Math.round((s - 0.15) * 100) / 100, 0.5));
+  const zoomOut = () => setScale((s) => Math.max(Math.round((s - 0.15) * 100) / 100, 0.35));
   const resetZoom = () => setScale(1);
 
   const fitWidth = useCallback(() => {
@@ -392,12 +422,12 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
     ) as HTMLElement | null;
     if (firstSection) {
       const containerWidth =
-        scrollContainerRef.current.clientWidth - (showThumbnails ? 240 : 64);
-      const sectionWidth = firstSection.offsetWidth;
+        scrollContainerRef.current.clientWidth - (showThumbnails && window.innerWidth >= 768 ? 240 : 32);
+      const sectionWidth = firstSection.offsetWidth || 800;
       if (sectionWidth > 0 && containerWidth > 0) {
         const calculatedScale =
           Math.round((containerWidth / sectionWidth) * 100) / 100;
-        setScale(Math.min(Math.max(calculatedScale, 0.5), 2.0));
+        setScale(Math.min(Math.max(calculatedScale, 0.35), 2.0));
       }
     } else {
       setScale(1);
@@ -411,6 +441,10 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
     if (targetSection) {
       targetSection.scrollIntoView({ behavior: "smooth", block: "start" });
       setCurrentPage(pageNum);
+      // On mobile, auto-close the drawer when a page is selected
+      if (typeof window !== "undefined" && window.innerWidth < 768) {
+        setShowThumbnails(false);
+      }
     }
   };
 
@@ -419,14 +453,14 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
       {/* Embedded CSS for clean paper layout and full print pagination */}
       <style dangerouslySetInnerHTML={{ __html: docxCustomStyles }} />
 
-      {/* Modern Glassmorphic Floating Toolbar */}
+      {/* Modern Glassmorphic Floating Toolbar - Fully Responsive */}
       {!loading && !error && (
-        <div className="no-print print-hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-30 transition-all duration-200">
+        <div className="no-print print-hidden absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 transition-all duration-200 max-w-[calc(100vw-1.5rem)]">
           {isToolbarCollapsed ? (
             <button
               type="button"
               onClick={() => setIsToolbarCollapsed(false)}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 shadow-2xl text-slate-300 hover:text-white text-xs cursor-pointer transition hover:bg-slate-800"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 shadow-2xl text-slate-300 hover:text-white text-xs cursor-pointer transition hover:bg-slate-800"
               title="Expand Word Controls"
             >
               <FileText className="w-3.5 h-3.5 text-blue-400" />
@@ -440,7 +474,7 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
               <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
             </button>
           ) : (
-            <div className="flex items-center gap-1 sm:gap-1.5 px-3 py-1.5 rounded-2xl bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 shadow-[0_16px_36px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] text-white text-xs">
+            <div className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-2xl bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 shadow-[0_16px_36px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] text-white text-xs">
               {/* Sidebar Thumbnails Toggle Button */}
               {pageHtmls.length > 0 && (
                 <button
@@ -453,8 +487,8 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
                   }`}
                   title="Toggle Pages Preview Sidebar"
                 >
-                  <Sidebar className="w-4 h-4" />
-                  <span className="text-[11px] hidden sm:inline font-medium">
+                  <Sidebar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span className="text-[11px] hidden md:inline font-medium">
                     Pages
                   </span>
                 </button>
@@ -474,10 +508,10 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
                     className="p-1 hover:bg-slate-800 disabled:opacity-30 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
                     title="Previous Page"
                   >
-                    <ChevronLeft className="w-4 h-4" />
+                    <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </button>
-                  <span className="text-[11px] font-mono text-slate-300 min-w-10 text-center px-1">
-                    {currentPage} / {pageCount}
+                  <span className="text-[11px] font-mono text-slate-300 min-w-9 sm:min-w-10 text-center px-0.5 sm:px-1">
+                    {currentPage}/{pageCount}
                   </span>
                   <button
                     type="button"
@@ -486,7 +520,7 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
                     className="p-1 hover:bg-slate-800 disabled:opacity-30 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
                     title="Next Page"
                   >
-                    <ChevronRight className="w-4 h-4" />
+                    <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </button>
                 </div>
               )}
@@ -500,7 +534,7 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
                 <button
                   type="button"
                   onClick={zoomOut}
-                  disabled={scale <= 0.5}
+                  disabled={scale <= 0.35}
                   className="p-1.5 hover:bg-slate-800 disabled:opacity-30 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
                   title="Zoom Out (-)"
                 >
@@ -510,7 +544,7 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
                 <button
                   type="button"
                   onClick={resetZoom}
-                  className="text-[11px] font-mono text-slate-300 hover:text-blue-400 px-1 py-0.5 rounded min-w-10 text-center transition cursor-pointer"
+                  className="text-[11px] font-mono text-slate-300 hover:text-blue-400 px-1 py-0.5 rounded min-w-9 sm:min-w-10 text-center transition cursor-pointer"
                   title="Reset to 100%"
                 >
                   {Math.round(scale * 100)}%
@@ -531,7 +565,7 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
               <button
                 type="button"
                 onClick={fitWidth}
-                className="hidden sm:inline-flex items-center gap-1 px-2 py-1 hover:bg-slate-800 rounded-lg text-[11px] text-slate-300 hover:text-white transition cursor-pointer"
+                className="hidden sm:inline-flex items-center gap-1 px-1.5 sm:px-2 py-1 hover:bg-slate-800 rounded-lg text-[11px] text-slate-300 hover:text-white transition cursor-pointer"
                 title="Fit Width"
               >
                 <Maximize2 className="w-3 h-3" />
@@ -566,9 +600,17 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Thumbnails Sidebar with REAL Page Previews */}
+        {/* Mobile Backdrop for Drawer */}
         {showThumbnails && pageHtmls.length > 0 && (
-          <aside className="no-print print-hidden w-52 bg-slate-900/95 border-r border-slate-800 flex flex-col shrink-0 z-20 animate-in slide-in-from-left duration-200 shadow-2xl">
+          <div
+            onClick={() => setShowThumbnails(false)}
+            className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-xs z-40 transition-opacity animate-in fade-in"
+          />
+        )}
+
+        {/* Thumbnails Sidebar: Responsive Drawer on Mobile, Dock on Desktop */}
+        {showThumbnails && pageHtmls.length > 0 && (
+          <aside className="no-print print-hidden fixed md:relative inset-y-0 left-0 z-50 md:z-20 w-64 md:w-52 bg-slate-900/98 md:bg-slate-900/95 border-r border-slate-800 flex flex-col shrink-0 animate-in slide-in-from-left duration-200 shadow-2xl">
             <div className="p-3 border-b border-slate-800 flex items-center justify-between text-xs text-slate-300 font-semibold">
               <div className="flex items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5 text-blue-400" />
@@ -597,10 +639,10 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
           </aside>
         )}
 
-        {/* Main Document Scroll Viewport with ample bottom clearance */}
+        {/* Main Document Scroll Viewport with responsive horizontal and bottom padding */}
         <main
           ref={scrollContainerRef}
-          className="flex-1 overflow-y-auto overflow-x-auto flex justify-center items-start pt-8 pb-44 px-4 sm:px-8 bg-slate-950 relative scroll-smooth will-change-scroll"
+          className="flex-1 overflow-y-auto overflow-x-auto flex justify-center items-start pt-4 sm:pt-8 pb-36 sm:pb-44 px-2 sm:px-4 md:px-8 bg-slate-950 relative scroll-smooth will-change-scroll"
         >
           {loading && (
             <div className="flex flex-col items-center justify-center gap-3 text-slate-400 my-auto">
@@ -615,8 +657,8 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
           )}
 
           {error && (
-            <div className="p-8 bg-slate-900 border border-rose-500/30 rounded-2xl max-w-md text-center space-y-3 shadow-2xl my-auto">
-              <AlertCircle className="w-10 h-10 text-rose-500 mx-auto" />
+            <div className="p-6 sm:p-8 bg-slate-900 border border-rose-500/30 rounded-2xl max-w-md text-center space-y-3 shadow-2xl my-auto m-4">
+              <AlertCircle className="w-9 h-9 text-rose-500 mx-auto" />
               <h4 className="text-sm font-bold text-white">Preview unavailable</h4>
               <p className="text-xs text-slate-400 leading-relaxed">{error}</p>
               {src && (
@@ -656,7 +698,7 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
               }}
               className="w-full max-w-4xl"
             >
-              <article className="bg-white text-slate-900 rounded-none border border-slate-200/80 shadow-2xl p-8 sm:p-14 md:p-16 min-h-[950px] leading-relaxed font-serif text-[15px] select-text">
+              <article className="bg-white text-slate-900 rounded-none border border-slate-200/80 shadow-2xl p-4 sm:p-10 md:p-16 min-h-[950px] leading-relaxed font-serif text-[15px] select-text">
                 <div
                   dangerouslySetInnerHTML={{ __html: fallbackHtml }}
                   className="docx-content space-y-4 [&>h1]:text-2xl [&>h1]:font-bold [&>h1]:text-slate-900 [&>h1]:mb-3 [&>h1]:mt-6 [&>h1]:border-b [&>h1]:border-slate-200 [&>h1]:pb-2

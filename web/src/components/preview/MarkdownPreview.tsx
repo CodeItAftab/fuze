@@ -76,7 +76,7 @@ export function MarkdownPreview({ content, fileName }: MarkdownPreviewProps) {
       />
 
       {/* Floating Bottom Control Bar */}
-      <div className="no-print print-hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-3.5 py-1.5 sm:py-2 rounded-full bg-slate-900/95 backdrop-blur-md border border-slate-700/70 shadow-2xl text-white text-xs">
+      <div className="no-print print-hidden absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-full bg-slate-900/95 backdrop-blur-md border border-slate-700/70 shadow-2xl text-white text-xs max-w-[calc(100vw-1.5rem)]">
         <div className="flex items-center gap-1.5 text-slate-300 font-mono text-[11px] pr-2 border-r border-slate-700">
           <BookOpen className="w-3.5 h-3.5 text-blue-400" />
           <span>Markdown</span>
@@ -181,7 +181,7 @@ export function MarkdownPreview({ content, fileName }: MarkdownPreviewProps) {
       </div>
 
       {/* Main View Area with generous bottom clearance */}
-      <main className="md-print-container flex-1 overflow-y-auto overflow-x-auto flex justify-center items-start pt-8 pb-44 px-4 sm:px-8 bg-slate-950 relative scroll-smooth">
+      <main className="md-print-container flex-1 overflow-y-auto overflow-x-auto flex justify-center items-start pt-4 sm:pt-8 pb-36 sm:pb-44 px-2 sm:px-4 md:px-8 bg-slate-950 relative scroll-smooth">
         {viewMode === "preview" ? (
           <div
             style={{
@@ -192,7 +192,7 @@ export function MarkdownPreview({ content, fileName }: MarkdownPreviewProps) {
             className="w-full max-w-4xl"
           >
             {/* Crisp paper article with square corners */}
-            <article className="md-article bg-white text-slate-900 rounded-none border border-slate-200/80 shadow-2xl p-8 sm:p-14 md:p-16 min-h-[950px] leading-relaxed text-[15px] select-text">
+            <article className="md-article bg-white text-slate-900 rounded-none border border-slate-200/80 shadow-2xl p-4 sm:p-10 md:p-16 min-h-[950px] leading-relaxed text-[15px] select-text">
               <div
                 dangerouslySetInnerHTML={{ __html: parsedHtml }}
                 className="markdown-body space-y-4 font-sans text-slate-800

@@ -248,7 +248,7 @@ export function FilePreviewClient() {
               </div>
               <div className="min-w-0 flex-1">
                 <h1
-                  className="font-semibold text-xs sm:text-sm text-white truncate"
+                  className="font-semibold text-xs sm:text-sm text-white truncate max-w-[120px] xs:max-w-[160px] sm:max-w-xs md:max-w-md"
                   title={plan.file.name}
                 >
                   {plan.file.name}
