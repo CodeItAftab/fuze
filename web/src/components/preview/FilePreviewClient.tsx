@@ -86,14 +86,14 @@ export function FilePreviewClient() {
     ].includes(ext);
 
   const renderIcon = () => {
-    if (isImage) return <ImageIcon className="w-5 h-5 text-emerald-600" />;
-    if (isVideo) return <VideoIcon className="w-5 h-5 text-blue-600" />;
-    if (isAudio) return <Music className="w-5 h-5 text-purple-600" />;
-    if (isCsv || isExcel) return <FileSpreadsheet className="w-5 h-5 text-amber-600" />;
-    if (isDocx) return <FileText className="w-5 h-5 text-blue-600" />;
-    if (isPdf) return <FileText className="w-5 h-5 text-rose-600" />;
-    if (isTextOrCode) return <FileCode className="w-5 h-5 text-blue-600" />;
-    return <FileText className="w-5 h-5 text-slate-500" />;
+    if (isImage) return <ImageIcon className="w-5 h-5 text-emerald-400" />;
+    if (isVideo) return <VideoIcon className="w-5 h-5 text-indigo-400" />;
+    if (isAudio) return <Music className="w-5 h-5 text-purple-400" />;
+    if (isCsv || isExcel) return <FileSpreadsheet className="w-5 h-5 text-emerald-400" />;
+    if (isDocx) return <FileText className="w-5 h-5 text-blue-400" />;
+    if (isPdf) return <FileText className="w-5 h-5 text-rose-400" />;
+    if (isTextOrCode) return <FileCode className="w-5 h-5 text-blue-400" />;
+    return <FileText className="w-5 h-5 text-slate-400" />;
   };
 
   useEffect(() => {
@@ -156,7 +156,7 @@ export function FilePreviewClient() {
         setIsLoading(false);
       });
 
-  return () => {
+    return () => {
       isMounted = false;
     };
   }, [fileId, isDocx, isExcel]);
@@ -209,20 +209,21 @@ export function FilePreviewClient() {
   return (
     <div
       ref={containerRef}
-      className="h-screen flex flex-col bg-[#f8fafc] text-slate-800 font-sans select-none overflow-hidden"
+      className="h-screen flex flex-col bg-slate-950 text-white font-sans select-none overflow-hidden"
     >
-      <header className="h-14 bg-white border-b border-slate-200 px-3 sm:px-6 flex items-center justify-between shrink-0 z-30 shadow-2xs">
+      {/* Unified Sleek Dark Header */}
+      <header className="h-14 bg-slate-900/90 border-b border-slate-800/80 px-3 sm:px-6 flex items-center justify-between shrink-0 z-30 backdrop-blur-md">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-2">
           <button
             type="button"
             onClick={() => router.back()}
-            className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-600 hover:text-slate-900 transition cursor-pointer"
+            className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition cursor-pointer"
             title="Back to Drive (Esc)"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
 
-          <div className="h-5 w-px bg-slate-200 mx-0.5 sm:mx-1 hidden sm:block" />
+          <div className="h-5 w-px bg-slate-800 mx-0.5 sm:mx-1 hidden sm:block" />
 
           <Link href="/dashboard" className="hidden sm:flex items-center gap-2 group">
             <FuzeLogo variant="icon" height={22} />
@@ -230,17 +231,17 @@ export function FilePreviewClient() {
 
           {plan && (
             <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1 ml-1 sm:ml-2">
-              <div className="p-1.5 bg-slate-100 rounded-lg text-slate-600 shrink-0">
+              <div className="p-1.5 bg-slate-800/80 rounded-lg shrink-0">
                 {renderIcon()}
               </div>
               <div className="min-w-0 flex-1">
                 <h1
-                  className="font-semibold text-xs sm:text-sm text-slate-900 truncate"
+                  className="font-semibold text-xs sm:text-sm text-white truncate"
                   title={plan.file.name}
                 >
                   {plan.file.name}
                 </h1>
-                <span className="text-[10px] sm:text-[11px] text-slate-500 font-normal block leading-tight truncate">
+                <span className="text-[10px] sm:text-[11px] text-slate-400 font-normal block leading-tight truncate">
                   {formatBytes(plan.file.size)}
                 </span>
               </div>
@@ -248,11 +249,11 @@ export function FilePreviewClient() {
           )}
         </div>
 
-        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <button
             type="button"
             onClick={toggleFullscreen}
-            className="hidden sm:flex p-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 rounded-xl transition cursor-pointer shadow-2xs"
+            className="hidden sm:flex p-2 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 text-slate-300 hover:text-white rounded-xl transition cursor-pointer"
             title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
           >
             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -262,10 +263,10 @@ export function FilePreviewClient() {
             <button
               type="button"
               onClick={() => setShowDetails(!showDetails)}
-              className={`p-1.5 sm:p-2 rounded-xl border transition cursor-pointer flex items-center justify-center ${
+              className={`p-2 rounded-xl border transition cursor-pointer flex items-center justify-center ${
                 showDetails
-                  ? "bg-blue-50 border-blue-200 text-blue-600"
-                  : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                  ? "bg-blue-600/20 border-blue-500/50 text-blue-400"
+                  : "bg-slate-800/80 border-slate-700/60 text-slate-300 hover:bg-slate-700/80 hover:text-white"
               }`}
               title="Toggle Details Panel"
             >
@@ -277,10 +278,10 @@ export function FilePreviewClient() {
             <button
               type="button"
               onClick={handleDownload}
-              className="flex items-center gap-1.5 p-1.5 sm:px-3.5 sm:py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition cursor-pointer shadow-2xs active:scale-95"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700/80 text-white border border-slate-700/60 rounded-xl text-xs font-semibold transition cursor-pointer"
               title="Download File"
             >
-              <Download className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+              <Download className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Download</span>
             </button>
           )}
@@ -289,20 +290,21 @@ export function FilePreviewClient() {
             <button
               type="button"
               onClick={() => setShareOpen(true)}
-              className="flex items-center gap-1.5 p-1.5 sm:px-4 sm:py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition cursor-pointer shadow-xs active:scale-95"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition cursor-pointer shadow-xs active:scale-95"
               title="Share File"
             >
-              <Share2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+              <Share2 className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Share</span>
             </button>
           )}
         </div>
       </header>
 
+      {/* Main Viewport */}
       <div className="flex-1 flex overflow-hidden relative">
-        <main className="flex-1 flex flex-col items-center justify-center relative overflow-hidden bg-slate-950">
+        <main className="flex-1 flex flex-col items-stretch justify-start relative overflow-hidden bg-slate-950">
           {isLoading && (
-            <div className="flex flex-col items-center justify-center gap-3 text-slate-400">
+            <div className="flex flex-col items-center justify-center gap-3 text-slate-400 my-auto">
               <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
               <div className="text-xs font-semibold text-slate-200">Connecting to cloud storage...</div>
               <span className="text-[11px] text-slate-400">Negotiating direct media stream</span>
@@ -321,7 +323,7 @@ export function FilePreviewClient() {
               <button
                 type="button"
                 onClick={handleDownload}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition cursor-pointer shadow-xs inline-flex items-center gap-1.5"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition cursor-pointer shadow-xs inline-flex items-center gap-1.5"
               >
                 <Download className="w-3.5 h-3.5" />
                 Download file instead
@@ -330,7 +332,7 @@ export function FilePreviewClient() {
           )}
 
           {!isLoading && !error && plan && streamSrc && (
-            <div className="w-full h-full flex items-center justify-center relative overflow-hidden">
+            <div className="w-full h-full flex items-stretch justify-center relative overflow-hidden">
               {isImage && (
                 <ImagePreview src={streamSrc} fileName={plan.file.name} />
               )}
@@ -383,7 +385,7 @@ export function FilePreviewClient() {
                   <button
                     type="button"
                     onClick={handleDownload}
-                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition cursor-pointer shadow-xs inline-flex items-center gap-2"
+                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl transition cursor-pointer shadow-xs inline-flex items-center gap-2"
                   >
                     <Download className="w-4 h-4" />
                     Download File
