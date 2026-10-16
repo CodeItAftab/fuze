@@ -17,6 +17,8 @@ import {
   Maximize2,
   ChevronDown,
   ChevronUp,
+  Sidebar,
+  X,
 } from "lucide-react";
 
 interface DocxPreviewProps {
@@ -98,14 +100,12 @@ const docxCustomStyles = `
 
 /**
  * Intelligent text extractor for legacy binary Word 97-2003 (.doc) files.
- * Extracts UTF-16LE and ASCII text streams when zip OpenXML fails.
  */
 function extractBinaryDocText(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let text = "";
   let currentRun = "";
 
-  // Scan UTF-16LE characters (Word 97-2003 primary document text stream)
   for (let i = 0; i < bytes.length - 1; i += 2) {
     const code = bytes[i] | (bytes[i + 1] << 8);
     if ((code >= 32 && code <= 126) || code === 10 || code === 13 || (code >= 160 && code <= 8191)) {
@@ -118,7 +118,6 @@ function extractBinaryDocText(buffer: ArrayBuffer): string {
     }
   }
 
-  // Fallback to ASCII scan if UTF-16LE extracted very little
   if (text.length < 80) {
     let asciiRun = "";
     for (let i = 0; i < bytes.length; i++) {
@@ -137,6 +136,58 @@ function extractBinaryDocText(buffer: ArrayBuffer): string {
   return text.trim();
 }
 
+/**
+ * Sub-component that renders an actual miniature visual preview of a Word document page.
+ */
+function DocxPageThumbnail({
+  sectionHtml,
+  pageNumber,
+  isActive,
+  onClick,
+}: {
+  sectionHtml: string;
+  pageNumber: number;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group w-full flex flex-col items-center p-2 rounded-xl transition cursor-pointer text-left relative ${
+        isActive
+          ? "bg-blue-600/15 border-2 border-blue-500 shadow-md shadow-blue-500/10"
+          : "bg-slate-900/60 border border-slate-800 hover:border-slate-700 hover:bg-slate-800/60"
+      }`}
+    >
+      <div className="w-[124px] h-[165px] bg-white rounded-none overflow-hidden relative shadow-md border border-slate-200/60 pointer-events-none select-none">
+        <div
+          style={{
+            transform: "scale(0.155)",
+            transformOrigin: "top left",
+            width: "800px",
+            height: "1064px",
+            overflow: "hidden",
+          }}
+          className="docx-thumbnail-content p-4 text-[13px] font-serif leading-snug text-slate-800"
+          dangerouslySetInnerHTML={{ __html: sectionHtml }}
+        />
+      </div>
+      <div className="mt-1.5 flex items-center justify-between w-full px-1">
+        <span
+          className={`text-[11px] font-mono font-medium ${
+            isActive
+              ? "text-blue-400 font-bold"
+              : "text-slate-400 group-hover:text-slate-200"
+          }`}
+        >
+          Page {pageNumber}
+        </span>
+      </div>
+    </button>
+  );
+}
+
 export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -146,10 +197,12 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
   const [scale, setScale] = useState(1);
   const [pageCount, setPageCount] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageHtmls, setPageHtmls] = useState<string[]>([]);
+  const [showThumbnails, setShowThumbnails] = useState(false);
   const [fallbackHtml, setFallbackHtml] = useState<string | null>(null);
   const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
 
-  // Throttled RAF scroll observer to prevent lag and high-frequency React re-renders
+  // Throttled RAF scroll observer for high-performance smooth scrolling
   useEffect(() => {
     if (!containerRef.current || loading || error || fallbackHtml) return;
 
@@ -204,6 +257,7 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
     setLoading(true);
     setError(null);
     setFallbackHtml(null);
+    setPageHtmls([]);
 
     const loadDocx = async () => {
       try {
@@ -246,7 +300,14 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
 
             if (!isCancelled) {
               const sections = containerRef.current.querySelectorAll("section.docx");
-              setPageCount(sections.length || 1);
+              const count = sections.length || 1;
+              setPageCount(count);
+
+              // Extract actual HTML from each page for high-fidelity sidebar previews
+              const htmls: string[] = [];
+              sections.forEach((sec) => htmls.push(sec.innerHTML));
+              setPageHtmls(htmls);
+
               setLoading(false);
               return;
             }
@@ -330,7 +391,8 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
       "section.docx",
     ) as HTMLElement | null;
     if (firstSection) {
-      const containerWidth = scrollContainerRef.current.clientWidth - 64;
+      const containerWidth =
+        scrollContainerRef.current.clientWidth - (showThumbnails ? 240 : 64);
       const sectionWidth = firstSection.offsetWidth;
       if (sectionWidth > 0 && containerWidth > 0) {
         const calculatedScale =
@@ -340,7 +402,7 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
     } else {
       setScale(1);
     }
-  }, []);
+  }, [showThumbnails]);
 
   const scrollToPage = (pageNum: number) => {
     if (!containerRef.current) return;
@@ -357,124 +419,143 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
       {/* Embedded CSS for clean paper layout and full print pagination */}
       <style dangerouslySetInnerHTML={{ __html: docxCustomStyles }} />
 
-      {/* Floating Bottom Control Bar */}
+      {/* Modern Glassmorphic Floating Toolbar */}
       {!loading && !error && (
         <div className="no-print print-hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-30 transition-all duration-200">
           {isToolbarCollapsed ? (
             <button
               type="button"
               onClick={() => setIsToolbarCollapsed(false)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/95 backdrop-blur-md border border-slate-700/70 shadow-2xl text-slate-300 hover:text-white text-xs cursor-pointer transition"
-              title="Expand Document Controls"
+              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 shadow-2xl text-slate-300 hover:text-white text-xs cursor-pointer transition hover:bg-slate-800"
+              title="Expand Word Controls"
             >
               <FileText className="w-3.5 h-3.5 text-blue-400" />
-              <span className="font-mono text-[11px]">Controls</span>
+              <span className="font-mono text-[11px]">
+                {currentPage} / {pageCount}
+              </span>
+              <span className="text-slate-500">•</span>
+              <span className="font-mono text-[11px]">
+                {Math.round(scale * 100)}%
+              </span>
               <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
             </button>
           ) : (
-            <div className="flex items-center gap-2 px-3.5 py-1.5 sm:py-2 rounded-full bg-slate-900/95 backdrop-blur-md border border-slate-700/70 shadow-2xl text-white text-xs">
-              <div className="flex items-center gap-1.5 text-slate-300 font-mono text-[11px] pr-2 border-r border-slate-700">
-                <FileText className="w-3.5 h-3.5 text-blue-400" />
-                <span className="hidden sm:inline">Word</span>
-                {pageCount > 1 && (
-                  <span className="text-slate-400 text-[10px] bg-slate-800 px-1.5 py-0.5 rounded ml-1 font-mono">
-                    {pageCount}p
+            <div className="flex items-center gap-1 sm:gap-1.5 px-3 py-1.5 rounded-2xl bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 shadow-[0_16px_36px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] text-white text-xs">
+              {/* Sidebar Thumbnails Toggle Button */}
+              {pageHtmls.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowThumbnails((v) => !v)}
+                  className={`p-1.5 rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                    showThumbnails
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "hover:bg-slate-800 text-slate-300 hover:text-white"
+                  }`}
+                  title="Toggle Pages Preview Sidebar"
+                >
+                  <Sidebar className="w-4 h-4" />
+                  <span className="text-[11px] hidden sm:inline font-medium">
+                    Pages
                   </span>
-                )}
-              </div>
+                </button>
+              )}
+
+              {pageHtmls.length > 0 && (
+                <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
+              )}
 
               {/* Page Navigation Jumper */}
               {pageCount > 1 && (
-                <div className="flex items-center gap-0.5 border-r border-slate-700 pr-1.5">
+                <div className="flex items-center gap-0.5">
                   <button
                     type="button"
                     onClick={() => scrollToPage(Math.max(1, currentPage - 1))}
                     disabled={currentPage <= 1}
-                    className="p-1 hover:bg-white/10 disabled:opacity-30 rounded-full transition cursor-pointer"
+                    className="p-1 hover:bg-slate-800 disabled:opacity-30 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
                     title="Previous Page"
                   >
-                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <ChevronLeft className="w-4 h-4" />
                   </button>
-                  <span className="text-[11px] font-mono text-slate-300 min-w-10 text-center">
+                  <span className="text-[11px] font-mono text-slate-300 min-w-10 text-center px-1">
                     {currentPage} / {pageCount}
                   </span>
                   <button
                     type="button"
                     onClick={() => scrollToPage(Math.min(pageCount, currentPage + 1))}
                     disabled={currentPage >= pageCount}
-                    className="p-1 hover:bg-white/10 disabled:opacity-30 rounded-full transition cursor-pointer"
+                    className="p-1 hover:bg-slate-800 disabled:opacity-30 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
                     title="Next Page"
                   >
-                    <ChevronRight className="w-3.5 h-3.5" />
+                    <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
               )}
 
+              {pageCount > 1 && (
+                <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
+              )}
+
               {/* Zoom Controls */}
-              <button
-                type="button"
-                onClick={zoomOut}
-                disabled={scale <= 0.5}
-                className="p-1 hover:bg-white/10 disabled:opacity-30 rounded-full transition cursor-pointer"
-                title="Zoom Out (-)"
-              >
-                <ZoomOut className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={zoomOut}
+                  disabled={scale <= 0.5}
+                  className="p-1.5 hover:bg-slate-800 disabled:opacity-30 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
+                  title="Zoom Out (-)"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
 
-              <span className="text-[11px] font-mono text-slate-300 min-w-9 text-center">
-                {Math.round(scale * 100)}%
-              </span>
-
-              <button
-                type="button"
-                onClick={zoomIn}
-                disabled={scale >= 2.2}
-                className="p-1 hover:bg-white/10 disabled:opacity-30 rounded-full transition cursor-pointer"
-                title="Zoom In (+)"
-              >
-                <ZoomIn className="w-3.5 h-3.5" />
-              </button>
-
-              {scale !== 1 && (
                 <button
                   type="button"
                   onClick={resetZoom}
-                  className="p-1 hover:bg-white/10 rounded-full text-slate-300 transition cursor-pointer"
-                  title="Reset Zoom"
+                  className="text-[11px] font-mono text-slate-300 hover:text-blue-400 px-1 py-0.5 rounded min-w-10 text-center transition cursor-pointer"
+                  title="Reset to 100%"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
+                  {Math.round(scale * 100)}%
                 </button>
-              )}
+
+                <button
+                  type="button"
+                  onClick={zoomIn}
+                  disabled={scale >= 2.2}
+                  className="p-1.5 hover:bg-slate-800 disabled:opacity-30 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
+                  title="Zoom In (+)"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+              </div>
 
               {/* Fit Width */}
               <button
                 type="button"
                 onClick={fitWidth}
-                className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 hover:bg-white/10 rounded text-[11px] text-slate-300 transition cursor-pointer"
+                className="hidden sm:inline-flex items-center gap-1 px-2 py-1 hover:bg-slate-800 rounded-lg text-[11px] text-slate-300 hover:text-white transition cursor-pointer"
                 title="Fit Width"
               >
                 <Maximize2 className="w-3 h-3" />
                 <span>Fit</span>
               </button>
 
-              <div className="w-px h-3.5 bg-slate-700 mx-0.5" />
+              <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
 
               {/* Print All Pages */}
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="p-1 hover:bg-white/10 rounded-full text-slate-300 hover:text-white transition cursor-pointer"
+                className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
                 title="Print All Pages"
               >
                 <Printer className="w-3.5 h-3.5" />
               </button>
 
-              {/* Collapse button */}
+              {/* Collapse toolbar */}
               <button
                 type="button"
                 onClick={() => setIsToolbarCollapsed(true)}
-                className="p-1 hover:bg-white/10 rounded-full text-slate-400 hover:text-slate-200 transition cursor-pointer"
-                title="Collapse toolbar"
+                className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition cursor-pointer"
+                title="Minimize Toolbar"
               >
                 <ChevronDown className="w-3.5 h-3.5" />
               </button>
@@ -483,84 +564,118 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
         </div>
       )}
 
-      {/* Main Document Scroll Viewport with ample bottom clearance */}
-      <main
-        ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto overflow-x-auto flex justify-center items-start pt-8 pb-44 px-4 sm:px-8 bg-slate-950 relative scroll-smooth will-change-scroll"
-      >
-        {loading && (
-          <div className="flex flex-col items-center justify-center gap-3 text-slate-400 my-auto">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-            <div className="text-xs font-medium text-slate-300">
-              Rendering Word document...
-            </div>
-            <span className="text-[11px] font-mono text-slate-500">
-              {fileName}
-            </span>
-          </div>
-        )}
-
-        {error && (
-          <div className="p-8 bg-slate-900 border border-rose-500/30 rounded-2xl max-w-md text-center space-y-3 shadow-2xl my-auto">
-            <AlertCircle className="w-10 h-10 text-rose-500 mx-auto" />
-            <h4 className="text-sm font-bold text-white">Preview unavailable</h4>
-            <p className="text-xs text-slate-400 leading-relaxed">{error}</p>
-            {src && (
-              <a
-                href={src}
-                download={fileName}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition cursor-pointer shadow-md mt-2"
+      {/* Main Content Area */}
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Thumbnails Sidebar with REAL Page Previews */}
+        {showThumbnails && pageHtmls.length > 0 && (
+          <aside className="no-print print-hidden w-52 bg-slate-900/95 border-r border-slate-800 flex flex-col shrink-0 z-20 animate-in slide-in-from-left duration-200 shadow-2xl">
+            <div className="p-3 border-b border-slate-800 flex items-center justify-between text-xs text-slate-300 font-semibold">
+              <div className="flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-blue-400" />
+                <span>Pages ({pageCount})</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowThumbnails(false)}
+                className="p-1 hover:bg-white/10 rounded-md text-slate-400 hover:text-white transition cursor-pointer"
+                title="Close Side Panel"
               >
-                <Download className="w-3.5 h-3.5" />
-                Download Document
-              </a>
-            )}
-          </div>
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              {pageHtmls.map((html, idx) => (
+                <DocxPageThumbnail
+                  key={idx}
+                  sectionHtml={html}
+                  pageNumber={idx + 1}
+                  isActive={currentPage === idx + 1}
+                  onClick={() => scrollToPage(idx + 1)}
+                />
+              ))}
+            </div>
+          </aside>
         )}
 
-        {/* Primary View: Native docx-preview rendering container with square paper edges */}
-        <div
-          style={{
-            transform: `scale(${scale})`,
-            transformOrigin: "top center",
-            transition: "transform 0.12s ease-out",
-          }}
-          className={`fuze-docx-view flex flex-col items-center select-text ${
-            loading || error || fallbackHtml ? "hidden" : "block"
-          }`}
+        {/* Main Document Scroll Viewport with ample bottom clearance */}
+        <main
+          ref={scrollContainerRef}
+          className="flex-1 overflow-y-auto overflow-x-auto flex justify-center items-start pt-8 pb-44 px-4 sm:px-8 bg-slate-950 relative scroll-smooth will-change-scroll"
         >
-          <div ref={containerRef} className="docx-mount-point" />
-        </div>
+          {loading && (
+            <div className="flex flex-col items-center justify-center gap-3 text-slate-400 my-auto">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+              <div className="text-xs font-medium text-slate-300">
+                Rendering Word document...
+              </div>
+              <span className="text-[11px] font-mono text-slate-500">
+                {fileName}
+              </span>
+            </div>
+          )}
 
-        {/* Fallback View: Crisp paper article with square corners */}
-        {!loading && !error && fallbackHtml && (
+          {error && (
+            <div className="p-8 bg-slate-900 border border-rose-500/30 rounded-2xl max-w-md text-center space-y-3 shadow-2xl my-auto">
+              <AlertCircle className="w-10 h-10 text-rose-500 mx-auto" />
+              <h4 className="text-sm font-bold text-white">Preview unavailable</h4>
+              <p className="text-xs text-slate-400 leading-relaxed">{error}</p>
+              {src && (
+                <a
+                  href={src}
+                  download={fileName}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition cursor-pointer shadow-md mt-2"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download Document
+                </a>
+              )}
+            </div>
+          )}
+
+          {/* Primary View: Native docx-preview rendering container with square paper edges */}
           <div
             style={{
               transform: `scale(${scale})`,
               transformOrigin: "top center",
               transition: "transform 0.12s ease-out",
             }}
-            className="w-full max-w-4xl"
+            className={`fuze-docx-view flex flex-col items-center select-text ${
+              loading || error || fallbackHtml ? "hidden" : "block"
+            }`}
           >
-            <article className="bg-white text-slate-900 rounded-none border border-slate-200/80 shadow-2xl p-8 sm:p-14 md:p-16 min-h-[950px] leading-relaxed font-serif text-[15px] select-text">
-              <div
-                dangerouslySetInnerHTML={{ __html: fallbackHtml }}
-                className="docx-content space-y-4 [&>h1]:text-2xl [&>h1]:font-bold [&>h1]:text-slate-900 [&>h1]:mb-3 [&>h1]:mt-6 [&>h1]:border-b [&>h1]:border-slate-200 [&>h1]:pb-2
-                           [&>h2]:text-xl [&>h2]:font-bold [&>h2]:text-slate-800 [&>h2]:mb-2 [&>h2]:mt-5
-                           [&>h3]:text-lg [&>h3]:font-semibold [&>h3]:text-slate-800 [&>h3]:mb-2 [&>h3]:mt-4
-                           [&>p]:text-slate-700 [&>p]:leading-7 [&>p]:mb-3
-                           [&>ul]:list-disc [&>ul]:pl-6 [&>ul]:space-y-1.5 [&>ul]:text-slate-700
-                           [&>ol]:list-decimal [&>ol]:pl-6 [&>ol]:space-y-1.5 [&>ol]:text-slate-700
-                           [&>table]:w-full [&>table]:border-collapse [&>table]:border [&>table]:border-slate-300 [&>table]:my-4
-                           [&_td]:border [&_td]:border-slate-300 [&_td]:p-2.5 [&_td]:text-xs [&_td]:font-sans
-                           [&_th]:border [&_th]:border-slate-300 [&_th]:p-2.5 [&_th]:bg-slate-100 [&_th]:text-xs [&_th]:font-semibold [&_th]:font-sans
-                           [&_img]:max-h-56 [&_img]:max-w-[280px] [&_img]:h-auto [&_img]:object-contain [&_img]:my-4 [&_img]:mx-auto [&_img]:block
-                           [&_a]:text-blue-600 [&_a]:underline"
-              />
-            </article>
+            <div ref={containerRef} className="docx-mount-point" />
           </div>
-        )}
-      </main>
+
+          {/* Fallback View: Crisp paper article with square corners */}
+          {!loading && !error && fallbackHtml && (
+            <div
+              style={{
+                transform: `scale(${scale})`,
+                transformOrigin: "top center",
+                transition: "transform 0.12s ease-out",
+              }}
+              className="w-full max-w-4xl"
+            >
+              <article className="bg-white text-slate-900 rounded-none border border-slate-200/80 shadow-2xl p-8 sm:p-14 md:p-16 min-h-[950px] leading-relaxed font-serif text-[15px] select-text">
+                <div
+                  dangerouslySetInnerHTML={{ __html: fallbackHtml }}
+                  className="docx-content space-y-4 [&>h1]:text-2xl [&>h1]:font-bold [&>h1]:text-slate-900 [&>h1]:mb-3 [&>h1]:mt-6 [&>h1]:border-b [&>h1]:border-slate-200 [&>h1]:pb-2
+                             [&>h2]:text-xl [&>h2]:font-bold [&>h2]:text-slate-800 [&>h2]:mb-2 [&>h2]:mt-5
+                             [&>h3]:text-lg [&>h3]:font-semibold [&>h3]:text-slate-800 [&>h3]:mb-2 [&>h3]:mt-4
+                             [&>p]:text-slate-700 [&>p]:leading-7 [&>p]:mb-3
+                             [&>ul]:list-disc [&>ul]:pl-6 [&>ul]:space-y-1.5 [&>ul]:text-slate-700
+                             [&>ol]:list-decimal [&>ol]:pl-6 [&>ol]:space-y-1.5 [&>ol]:text-slate-700
+                             [&>table]:w-full [&>table]:border-collapse [&>table]:border [&>table]:border-slate-300 [&>table]:my-4
+                             [&_td]:border [&_td]:border-slate-300 [&_td]:p-2.5 [&_td]:text-xs [&_td]:font-sans
+                             [&_th]:border [&_th]:border-slate-300 [&_th]:p-2.5 [&_th]:bg-slate-100 [&_th]:text-xs [&_th]:font-semibold [&_th]:font-sans
+                             [&_img]:max-h-56 [&_img]:max-w-[280px] [&_img]:h-auto [&_img]:object-contain [&_img]:my-4 [&_img]:mx-auto [&_img]:block
+                             [&_a]:text-blue-600 [&_a]:underline"
+                />
+              </article>
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   );
 }

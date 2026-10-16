@@ -18,6 +18,8 @@ import {
   FileText,
   ChevronDown,
   ChevronUp,
+  X,
+  Maximize2,
 } from "lucide-react";
 
 // Configure worker locally using the bundled public file
@@ -65,6 +67,93 @@ const pdfPrintStyles = `
   }
 `;
 
+/**
+ * Dedicated sub-component that renders an actual miniature visual preview canvas of a PDF page.
+ */
+function PdfThumbnailItem({
+  pdfDoc,
+  pageNumber,
+  isActive,
+  onClick,
+}: {
+  pdfDoc: PDFDocumentProxy;
+  pageNumber: number;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [rendered, setRendered] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let renderTask: any = null;
+
+    pdfDoc.getPage(pageNumber).then((page) => {
+      if (cancelled || !canvasRef.current) return;
+      // Scale 0.18 produces a ~110px wide sharp thumbnail preview
+      const viewport = page.getViewport({ scale: 0.22 });
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d", { alpha: false });
+      if (!ctx) return;
+
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+
+      renderTask = page.render({
+        canvasContext: ctx,
+        viewport,
+      });
+
+      renderTask.promise
+        .then(() => {
+          if (!cancelled) setRendered(true);
+        })
+        .catch(() => {});
+    });
+
+    return () => {
+      cancelled = true;
+      if (renderTask) {
+        try {
+          renderTask.cancel();
+        } catch {}
+      }
+    };
+  }, [pdfDoc, pageNumber]);
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group w-full flex flex-col items-center p-2 rounded-xl transition cursor-pointer text-left relative ${
+        isActive
+          ? "bg-blue-600/15 border-2 border-blue-500 shadow-md shadow-blue-500/10"
+          : "bg-slate-900/60 border border-slate-800 hover:border-slate-700 hover:bg-slate-800/60"
+      }`}
+    >
+      <div className="w-full flex items-center justify-center bg-white rounded-none overflow-hidden shadow-inner border border-slate-200/50 relative min-h-[140px]">
+        <canvas ref={canvasRef} className="max-w-full h-auto block" />
+        {!rendered && (
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-800/60 animate-pulse text-slate-400">
+            <span className="text-[10px] font-mono">Loading...</span>
+          </div>
+        )}
+      </div>
+      <div className="mt-1.5 flex items-center justify-between w-full px-1">
+        <span
+          className={`text-[11px] font-mono font-medium ${
+            isActive
+              ? "text-blue-400 font-bold"
+              : "text-slate-400 group-hover:text-slate-200"
+          }`}
+        >
+          Page {pageNumber}
+        </span>
+      </div>
+    </button>
+  );
+}
+
 export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [numPages, setNumPages] = useState<number>(0);
@@ -75,7 +164,6 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [showThumbnails, setShowThumbnails] = useState<boolean>(false);
-  // Default to continuous scroll as requested by user
   const [viewMode, setViewMode] = useState<"single" | "continuous">("continuous");
   const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
 
@@ -193,7 +281,7 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
         const viewport = page.getViewport({ scale, rotation });
         const outputScale = window.devicePixelRatio || 1;
 
-        // Clean rectangular paper page wrapper (no rounded corners)
+        // Clean rectangular paper page wrapper with sharp corners
         const pageWrapper = document.createElement("div");
         pageWrapper.className =
           "pdf-page-card relative mb-7 shadow-xl rounded-none bg-white overflow-hidden border border-slate-200/50 transition-shadow";
@@ -273,15 +361,13 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
   // Page Controls
   const goToPrev = () => {
     if (currentPage > 1) {
-      const next = currentPage - 1;
-      scrollToPage(next);
+      scrollToPage(currentPage - 1);
     }
   };
 
   const goToNext = () => {
     if (currentPage < numPages) {
-      const next = currentPage + 1;
-      scrollToPage(next);
+      scrollToPage(currentPage + 1);
     }
   };
 
@@ -315,12 +401,13 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
   const zoomOut = () =>
     setScale((s) => Math.max(Math.round((s - 0.2) * 10) / 10, 0.4));
   const rotateDoc = () => setRotation((r) => (r + 90) % 360);
+  const resetZoom = () => setScale(1.2);
 
   // Fit Width
   const fitWidth = () => {
     if (!containerRef.current || !pdfDoc) return;
     const containerWidth =
-      containerRef.current.clientWidth - (showThumbnails ? 220 : 64);
+      containerRef.current.clientWidth - (showThumbnails ? 240 : 64);
     pdfDoc.getPage(currentPage).then((page) => {
       const defaultViewport = page.getViewport({ scale: 1, rotation });
       const newScale = Math.max(
@@ -407,45 +494,54 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
     >
       <style dangerouslySetInnerHTML={{ __html: pdfPrintStyles }} />
 
-      {/* Floating Bottom Control Bar */}
+      {/* Modern Glassmorphic Floating Toolbar */}
       {!loading && !error && (
         <div className="no-print print-hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-30 transition-all duration-200">
           {isToolbarCollapsed ? (
             <button
               type="button"
               onClick={() => setIsToolbarCollapsed(false)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/95 backdrop-blur-md border border-slate-700/70 shadow-2xl text-slate-300 hover:text-white text-xs cursor-pointer transition"
-              title="Expand PDF Controls"
+              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 shadow-2xl text-slate-300 hover:text-white text-xs cursor-pointer transition hover:bg-slate-800"
+              title="Expand PDF Toolbar"
             >
               <FileText className="w-3.5 h-3.5 text-rose-400" />
-              <span className="font-mono text-[11px]">PDF Controls</span>
+              <span className="font-mono text-[11px]">
+                {currentPage} / {numPages}
+              </span>
+              <span className="text-slate-500">•</span>
+              <span className="font-mono text-[11px]">
+                {Math.round(scale * 100)}%
+              </span>
               <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
             </button>
           ) : (
-            <div className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-slate-900/95 backdrop-blur-md border border-slate-700/70 shadow-2xl text-white text-xs">
+            <div className="flex items-center gap-1 sm:gap-1.5 px-3 py-1.5 rounded-2xl bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 shadow-[0_16px_36px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] text-white text-xs">
               {/* Thumbnails Sidebar Toggle */}
               <button
                 type="button"
                 onClick={() => setShowThumbnails((v) => !v)}
-                className={`p-1.5 rounded-full transition cursor-pointer ${
+                className={`p-1.5 rounded-lg transition cursor-pointer flex items-center gap-1 ${
                   showThumbnails
-                    ? "bg-blue-600 text-white"
-                    : "hover:bg-white/10 text-slate-300"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "hover:bg-slate-800 text-slate-300 hover:text-white"
                 }`}
-                title="Toggle Page Thumbnails"
+                title="Toggle Page Previews Sidebar"
               >
                 <Sidebar className="w-4 h-4" />
+                <span className="text-[11px] hidden sm:inline font-medium">
+                  Pages
+                </span>
               </button>
 
-              <div className="w-px h-4 bg-slate-700 mx-0.5" />
+              <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
 
               {/* Page Navigation Jumper */}
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5">
                 <button
                   type="button"
                   onClick={goToPrev}
                   disabled={currentPage <= 1}
-                  className="p-1.5 hover:bg-white/10 disabled:opacity-30 rounded-full transition cursor-pointer"
+                  className="p-1 hover:bg-slate-800 disabled:opacity-30 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
                   title="Previous Page (Left Arrow)"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -453,14 +549,14 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
 
                 <form
                   onSubmit={handlePageInputSubmit}
-                  className="flex items-center gap-1"
+                  className="flex items-center gap-1 px-1"
                 >
                   <input
                     type="text"
                     value={inputPage}
                     onChange={(e) => setInputPage(e.target.value)}
                     onBlur={() => setInputPage(String(currentPage))}
-                    className="w-9 text-center py-0.5 bg-slate-800 border border-slate-700 rounded text-white font-mono text-xs focus:outline-none focus:border-blue-500"
+                    className="w-8 text-center py-0.5 bg-slate-800/80 border border-slate-700/80 rounded font-mono text-[11px] text-white focus:outline-none focus:border-blue-500"
                   />
                   <span className="text-slate-400 font-mono text-[11px]">
                     / {numPages || 1}
@@ -471,62 +567,66 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
                   type="button"
                   onClick={goToNext}
                   disabled={currentPage >= numPages}
-                  className="p-1.5 hover:bg-white/10 disabled:opacity-30 rounded-full transition cursor-pointer"
+                  className="p-1 hover:bg-slate-800 disabled:opacity-30 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
                   title="Next Page (Right Arrow)"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
 
-              <div className="w-px h-4 bg-slate-700 mx-0.5" />
+              <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
 
               {/* Zoom Controls */}
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5">
                 <button
                   type="button"
                   onClick={zoomOut}
                   disabled={scale <= 0.4}
-                  className="p-1.5 hover:bg-white/10 disabled:opacity-30 rounded-full transition cursor-pointer"
+                  className="p-1.5 hover:bg-slate-800 disabled:opacity-30 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
                   title="Zoom Out (-)"
                 >
-                  <ZoomOut className="w-4 h-4" />
+                  <ZoomOut className="w-3.5 h-3.5" />
                 </button>
 
-                <span className="text-[11px] font-mono text-slate-300 min-w-10 text-center">
+                <button
+                  type="button"
+                  onClick={resetZoom}
+                  className="text-[11px] font-mono text-slate-300 hover:text-blue-400 px-1 py-0.5 rounded min-w-10 text-center transition cursor-pointer"
+                  title="Reset to 100%"
+                >
                   {Math.round(scale * 100)}%
-                </span>
+                </button>
 
                 <button
                   type="button"
                   onClick={zoomIn}
                   disabled={scale >= 3.5}
-                  className="p-1.5 hover:bg-white/10 disabled:opacity-30 rounded-full transition cursor-pointer"
+                  className="p-1.5 hover:bg-slate-800 disabled:opacity-30 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
                   title="Zoom In (+)"
                 >
-                  <ZoomIn className="w-4 h-4" />
+                  <ZoomIn className="w-3.5 h-3.5" />
                 </button>
               </div>
-
-              <div className="w-px h-4 bg-slate-700 mx-0.5 hidden sm:block" />
 
               {/* Fit Width */}
               <button
                 type="button"
                 onClick={fitWidth}
-                className="hidden sm:inline-flex px-2 py-1 hover:bg-white/10 rounded text-[11px] text-slate-300 transition cursor-pointer"
+                className="hidden sm:inline-flex items-center gap-1 px-2 py-1 hover:bg-slate-800 rounded-lg text-[11px] text-slate-300 hover:text-white transition cursor-pointer"
                 title="Fit to Width"
               >
-                Fit Width
+                <Maximize2 className="w-3 h-3" />
+                <span>Fit</span>
               </button>
 
               {/* Rotate */}
               <button
                 type="button"
                 onClick={rotateDoc}
-                className="p-1.5 hover:bg-white/10 rounded-full text-slate-300 transition cursor-pointer"
+                className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
                 title="Rotate 90° (R)"
               >
-                <RotateCw className="w-4 h-4" />
+                <RotateCw className="w-3.5 h-3.5" />
               </button>
 
               {/* Single / Continuous View Mode Toggle */}
@@ -535,36 +635,38 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
                 onClick={() =>
                   setViewMode((m) => (m === "single" ? "continuous" : "single"))
                 }
-                className={`hidden sm:flex p-1.5 rounded-full transition cursor-pointer ${
+                className={`hidden sm:flex p-1.5 rounded-lg transition cursor-pointer ${
                   viewMode === "continuous"
-                    ? "bg-blue-600 text-white"
-                    : "hover:bg-white/10 text-slate-300"
+                    ? "bg-slate-800 text-blue-400"
+                    : "hover:bg-slate-800 text-slate-300 hover:text-white"
                 }`}
                 title={
                   viewMode === "continuous"
-                    ? "Switch to Single Page View"
-                    : "Switch to Continuous Vertical Scroll"
+                    ? "Continuous Scroll (Active)"
+                    : "Single Page Mode (Active)"
                 }
               >
-                <Layers className="w-4 h-4" />
+                <Layers className="w-3.5 h-3.5" />
               </button>
+
+              <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
 
               {/* Print Vector PDF */}
               <button
                 type="button"
                 onClick={handlePrint}
-                className="p-1.5 hover:bg-white/10 rounded-full text-slate-300 hover:text-white transition cursor-pointer"
-                title="Print All Pages"
+                className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
+                title="Print Vector PDF (All Pages)"
               >
-                <Printer className="w-4 h-4" />
+                <Printer className="w-3.5 h-3.5" />
               </button>
 
               {/* Collapse toolbar */}
               <button
                 type="button"
                 onClick={() => setIsToolbarCollapsed(true)}
-                className="p-1.5 hover:bg-white/10 rounded-full text-slate-400 hover:text-slate-200 transition cursor-pointer"
-                title="Collapse toolbar"
+                className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition cursor-pointer"
+                title="Minimize Toolbar"
               >
                 <ChevronDown className="w-3.5 h-3.5" />
               </button>
@@ -575,31 +677,32 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Thumbnails Sidebar */}
-        {showThumbnails && numPages > 0 && (
-          <aside className="no-print print-hidden w-48 bg-slate-900/95 border-r border-slate-800 flex flex-col shrink-0 z-20 animate-in slide-in-from-left duration-200">
-            <div className="p-3 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400 font-semibold">
-              <span>Pages ({numPages})</span>
+        {/* Thumbnails Sidebar with REAL Page Previews */}
+        {showThumbnails && numPages > 0 && pdfDoc && (
+          <aside className="no-print print-hidden w-52 bg-slate-900/95 border-r border-slate-800 flex flex-col shrink-0 z-20 animate-in slide-in-from-left duration-200 shadow-2xl">
+            <div className="p-3 border-b border-slate-800 flex items-center justify-between text-xs text-slate-300 font-semibold">
+              <div className="flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-rose-400" />
+                <span>Pages ({numPages})</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowThumbnails(false)}
+                className="p-1 hover:bg-white/10 rounded-md text-slate-400 hover:text-white transition cursor-pointer"
+                title="Close Side Panel"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
             <div className="flex-1 overflow-y-auto p-3 space-y-3">
               {Array.from({ length: numPages }, (_, i) => i + 1).map((pNum) => (
-                <button
+                <PdfThumbnailItem
                   key={pNum}
-                  type="button"
+                  pdfDoc={pdfDoc}
+                  pageNumber={pNum}
+                  isActive={currentPage === pNum}
                   onClick={() => scrollToPage(pNum)}
-                  className={`w-full flex flex-col items-center p-2 rounded-lg border transition cursor-pointer ${
-                    currentPage === pNum
-                      ? "bg-blue-600/15 border-blue-500 text-blue-400 shadow-md"
-                      : "bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:bg-slate-800/60"
-                  }`}
-                >
-                  <div className="w-full h-24 bg-white/5 rounded flex items-center justify-center mb-1.5 text-slate-500">
-                    <FileText className="w-6 h-6 opacity-60" />
-                  </div>
-                  <span className="text-[11px] font-mono font-medium">
-                    Page {pNum}
-                  </span>
-                </button>
+                />
               ))}
             </div>
           </aside>
