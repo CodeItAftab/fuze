@@ -302,9 +302,9 @@ export function FilePreviewClient() {
 
       {/* Main Viewport */}
       <div className="flex-1 flex overflow-hidden relative">
-        <main className="flex-1 flex flex-col items-center justify-center relative overflow-hidden bg-slate-950">
+        <main className="flex-1 flex flex-col items-stretch justify-start relative overflow-hidden bg-slate-950">
           {isLoading && (
-            <div className="flex flex-col items-center justify-center gap-3 text-slate-400">
+            <div className="flex flex-col items-center justify-center gap-3 text-slate-400 my-auto">
               <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
               <div className="text-xs font-semibold text-slate-200">Connecting to cloud storage...</div>
               <span className="text-[11px] text-slate-400">Negotiating direct media stream</span>
@@ -332,7 +332,7 @@ export function FilePreviewClient() {
           )}
 
           {!isLoading && !error && plan && streamSrc && (
-            <div className="w-full h-full flex items-center justify-center relative overflow-hidden">
+            <div className="w-full h-full flex items-stretch justify-center relative overflow-hidden">
               {isImage && (
                 <ImagePreview src={streamSrc} fileName={plan.file.name} />
               )}

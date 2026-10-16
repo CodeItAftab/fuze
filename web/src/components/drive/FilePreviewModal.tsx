@@ -374,7 +374,13 @@ export function FilePreviewModal({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto flex items-center justify-center p-3 sm:p-6 relative">
+      <div
+        className={`flex-1 overflow-hidden flex relative ${
+          isPdf || isDocx
+            ? "items-stretch justify-center p-0"
+            : "items-center justify-center p-3 sm:p-6 overflow-auto"
+        }`}
+      >
         {loading && (
           <div className="flex flex-col items-center justify-center gap-3 text-white max-w-sm text-center">
             <Loader2 className="w-8 h-8 animate-spin text-blue-500" />

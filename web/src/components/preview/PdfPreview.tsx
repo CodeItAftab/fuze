@@ -459,9 +459,9 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
         )}
 
         {/* Viewport Canvas Area */}
-        <main className="flex-1 overflow-auto flex items-center justify-center p-4 sm:p-8 relative bg-slate-950">
+        <main className="flex-1 overflow-y-auto overflow-x-auto flex flex-col items-center justify-start pt-8 pb-32 px-4 sm:px-8 relative bg-slate-950">
           {loading && (
-            <div className="flex flex-col items-center justify-center gap-3 text-slate-400">
+            <div className="flex flex-col items-center justify-center gap-3 text-slate-400 my-auto">
               <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
               <div className="text-xs font-medium text-slate-300">
                 Rendering PDF vector pages...
@@ -473,7 +473,7 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
           )}
 
           {error && (
-            <div className="p-8 bg-slate-900 border border-rose-500/30 rounded-2xl max-w-md text-center space-y-3 shadow-2xl">
+            <div className="p-8 bg-slate-900 border border-rose-500/30 rounded-2xl max-w-md text-center space-y-3 shadow-2xl my-auto">
               <AlertCircle className="w-10 h-10 text-rose-500 mx-auto" />
               <h4 className="text-sm font-bold text-white">
                 Unable to display PDF
@@ -492,7 +492,7 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
 
           {/* Single Page Canvas */}
           {!loading && !error && viewMode === "single" && (
-            <div className="flex items-center justify-center transition-all duration-200">
+            <div className="flex flex-col items-center justify-start transition-all duration-200">
               <canvas
                 ref={canvasRef}
                 className="shadow-2xl rounded-lg bg-white select-none transition-transform"
@@ -504,7 +504,7 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
           {!loading && !error && viewMode === "continuous" && (
             <div
               ref={continuousContainerRef}
-              className="flex flex-col items-center justify-start w-full h-full overflow-y-auto py-6 pb-24"
+              className="flex flex-col items-center justify-start w-full py-2 pb-24"
             />
           )}
         </main>
