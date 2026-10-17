@@ -12,6 +12,7 @@ import { TokenService } from "./token.service.js";
 import { getStorageAdapter } from "../adapters/factory.js";
 import { computeMerkleRoot } from "../utils/crypto.js";
 import { socketManager } from "../websocket/socket-manager.js";
+import { VfsService } from "./vfs.service.js";
 
 export class UploadSessionService {
   static async createSession(params: {
@@ -21,6 +22,13 @@ export class UploadSessionService {
     totalSize: number;
     parentId?: string | null;
   }) {
+    // 0. Auto-resolve VFS name conflict so files in the same folder don't collide or overwrite
+    const resolvedFileName = await VfsService.resolveUniqueName(
+      params.userId,
+      params.parentId || null,
+      params.fileName,
+    );
+
     // 1. Fetch connected providers and their quotas
     const identities = await db
       .select()
@@ -54,7 +62,7 @@ export class UploadSessionService {
       .values({
         userId: params.userId,
         parentId: params.parentId || null,
-        fileName: params.fileName,
+        fileName: resolvedFileName,
         mimeType: params.mimeType,
         totalSize: params.totalSize,
         strategy: decision.strategy,
@@ -77,6 +85,7 @@ export class UploadSessionService {
 
     return {
       sessionId: session!.id,
+      fileName: resolvedFileName,
       strategy: decision.strategy,
       totalChunks: decision.chunks.length,
       chunks: decision.chunks,
@@ -87,6 +96,7 @@ export class UploadSessionService {
     sessionId: string,
     chunkIndex: number,
     clientOrigin?: string,
+    retryCount = 0,
   ) {
     const [chunk] = await db
       .select()
@@ -122,10 +132,22 @@ export class UploadSessionService {
 
     // 3. Dynamically resolve adapter (Google Drive, OneDrive, Dropbox, or Box)
     const adapter = getStorageAdapter(identity.provider);
+
+    // Formulate collision-proof provider storage object name:
+    // Ensures Box (409 item_name_in_use), Dropbox (overwrite), and OneDrive never collide
+    const shortSessionId = session.id.slice(0, 8);
+    const lastDotIndex = session.fileName.lastIndexOf(".");
+    const baseName =
+      lastDotIndex > 0
+        ? session.fileName.slice(0, lastDotIndex)
+        : session.fileName;
+    const ext = lastDotIndex > 0 ? session.fileName.slice(lastDotIndex) : "";
+    const retrySalt = retryCount > 0 ? `_r${retryCount}` : "";
+
     const chunkName =
       session.strategy === "whole"
-        ? session.fileName
-        : `${session.fileName}.part${chunk.chunkIndex}`;
+        ? `${baseName}_${shortSessionId}${retrySalt}${ext}`
+        : `${baseName}_${shortSessionId}.part${chunk.chunkIndex}${retrySalt}${ext}`;
 
     const chunkSize = chunk.byteEnd - chunk.byteStart;
 
@@ -162,6 +184,7 @@ export class UploadSessionService {
       headers,
       uploadType: sessionRes.uploadType || "binary",
       formDataFields: sessionRes.formDataFields,
+      fileName: chunkName,
     };
   }
 
