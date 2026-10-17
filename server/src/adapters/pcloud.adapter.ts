@@ -18,15 +18,31 @@ interface PCloudFileResponse {
 }
 
 export class PCloudAdapter implements StorageAdapter {
+  private static folderCache = new Map<string, boolean>();
+
+  async ensureFuzeFolder(accessToken: string): Promise<void> {
+    if (PCloudAdapter.folderCache.get(accessToken)) return;
+    try {
+      await fetch(
+        `https://api.pcloud.com/createfolderifnotexists?access_token=${accessToken}&path=/Fuze`,
+      );
+      PCloudAdapter.folderCache.set(accessToken, true);
+    } catch (err) {
+      console.warn("[PCloudAdapter] Could not ensure Fuze folder:", err);
+    }
+  }
+
   async createResumableUploadSession(params: {
     fileName: string;
     mimeType: string;
     size: number;
     accessToken: string;
   }): Promise<UploadSessionResult> {
-    // pCloud direct file upload endpoint
+    await this.ensureFuzeFolder(params.accessToken);
+
+    // pCloud direct file upload endpoint with path=/Fuze
     const encodedName = encodeURIComponent(params.fileName);
-    const sessionUrl = `https://api.pcloud.com/uploadfile?access_token=${params.accessToken}&filename=${encodedName}&nopartial=0`;
+    const sessionUrl = `https://api.pcloud.com/uploadfile?access_token=${params.accessToken}&path=/Fuze&filename=${encodedName}&nopartial=0`;
 
     return {
       sessionUrl,

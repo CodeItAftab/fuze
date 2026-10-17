@@ -27,15 +27,90 @@ interface BoxTokenResponse {
 }
 
 export class BoxAdapter implements StorageAdapter {
+  private static folderCache = new Map<string, string>();
+
+  async getOrCreateFuzeFolder(accessToken: string): Promise<string> {
+    const cached = BoxAdapter.folderCache.get(accessToken);
+    if (cached) return cached;
+
+    try {
+      // 1. Search root folder items for an existing "Fuze" folder
+      const listRes = await fetch(
+        "https://api.box.com/2.0/folders/0/items?fields=id,name,type&limit=1000",
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
+      );
+
+      if (listRes.ok) {
+        const listData = (await listRes.json()) as {
+          entries?: Array<{ id: string; name: string; type: string }>;
+        };
+        const existing = listData.entries?.find(
+          (e) => e.type === "folder" && e.name.toLowerCase() === "fuze",
+        );
+        if (existing) {
+          BoxAdapter.folderCache.set(accessToken, existing.id);
+          return existing.id;
+        }
+      }
+
+      // 2. If not found, create "Fuze" folder in root folder ("0")
+      const createRes = await fetch("https://api.box.com/2.0/folders", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "Fuze",
+          parent: { id: "0" },
+        }),
+      });
+
+      if (createRes.ok) {
+        const createData = (await createRes.json()) as { id: string };
+        BoxAdapter.folderCache.set(accessToken, createData.id);
+        return createData.id;
+      }
+
+      // 3. If 409 Conflict, Box returns existing folder ID in context_info
+      if (createRes.status === 409) {
+        const errJson = (await createRes.json().catch(() => ({}))) as {
+          context_info?: {
+            conflicts?: Array<{ id: string }> | { id: string };
+          };
+        };
+        const conflictId = Array.isArray(errJson.context_info?.conflicts)
+          ? errJson.context_info.conflicts[0]?.id
+          : (errJson.context_info?.conflicts as { id: string } | undefined)?.id;
+
+        if (conflictId) {
+          BoxAdapter.folderCache.set(accessToken, conflictId);
+          return conflictId;
+        }
+      }
+    } catch (err) {
+      console.warn(
+        "[BoxAdapter] Could not get/create Fuze folder, falling back to root:",
+        err,
+      );
+    }
+
+    return "0";
+  }
+
   async createResumableUploadSession(params: {
     fileName: string;
     mimeType: string;
     size: number;
     accessToken: string;
   }): Promise<UploadSessionResult> {
+    const folderId = await this.getOrCreateFuzeFolder(params.accessToken);
+
     // With CORS configured for http://localhost:3000, Box supports direct client-side
     // multipart upload to https://upload.box.com/api/2.0/files/content
-    // Attributes must contain name and parent folder { id: "0" }
+    // Attributes specify name and the dedicated Fuze folder id
     return {
       sessionUrl: "https://upload.box.com/api/2.0/files/content",
       expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
@@ -44,7 +119,7 @@ export class BoxAdapter implements StorageAdapter {
       formDataFields: {
         attributes: JSON.stringify({
           name: params.fileName,
-          parent: { id: "0" },
+          parent: { id: folderId },
         }),
       },
       headers: {
