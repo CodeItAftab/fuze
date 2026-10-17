@@ -790,7 +790,7 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
           onMouseMove={handlePanMouseMove}
           onMouseUp={handlePanMouseUp}
           onMouseLeave={handlePanMouseUp}
-          className={`pdf-scroll-main flex-1 overflow-y-auto overflow-x-auto flex items-start pt-4 sm:pt-8 pb-36 sm:pb-44 px-2 sm:px-4 md:px-8 relative bg-slate-950 will-change-scroll custom-scrollbar ${
+          className={`pdf-scroll-main flex-1 overflow-y-auto overflow-x-auto flex items-start pt-4 sm:pt-8 pb-20 sm:pb-24 px-2 sm:px-4 md:px-8 relative bg-slate-950 will-change-scroll custom-scrollbar ${
             scale > 1.2 ? (isPanning ? "cursor-grabbing" : "cursor-grab") : "cursor-default"
           }`}
         >

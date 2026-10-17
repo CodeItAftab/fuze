@@ -214,10 +214,12 @@ function DocxPageThumbnail({
 export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const fallbackContainerRef = useRef<HTMLDivElement>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
+  const [docHeight, setDocHeight] = useState<number | null>(null);
   const [pageCount, setPageCount] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageHtmls, setPageHtmls] = useState<string[]>([]);
@@ -371,6 +373,11 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
               sections.forEach((sec) => htmls.push(sec.innerHTML));
               setPageHtmls(htmls);
 
+              const unscaledH = containerRef.current.offsetHeight || containerRef.current.scrollHeight;
+              if (unscaledH > 0) {
+                setDocHeight(unscaledH);
+              }
+
               computeResponsiveFit();
               setLoading(false);
               return;
@@ -444,6 +451,29 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
       isCancelled = true;
     };
   }, [src, blob, computeResponsiveFit]);
+
+  // Dynamically track rendered unscaled document height to eliminate blank trailing space when scaled
+  useEffect(() => {
+    if (loading || error) return;
+    const target = fallbackHtml ? fallbackContainerRef.current : containerRef.current;
+    if (!target) return;
+
+    const updateHeight = () => {
+      const h = target.offsetHeight || target.scrollHeight;
+      if (h > 0) {
+        setDocHeight((prev) => (prev && Math.abs(prev - h) < 2 ? prev : h));
+      }
+    };
+
+    updateHeight();
+
+    const ro = new ResizeObserver(() => {
+      updateHeight();
+    });
+
+    ro.observe(target);
+    return () => ro.disconnect();
+  }, [loading, error, fallbackHtml]);
 
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
@@ -706,7 +736,7 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
           onMouseMove={handlePanMouseMove}
           onMouseUp={handlePanMouseUp}
           onMouseLeave={handlePanMouseUp}
-          className={`flex-1 overflow-y-auto overflow-x-auto flex items-start pt-4 sm:pt-8 pb-36 sm:pb-44 px-2 sm:px-4 md:px-8 bg-slate-950 relative will-change-scroll custom-scrollbar ${
+          className={`flex-1 overflow-y-auto overflow-x-auto flex items-start pt-4 sm:pt-8 pb-20 sm:pb-24 px-2 sm:px-4 md:px-8 bg-slate-950 relative will-change-scroll custom-scrollbar ${
             scale > 1.05 ? (isPanning ? "cursor-grabbing" : "cursor-grab") : "cursor-default"
           }`}
         >
@@ -751,6 +781,7 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
               style={{
                 transform: `scale(${scale})`,
                 transformOrigin: "top center",
+                marginBottom: docHeight ? `${Math.round(docHeight * (scale - 1))}px` : undefined,
                 transition: isPanning ? "none" : "transform 0.12s ease-out",
               }}
               className={`fuze-docx-view flex flex-col items-center select-text ${
@@ -766,11 +797,15 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
                 style={{
                   transform: `scale(${scale})`,
                   transformOrigin: "top center",
+                  marginBottom: docHeight ? `${Math.round(docHeight * (scale - 1))}px` : undefined,
                   transition: isPanning ? "none" : "transform 0.12s ease-out",
                 }}
                 className="w-full max-w-4xl"
               >
-                <article className="bg-white text-slate-900 rounded-none border border-slate-200/80 shadow-2xl p-4 sm:p-10 md:p-16 min-h-[950px] leading-relaxed font-serif text-[15px] select-text">
+                <article
+                  ref={fallbackContainerRef}
+                  className="bg-white text-slate-900 rounded-none border border-slate-200/80 shadow-2xl p-4 sm:p-10 md:p-16 min-h-[950px] leading-relaxed font-serif text-[15px] select-text"
+                >
                   <div
                     dangerouslySetInnerHTML={{ __html: fallbackHtml }}
                     className="docx-content space-y-4 [&>h1]:text-2xl [&>h1]:font-bold [&>h1]:text-slate-900 [&>h1]:mb-3 [&>h1]:mt-6 [&>h1]:border-b [&>h1]:border-slate-200 [&>h1]:pb-2
