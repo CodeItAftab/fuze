@@ -64,6 +64,14 @@ export function getProviderBadgeStyle(badge: string | null | undefined) {
   return "bg-slate-50 text-slate-700 border border-slate-200/80";
 }
 
+function CornerBadges({ ext }: { ext: string }) {
+  return (
+    <span className="absolute bottom-2 right-2 text-[9px] font-bold uppercase bg-slate-900/75 text-white px-1.5 py-0.5 rounded backdrop-blur-xs select-none shadow-xs pointer-events-none">
+      {ext}
+    </span>
+  );
+}
+
 interface FileThumbnailProps {
   file: VfsItem;
   badge?: string;
@@ -106,13 +114,6 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
   const isDiskImage = /\.(iso|img|vmdk|vdi|cue)$/i.test(name);
   const isCert = /\.(pem|crt|cer|key|p12|pfx|pub)$/i.test(name);
 
-  const CornerBadges = () => (
-    <>
-      <span className="absolute bottom-2 right-2 text-[9px] font-bold uppercase bg-slate-900/75 text-white px-1.5 py-0.5 rounded backdrop-blur-xs select-none shadow-xs pointer-events-none">
-        {ext}
-      </span>
-    </>
-  );
 
   // 1. Native Image Thumbnail
   if (isImage && !imgError) {
@@ -127,7 +128,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
           onError={() => setImgError(true)}
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
         />
-        <CornerBadges />
+        <CornerBadges ext={ext} />
       </div>
     );
   }
@@ -150,7 +151,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
             <Play className="w-4 h-4 fill-slate-900 ml-0.5" />
           </div>
         </div>
-        <CornerBadges />
+        <CornerBadges ext={ext} />
       </div>
     );
   }
@@ -184,7 +185,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
             <span className="text-[8px] font-mono text-slate-500 uppercase">Source Code</span>
           </div>
         </div>
-        <CornerBadges />
+        <CornerBadges ext={ext} />
       </div>
     );
   }
@@ -214,7 +215,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
             <span className="text-[8px] font-mono text-cyan-400 uppercase">Markdown</span>
           </div>
         </div>
-        <CornerBadges />
+        <CornerBadges ext={ext} />
       </div>
     );
   }
@@ -252,7 +253,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
             </span>
           </div>
         </div>
-        <CornerBadges />
+        <CornerBadges ext={ext} />
       </div>
     );
   }
@@ -281,7 +282,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
             </span>
           </div>
         </div>
-        <CornerBadges />
+        <CornerBadges ext={ext} />
       </div>
     );
   }
@@ -304,7 +305,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
             <span className="text-[8px] font-bold text-amber-700 uppercase">Archive</span>
           </div>
         </div>
-        <CornerBadges />
+        <CornerBadges ext={ext} />
       </div>
     );
   }
@@ -331,7 +332,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
             <span className="text-[8px] font-bold text-purple-700 uppercase">Audio Track</span>
           </div>
         </div>
-        <CornerBadges />
+        <CornerBadges ext={ext} />
       </div>
     );
   }
@@ -368,7 +369,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
             <span className="text-[8px] font-bold text-emerald-700 uppercase tracking-wide">Spreadsheet</span>
           </div>
         </div>
-        <CornerBadges />
+        <CornerBadges ext={ext} />
       </div>
     );
   }
@@ -398,7 +399,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
             </span>
           </div>
         </div>
-        <CornerBadges />
+        <CornerBadges ext={ext} />
       </div>
     );
   }
@@ -431,7 +432,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
             </span>
           </div>
         </div>
-        <CornerBadges />
+        <CornerBadges ext={ext} />
       </div>
     );
   }
@@ -468,7 +469,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
             </span>
           </div>
         </div>
-        <CornerBadges />
+        <CornerBadges ext={ext} />
       </div>
     );
   }
@@ -493,7 +494,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
             <span className="text-[8px] font-bold text-emerald-700 uppercase">Database</span>
           </div>
         </div>
-        <CornerBadges />
+        <CornerBadges ext={ext} />
       </div>
     );
   }
@@ -516,7 +517,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
             <span className="text-[8px] font-bold text-sky-700 uppercase">3D / CAD</span>
           </div>
         </div>
-        <CornerBadges />
+        <CornerBadges ext={ext} />
       </div>
     );
   }
@@ -539,7 +540,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
             <span className="text-[8px] font-bold text-pink-700 uppercase">Design</span>
           </div>
         </div>
-        <CornerBadges />
+        <CornerBadges ext={ext} />
       </div>
     );
   }
@@ -562,7 +563,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
             <span className="text-[8px] font-bold text-rose-700 uppercase">Font</span>
           </div>
         </div>
-        <CornerBadges />
+        <CornerBadges ext={ext} />
       </div>
     );
   }
@@ -585,7 +586,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
             <span className="text-[8px] font-bold text-cyan-700 uppercase">Disk Image</span>
           </div>
         </div>
-        <CornerBadges />
+        <CornerBadges ext={ext} />
       </div>
     );
   }
@@ -608,7 +609,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
             <span className="text-[8px] font-bold text-teal-700 uppercase">Security Key</span>
           </div>
         </div>
-        <CornerBadges />
+        <CornerBadges ext={ext} />
       </div>
     );
   }
@@ -635,7 +636,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
             </span>
           </div>
         </div>
-        <CornerBadges />
+        <CornerBadges ext={ext} />
       </div>
     );
   }
@@ -658,7 +659,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
             <span className="text-[8px] font-bold text-emerald-700 uppercase">Image</span>
           </div>
         </div>
-        <CornerBadges />
+        <CornerBadges ext={ext} />
       </div>
     );
   }
@@ -690,7 +691,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
           </span>
         </div>
       </div>
-      <CornerBadges />
+      <CornerBadges ext={ext} />
     </div>
   );
 }
