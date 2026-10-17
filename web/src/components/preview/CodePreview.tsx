@@ -28,6 +28,8 @@ import {
   WrapText,
   Search,
   X,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 interface CodePreviewProps {
@@ -143,6 +145,7 @@ export function CodePreview({
   const [fontSize, setFontSize] = useState<"sm" | "base" | "lg">("base");
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Normalize input string: strip BOM and stray null bytes
@@ -266,151 +269,176 @@ export function CodePreview({
 
       {/* Floating Bottom Control Bar - Unified with all Fuze Previewers */}
       <div className="no-print print-hidden absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 transition-all duration-200 max-w-[calc(100vw-1.5rem)]">
-        <div className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-2xl bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 shadow-[0_16px_36px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] text-white text-xs">
-          {/* Language Pill */}
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-400 font-mono text-[11px] font-semibold">
-            <FileCode className="w-3.5 h-3.5" />
-            <span>{langLabel}</span>
-          </div>
+        {isToolbarCollapsed ? (
+          <button
+            type="button"
+            onClick={() => setIsToolbarCollapsed(false)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 shadow-2xl text-slate-300 hover:text-white text-xs cursor-pointer transition hover:bg-slate-800"
+            title="Expand Controls"
+          >
+            <FileCode className="w-3.5 h-3.5 text-blue-400" />
+            <span className="font-mono text-[11px] font-semibold">{langLabel}</span>
+            <span className="text-slate-500">•</span>
+            <span className="font-mono text-[11px]">{lines.length} lines</span>
+            <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+          </button>
+        ) : (
+          <div className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-2xl bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 shadow-[0_16px_36px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] text-white text-xs">
+            {/* Language Pill */}
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-400 font-mono text-[11px] font-semibold">
+              <FileCode className="w-3.5 h-3.5" />
+              <span>{langLabel}</span>
+            </div>
 
-          <span className="text-[11px] font-mono text-slate-400 px-1 hidden xs:inline">
-            {lines.length} {lines.length === 1 ? "line" : "lines"}
-          </span>
+            <span className="text-[11px] font-mono text-slate-400 px-1 hidden xs:inline">
+              {lines.length} {lines.length === 1 ? "line" : "lines"}
+            </span>
 
-          <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
+            <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
 
-          {/* Search in Code */}
-          {showSearch ? (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-800/95 border border-blue-500/50 rounded-lg text-xs animate-in fade-in duration-150">
-              <Search className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Find in code..."
-                className="bg-transparent text-white text-[11px] placeholder:text-slate-500 outline-none w-20 sm:w-28 font-mono"
-                autoFocus
-              />
-              {searchQuery.trim() && (
-                <span className="text-[10px] font-mono px-1 py-0.2 bg-slate-700/80 rounded text-slate-300">
-                  {matchCount}
-                </span>
-              )}
+            {/* Search in Code */}
+            {showSearch ? (
+              <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-800/95 border border-blue-500/50 rounded-lg text-xs animate-in fade-in duration-150">
+                <Search className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Find in code..."
+                  className="bg-transparent text-white text-[11px] placeholder:text-slate-500 outline-none w-20 sm:w-28 font-mono"
+                  autoFocus
+                />
+                {searchQuery.trim() && (
+                  <span className="text-[10px] font-mono px-1 py-0.2 bg-slate-700/80 rounded text-slate-300">
+                    {matchCount}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setShowSearch(false);
+                  }}
+                  className="p-0.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition cursor-pointer"
+                  title="Close Search"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
               <button
                 type="button"
                 onClick={() => {
-                  setSearchQuery("");
-                  setShowSearch(false);
+                  setShowSearch(true);
+                  setTimeout(() => searchInputRef.current?.focus(), 50);
                 }}
-                className="p-0.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition cursor-pointer"
-                title="Close Search"
+                className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition cursor-pointer"
+                title="Find in code"
               >
-                <X className="w-3 h-3" />
+                <Search className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {/* Word Wrap Toggle */}
+            <button
+              type="button"
+              onClick={() => setWordWrap((w) => !w)}
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg border transition cursor-pointer text-[11px] ${
+                wordWrap
+                  ? "bg-blue-600/20 border-blue-500/40 text-blue-400 font-semibold"
+                  : "hover:bg-slate-800 border-transparent text-slate-400 hover:text-white"
+              }`}
+              title="Toggle Word Wrap"
+            >
+              <WrapText className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Wrap</span>
+            </button>
+
+            {/* Font Size Selector */}
+            <div className="flex items-center gap-0.5 bg-slate-800/80 rounded-lg p-0.5 border border-slate-700/60 text-[11px]">
+              <button
+                type="button"
+                onClick={() => setFontSize("sm")}
+                className={`px-1.5 py-0.5 rounded transition cursor-pointer ${
+                  fontSize === "sm" ? "bg-slate-700 text-white font-bold" : "text-slate-400 hover:text-slate-200"
+                }`}
+                title="Small font"
+              >
+                A-
+              </button>
+              <button
+                type="button"
+                onClick={() => setFontSize("base")}
+                className={`px-1.5 py-0.5 rounded transition cursor-pointer ${
+                  fontSize === "base" ? "bg-slate-700 text-white font-bold" : "text-slate-400 hover:text-slate-200"
+                }`}
+                title="Default font"
+              >
+                A
+              </button>
+              <button
+                type="button"
+                onClick={() => setFontSize("lg")}
+                className={`px-1.5 py-0.5 rounded transition cursor-pointer ${
+                  fontSize === "lg" ? "bg-slate-700 text-white font-bold" : "text-slate-400 hover:text-slate-200"
+                }`}
+                title="Large font"
+              >
+                A+
               </button>
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                setShowSearch(true);
-                setTimeout(() => searchInputRef.current?.focus(), 50);
-              }}
-              className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition cursor-pointer"
-              title="Find in code"
-            >
-              <Search className="w-3.5 h-3.5" />
-            </button>
-          )}
 
-          {/* Word Wrap Toggle */}
-          <button
-            type="button"
-            onClick={() => setWordWrap((w) => !w)}
-            className={`flex items-center gap-1 px-2 py-1 rounded-lg border transition cursor-pointer text-[11px] ${
-              wordWrap
-                ? "bg-blue-600/20 border-blue-500/40 text-blue-400 font-semibold"
-                : "hover:bg-slate-800 border-transparent text-slate-400 hover:text-white"
-            }`}
-            title="Toggle Word Wrap"
-          >
-            <WrapText className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Wrap</span>
-          </button>
+            <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
 
-          {/* Font Size Selector */}
-          <div className="flex items-center gap-0.5 bg-slate-800/80 rounded-lg p-0.5 border border-slate-700/60 text-[11px]">
+            {/* Clean Copy Button */}
             <button
               type="button"
-              onClick={() => setFontSize("sm")}
-              className={`px-1.5 py-0.5 rounded transition cursor-pointer ${
-                fontSize === "sm" ? "bg-slate-700 text-white font-bold" : "text-slate-400 hover:text-slate-200"
-              }`}
-              title="Small font"
+              onClick={handleCopy}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition text-xs font-semibold cursor-pointer shadow-xs active:scale-95"
+              title="Copy code to clipboard"
             >
-              A-
+              {copied ? (
+                <>
+                  <Check className="h-3.5 w-3.5 text-emerald-300" />
+                  <span>Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3.5 w-3.5" />
+                  <span>Copy</span>
+                </>
+              )}
             </button>
+
+            {/* Minimize Toolbar Chevron */}
             <button
               type="button"
-              onClick={() => setFontSize("base")}
-              className={`px-1.5 py-0.5 rounded transition cursor-pointer ${
-                fontSize === "base" ? "bg-slate-700 text-white font-bold" : "text-slate-400 hover:text-slate-200"
-              }`}
-              title="Default font"
+              onClick={() => setIsToolbarCollapsed(true)}
+              className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition cursor-pointer ml-0.5"
+              title="Minimize toolbar"
             >
-              A
-            </button>
-            <button
-              type="button"
-              onClick={() => setFontSize("lg")}
-              className={`px-1.5 py-0.5 rounded transition cursor-pointer ${
-                fontSize === "lg" ? "bg-slate-700 text-white font-bold" : "text-slate-400 hover:text-slate-200"
-              }`}
-              title="Large font"
-            >
-              A+
+              <ChevronDown className="w-3.5 h-3.5" />
             </button>
           </div>
-
-          <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
-
-          {/* Clean Copy Button */}
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition text-xs font-semibold cursor-pointer shadow-xs active:scale-95"
-            title="Copy code to clipboard"
-          >
-            {copied ? (
-              <>
-                <Check className="h-3.5 w-3.5 text-emerald-300" />
-                <span>Copied!</span>
-              </>
-            ) : (
-              <>
-                <Copy className="h-3.5 w-3.5" />
-                <span>Copy</span>
-              </>
-            )}
-          </button>
-        </div>
+        )}
       </div>
 
       {/* Edge-to-Edge Code Canvas with Sticky Line Numbers Gutter */}
-      <div className="flex-1 overflow-auto custom-scrollbar flex min-w-full bg-slate-950 pb-20 sm:pb-24">
+      <div className="flex-1 overflow-auto custom-scrollbar bg-slate-950">
         <div className="flex min-w-full">
-          {/* Sticky Gutter with Line Numbers */}
+          {/* Sticky Gutter with Line Numbers - generous bottom padding clears floating toolbar */}
           <div
-            className={`sticky left-0 select-none text-slate-600 bg-slate-950/95 border-r border-slate-800/80 pl-3 sm:pl-4 pr-3 sm:pr-4 py-4 text-right shrink-0 z-10 backdrop-blur-xs font-mono ${lineHeightClass} ${fontTextClass}`}
+            className={`sticky left-0 select-none text-slate-600 bg-slate-950/95 border-r border-slate-800/80 pl-3 sm:pl-4 pr-3 sm:pr-4 pt-4 pb-28 sm:pb-36 text-right shrink-0 z-10 backdrop-blur-xs font-mono ${lineHeightClass} ${fontTextClass}`}
           >
             {lines.map((_, i) => (
               <div key={i}>{i + 1}</div>
             ))}
           </div>
 
-          {/* Syntax Highlighted Code Area */}
+          {/* Syntax Highlighted Code Area - generous bottom padding clears floating toolbar */}
           <pre
-            className={`p-4 pl-4 sm:pl-5 flex-1 m-0 font-mono ${lineHeightClass} ${fontTextClass} text-slate-100 ${
+            className={`pt-4 pb-28 sm:pb-36 pl-4 sm:pl-5 pr-4 flex-1 m-0 font-mono ${lineHeightClass} ${fontTextClass} text-slate-100 ${
               wordWrap ? "whitespace-pre-wrap break-all" : "whitespace-pre overflow-x-visible"
             }`}
           >

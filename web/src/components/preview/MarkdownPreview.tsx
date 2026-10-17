@@ -214,7 +214,7 @@ export function MarkdownPreview({ content, fileName }: MarkdownPreviewProps) {
             className="w-full max-w-4xl"
           >
             {/* Sleek Dark Markdown Paper */}
-            <article className="md-article bg-slate-900/90 text-slate-100 rounded-2xl border border-slate-800 shadow-2xl p-6 sm:p-10 md:p-12 leading-relaxed text-[15px] select-text">
+            <article className="md-article bg-slate-900/90 text-slate-100 rounded-2xl border border-slate-800 shadow-2xl p-6 sm:p-10 md:p-12 mb-28 sm:mb-36 leading-relaxed text-[15px] select-text">
               <div
                 dangerouslySetInnerHTML={{ __html: parsedHtml }}
                 className="markdown-body space-y-4 font-sans text-slate-200
@@ -239,7 +239,7 @@ export function MarkdownPreview({ content, fileName }: MarkdownPreviewProps) {
             </article>
           </div>
         ) : (
-          <div className="w-full max-w-4xl bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-2xl font-mono text-xs text-slate-200 select-text overflow-x-auto whitespace-pre-wrap leading-relaxed">
+          <div className="w-full max-w-4xl bg-slate-900/90 border border-slate-800 rounded-2xl p-6 mb-28 sm:mb-36 shadow-2xl font-mono text-xs text-slate-200 select-text overflow-x-auto whitespace-pre-wrap leading-relaxed">
             {cleanContent}
           </div>
         )}
