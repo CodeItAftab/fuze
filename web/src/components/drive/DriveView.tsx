@@ -113,10 +113,14 @@ export function DriveView({
   );
 
   const navigateToFolder = useCallback(
-    (targetFolderId: string | null) => {
+    (targetFolderId: string | null, targetFolderName?: string) => {
       if (targetFolderId) {
+        if (targetFolderName) {
+          document.title = `${targetFolderName} - Fuze Drive`;
+        }
         router.push(`/dashboard/folder/${targetFolderId}`);
       } else {
+        document.title = "Dashboard | Fuze Drive";
         router.push("/dashboard");
       }
     },
@@ -170,6 +174,26 @@ export function DriveView({
     setCurrentFolder(folderId || null);
     void fetchData();
   }, [folderId, setCurrentFolder, fetchData]);
+
+  // Synchronize browser tab title with opened folder, view, or root
+  useEffect(() => {
+    if (isStarredView) {
+      document.title = "Starred - Fuze Drive";
+      return;
+    }
+
+    if (folderId) {
+      const currentCrumb =
+        breadcrumbs.find((b) => b.id === folderId) ||
+        (breadcrumbs.length > 1 ? breadcrumbs[breadcrumbs.length - 1] : null);
+
+      if (currentCrumb && currentCrumb.name && currentCrumb.id !== null) {
+        document.title = `${currentCrumb.name} - Fuze Drive`;
+      }
+    } else {
+      document.title = "Dashboard | Fuze Drive";
+    }
+  }, [folderId, breadcrumbs, isStarredView]);
 
   useEffect(() => {
     socketClient.connect();
@@ -365,7 +389,7 @@ export function DriveView({
       }
 
       if (item.type === "folder") {
-        navigateToFolder(item.id);
+        navigateToFolder(item.id, item.name);
       } else {
         router.push(`/preview/${item.id}`);
       }

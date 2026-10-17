@@ -3,7 +3,7 @@ import { HardDrive, ChevronRight } from "lucide-react";
 interface DriveBreadcrumbsProps {
   folderId: string | null;
   breadcrumbs: Array<{ id: string | null; name: string }>;
-  onNavigate: (folderId: string | null) => void;
+  onNavigate: (folderId: string | null, folderName?: string) => void;
 }
 
 export function DriveBreadcrumbs({
@@ -35,7 +35,7 @@ export function DriveBreadcrumbs({
         <div key={crumb.id || idx} className="flex items-center gap-1.5 shrink-0">
           <ChevronRight className="h-3 w-3 text-slate-400" />
           <button
-            onClick={() => onNavigate(crumb.id)}
+            onClick={() => onNavigate(crumb.id, crumb.name)}
             className={`hover:text-blue-600 transition cursor-pointer ${
               idx === folderCrumbs.length - 1
                 ? "font-semibold text-slate-800"

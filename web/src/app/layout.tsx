@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   ),
   title: {
     default: "Combine Free Cloud Storage into One 42 GB Drive | Fuze Drive",
-    template: "%s | Fuze Drive",
+    template: "%s",
   },
   description:
     "Combine free Google Drive, OneDrive, Dropbox, Box and pCloud storage into one 42 GB drive. Open source, free, files stream directly from your browser.",
@@ -102,7 +102,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
       name: "Fuze Drive",
-      applicationCategory: "UtilitiesApplication, ProductivityApplication, CloudStorage",
+      applicationCategory:
+        "UtilitiesApplication, ProductivityApplication, CloudStorage",
       operatingSystem: "Web, Windows, macOS, Linux, iOS, Android",
       offers: {
         "@type": "Offer",
@@ -209,10 +210,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         name: "Aftab Alam",
         url: "https://aftabalam.me",
       },
-      sameAs: [
-        "https://github.com/CodeItAftab/fuze",
-        "https://aftabalam.me",
-      ],
+      sameAs: ["https://github.com/CodeItAftab/fuze", "https://aftabalam.me"],
     },
   ];
 

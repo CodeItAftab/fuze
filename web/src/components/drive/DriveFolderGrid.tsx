@@ -7,7 +7,7 @@ import { getFolderPalette } from "@/components/drive/FileThumbnail";
 interface DriveFolderGridProps {
   folders: VfsItem[];
   selectedIds: Set<string>;
-  onNavigate: (folderId: string) => void;
+  onNavigate: (folderId: string, folderName?: string) => void;
   onItemClick: (folder: VfsItem, e: React.MouseEvent) => void;
   onToggleSelectCheckbox: (id: string, e: React.MouseEvent) => void;
   onToggleStar: (folder: VfsItem) => void;
@@ -37,7 +37,7 @@ export function DriveFolderGrid({
           return (
             <div
               key={folder.id}
-              onDoubleClick={() => onNavigate(folder.id)}
+              onDoubleClick={() => onNavigate(folder.id, folder.name)}
               onClick={(e) => onItemClick(folder, e)}
               onContextMenu={(e) => {
                 e.preventDefault();
