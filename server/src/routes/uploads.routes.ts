@@ -62,11 +62,15 @@ export async function uploadRoutes(fastify: FastifyInstance) {
   fastify.get(
     "/:sessionId/chunks/:index/url",
     async (
-      request: FastifyRequest<{ Params: { sessionId: string; index: string } }>,
+      request: FastifyRequest<{
+        Params: { sessionId: string; index: string };
+        Querystring: { retry?: string };
+      }>,
       reply,
     ) => {
       try {
         const { sessionId, index } = request.params;
+        const retry = Number(request.query?.retry) || 0;
         const clientOrigin =
           (request.headers.origin as string) ||
           process.env.CLIENT_ORIGIN ||
@@ -75,6 +79,7 @@ export async function uploadRoutes(fastify: FastifyInstance) {
           sessionId,
           Number(index),
           clientOrigin,
+          retry,
         );
         return reply.send(res);
       } catch (err: any) {

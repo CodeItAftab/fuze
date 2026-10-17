@@ -279,27 +279,6 @@ export class UploadQueueManager {
     for (const chunk of chunks) {
       if (signal?.aborted) throw new Error("Upload cancelled");
 
-      // Obtain provider presigned/resumable instruction URL
-      const urlRes = await fetch(
-        `${apiUrl}/uploads/${sessionData.sessionId}/chunks/${chunk.index}/url`,
-        { credentials: "include", signal },
-      );
-
-      if (!urlRes.ok) {
-        const errJson = await urlRes.json().catch(() => ({}));
-        throw new Error(
-          errJson.error || `Failed to get upload URL for chunk ${chunk.index}`,
-        );
-      }
-
-      const instruction = (await urlRes.json()) as {
-        uploadUrl: string;
-        httpMethod?: string;
-        headers?: Record<string, string>;
-        uploadType?: "binary" | "multipart";
-        formDataFields?: Record<string, string>;
-      };
-
       const chunkBlob = item.file.slice(chunk.byteStart, chunk.byteEnd);
       const chunkSize = chunk.byteEnd - chunk.byteStart;
 
@@ -316,6 +295,28 @@ export class UploadQueueManager {
             await new Promise((r) => setTimeout(r, 1500 * attempt));
             if (signal?.aborted) throw new Error("Upload cancelled");
           }
+
+          // Obtain provider presigned/resumable instruction URL (passes retry attempt so server can re-salt name if provider returned 409)
+          const urlRes = await fetch(
+            `${apiUrl}/uploads/${sessionData.sessionId}/chunks/${chunk.index}/url${attempt > 0 ? `?retry=${attempt}` : ""}`,
+            { credentials: "include", signal },
+          );
+
+          if (!urlRes.ok) {
+            const errJson = await urlRes.json().catch(() => ({}));
+            throw new Error(
+              errJson.error || `Failed to get upload URL for chunk ${chunk.index}`,
+            );
+          }
+
+          const instruction = (await urlRes.json()) as {
+            uploadUrl: string;
+            httpMethod?: string;
+            headers?: Record<string, string>;
+            uploadType?: "binary" | "multipart";
+            formDataFields?: Record<string, string>;
+            fileName?: string;
+          };
 
           uploadSuccess = await new Promise<{
             status: number;
@@ -387,11 +388,18 @@ export class UploadQueueManager {
               if (xhr.status >= 200 && xhr.status < 300) {
                 resolve({ status: xhr.status, responseText: xhr.responseText });
               } else {
-                reject(
-                  new Error(
-                    `Direct cloud upload failed for chunk ${chunk.index} (HTTP ${xhr.status})`,
-                  ),
-                );
+                let errorMsg = `Direct cloud upload failed for chunk ${chunk.index} (HTTP ${xhr.status})`;
+                try {
+                  const errJson = JSON.parse(xhr.responseText);
+                  if (errJson.message) {
+                    errorMsg = `${errJson.message} (HTTP ${xhr.status})`;
+                  } else if (errJson.error_summary) {
+                    errorMsg = `${errJson.error_summary} (HTTP ${xhr.status})`;
+                  } else if (errJson.error?.message) {
+                    errorMsg = `${errJson.error.message} (HTTP ${xhr.status})`;
+                  }
+                } catch {}
+                reject(new Error(errorMsg));
               }
             };
 
@@ -424,8 +432,13 @@ export class UploadQueueManager {
                   formData.append(k, v);
                 }
               }
-              // For Box, file part comes after attributes
-              formData.append("file", chunkBlob, item.file.name);
+              // For Box, ensure file part uses exact unique chunk storage name
+              const uploadFileName =
+                instruction.fileName ||
+                (instruction.formDataFields?.attributes
+                  ? JSON.parse(instruction.formDataFields.attributes).name
+                  : item.file.name);
+              formData.append("file", chunkBlob, uploadFileName);
               xhr.send(formData);
             } else {
               // Binary byte stream upload (Google Drive, OneDrive, Dropbox, pCloud)

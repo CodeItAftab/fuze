@@ -13,6 +13,7 @@ import { MarkdownPreview } from "@/components/preview/MarkdownPreview";
 import { SpreadsheetPreview } from "@/components/preview/SpreadsheetPreview";
 import { PdfPreview } from "@/components/preview/PdfPreview";
 import { DocxPreview } from "@/components/preview/DocxPreview";
+import { UnsupportedPreview } from "@/components/preview/UnsupportedPreview";
 import { FileDetailsDrawer } from "@/components/preview/FileDetailsDrawer";
 import {
   ArrowLeft,
@@ -30,6 +31,12 @@ import {
   Info,
   Share2,
   BookOpen,
+  Archive,
+  Terminal,
+  Disc,
+  Database,
+  Box,
+  Type,
 } from "lucide-react";
 import { formatBytes } from "@/lib/format";
 import {
@@ -38,6 +45,7 @@ import {
   triggerBlobDownload,
   DownloadPlan,
 } from "@/lib/download-engine";
+import { decodeTextBuffer } from "@/lib/text-decoder";
 
 export function FilePreviewClient() {
   const router = useRouter();
@@ -83,14 +91,22 @@ export function FilePreviewClient() {
     mime.includes("ms-excel");
   const isCsv = ["csv", "tsv"].includes(ext) || mime.includes("csv");
   const isMarkdown = ["md", "markdown"].includes(ext);
+  const isArchive =
+    ["zip", "rar", "7z", "tar", "gz", "bz2", "xz", "tgz"].includes(ext) ||
+    mime.includes("zip") ||
+    mime.includes("compressed") ||
+    mime.includes("tar");
   const isTextOrCode =
     (mime.startsWith("text/") ||
       [
         "txt", "json", "js", "ts", "tsx", "jsx", "py", "html", "css", "scss",
-        "xml", "log", "sql", "sh", "bash", "yaml", "yml",
-        "c", "cpp", "rs", "go", "java", "env", "dockerfile",
+        "xml", "log", "sql", "sh", "bash", "zsh", "yaml", "yml",
+        "c", "h", "cpp", "hpp", "cc", "cxx", "rs", "go", "java", "kt", "kts",
+        "cs", "php", "rb", "swift", "scala", "lua", "r", "dart",
+        "env", "dockerfile", "gitignore", "toml", "ini", "graphql", "gql",
       ].includes(ext)) &&
-    !isMarkdown;
+    !isMarkdown &&
+    !isCsv;
 
   const renderIcon = () => {
     if (isImage) return <ImageIcon className="w-5 h-5 text-emerald-400" />;
@@ -101,6 +117,22 @@ export function FilePreviewClient() {
     if (isPdf) return <FileText className="w-5 h-5 text-rose-400" />;
     if (isMarkdown) return <BookOpen className="w-5 h-5 text-blue-400" />;
     if (isTextOrCode) return <FileCode className="w-5 h-5 text-blue-400" />;
+    if (isArchive) return <Archive className="w-5 h-5 text-amber-400" />;
+    if (["exe", "msi", "dmg", "pkg", "apk", "bin"].includes(ext)) {
+      return <Terminal className="w-5 h-5 text-violet-400" />;
+    }
+    if (["iso", "img", "vmdk"].includes(ext)) {
+      return <Disc className="w-5 h-5 text-cyan-400" />;
+    }
+    if (["sql", "sqlite", "db"].includes(ext)) {
+      return <Database className="w-5 h-5 text-emerald-400" />;
+    }
+    if (["stl", "obj", "fbx", "blend"].includes(ext)) {
+      return <Box className="w-5 h-5 text-blue-400" />;
+    }
+    if (["ttf", "otf", "woff", "woff2"].includes(ext)) {
+      return <Type className="w-5 h-5 text-rose-400" />;
+    }
     return <FileText className="w-5 h-5 text-slate-400" />;
   };
 
@@ -116,6 +148,7 @@ export function FilePreviewClient() {
         setPlan(data);
 
         let previewUrl = data.streamUrl || data.downloadUrl;
+        let activeBlob: Blob | null = null;
 
         // When chunked across multiple clouds or for DOCX/Excel/PDF, assemble chunks
         const isDocOrSheet = isDocx || isExcel;
@@ -124,6 +157,7 @@ export function FilePreviewClient() {
             const { blob: assembledBlob, objectUrl: assembledUrl } =
               await downloadAndAssembleChunks(data);
             if (!isMounted) return;
+            activeBlob = assembledBlob;
             setBlob(assembledBlob);
             previewUrl = assembledUrl;
           } catch (e: any) {
@@ -138,19 +172,42 @@ export function FilePreviewClient() {
           setStreamSrc(previewUrl);
         }
 
+        const fileNameLower = data.file.name.toLowerCase();
+        const fileExt = fileNameLower.includes(".")
+          ? fileNameLower.split(".").pop() || ""
+          : "";
+        const fileMime = (data.file.mimeType || "").toLowerCase();
+
         const shouldFetchText =
-          data.file.mimeType?.startsWith("text/") ||
+          fileMime.startsWith("text/") ||
           [
             "txt", "json", "js", "ts", "tsx", "jsx", "py", "html", "css", "scss",
-            "md", "markdown", "csv", "tsv", "log", "sql", "sh", "yaml", "yml",
-          ].includes(data.file.name.split(".").pop()?.toLowerCase() || "");
+            "xml", "log", "sql", "sh", "bash", "zsh", "yaml", "yml",
+            "c", "h", "cpp", "hpp", "cc", "cxx", "rs", "go", "java", "kt", "kts",
+            "cs", "php", "rb", "swift", "scala", "lua", "r", "dart",
+            "env", "dockerfile", "gitignore", "toml", "ini", "graphql", "gql",
+            "md", "markdown", "csv", "tsv",
+          ].includes(fileExt);
 
-        if (shouldFetchText && previewUrl) {
+        if (shouldFetchText) {
           try {
-            const res = await fetch(previewUrl);
-            if (res.ok && isMounted) {
-              const text = await res.text();
-              setTextContent(text);
+            if (activeBlob) {
+              const buf = await activeBlob.arrayBuffer();
+              const text = decodeTextBuffer(buf);
+              if (isMounted) setTextContent(text);
+            } else if (previewUrl) {
+              const res = await fetch(previewUrl, { credentials: "include" });
+              if (res.ok && isMounted) {
+                const buf = await res.arrayBuffer();
+                const text = decodeTextBuffer(buf);
+                setTextContent(text);
+              } else if (!res.ok) {
+                const errJson = await res.json().catch(() => null);
+                console.warn("Failed fetching text preview content:", res.status, errJson);
+                if (isMounted && res.status >= 400) {
+                  setError(errJson?.error || `Failed to load file content (HTTP ${res.status})`);
+                }
+              }
             }
           } catch (e) {
             console.warn("Failed fetching text preview content:", e);
@@ -389,27 +446,27 @@ export function FilePreviewClient() {
                 />
               )}
 
-              {!isImage && !isVideo && !isAudio && !isPdf && !isDocx && !isExcel && !isTextOrCode && !isMarkdown && (
-                <div className="p-8 sm:p-10 bg-slate-900 border border-slate-800 rounded-3xl text-center max-w-md space-y-4 shadow-xl">
-                  <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center mx-auto">
-                    <FileText className="w-8 h-8" />
+              {!isImage &&
+                !isVideo &&
+                !isAudio &&
+                !isPdf &&
+                !isDocx &&
+                !isExcel &&
+                !isTextOrCode &&
+                !isMarkdown && (
+                  <div className="w-full h-full flex items-center justify-center p-4 sm:p-8 overflow-auto">
+                    <UnsupportedPreview
+                      fileName={plan.file.name}
+                      fileSize={plan.file.size}
+                      mimeType={plan.file.mimeType}
+                      downloadUrl={streamSrc}
+                      onDownload={handleDownload}
+                      onOpenDetails={() => setShowDetails(true)}
+                      onShare={() => setShareOpen(true)}
+                      plan={plan}
+                    />
                   </div>
-                  <div>
-                    <h4 className="text-base font-bold text-white">{plan.file.name}</h4>
-                    <p className="text-xs text-slate-400 mt-1">
-                      No direct browser preview for this file format ({formatBytes(plan.file.size)}).
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleDownload}
-                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl transition cursor-pointer shadow-xs inline-flex items-center gap-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download File
-                  </button>
-                </div>
-              )}
+                )}
             </div>
           )}
         </main>

@@ -117,16 +117,70 @@ export class VfsService {
       .where(and(eq(vfsNodes.userId, userId), isNotNull(vfsNodes.trashedAt)));
   }
 
+  /**
+   * Resolves a non-conflicting unique name for a file or folder in a directory.
+   * If "README.md" already exists, returns "README (1).md", "README (2).md", etc.
+   */
+  static async resolveUniqueName(
+    userId: string,
+    parentId: string | null = null,
+    desiredName: string,
+  ): Promise<string> {
+    const trimmed = desiredName.trim();
+    if (!trimmed) return "Untitled";
+
+    const parentCondition = parentId
+      ? eq(vfsNodes.parentId, parentId)
+      : isNull(vfsNodes.parentId);
+
+    const existingNodes = await db
+      .select({ name: vfsNodes.name })
+      .from(vfsNodes)
+      .where(
+        and(
+          eq(vfsNodes.userId, userId),
+          parentCondition,
+          isNull(vfsNodes.trashedAt),
+        ),
+      );
+
+    const existingNames = new Set(
+      existingNodes.map((n) => n.name.toLowerCase()),
+    );
+
+    if (!existingNames.has(trimmed.toLowerCase())) {
+      return trimmed;
+    }
+
+    const lastDotIndex = trimmed.lastIndexOf(".");
+    const baseName =
+      lastDotIndex > 0 ? trimmed.slice(0, lastDotIndex) : trimmed;
+    const ext = lastDotIndex > 0 ? trimmed.slice(lastDotIndex) : "";
+
+    let counter = 1;
+    while (counter < 1000) {
+      const candidate = `${baseName} (${counter})${ext}`;
+      if (!existingNames.has(candidate.toLowerCase())) {
+        return candidate;
+      }
+      counter++;
+    }
+
+    return `${baseName} (${Date.now()})${ext}`;
+  }
+
   static async createFolder(
     userId: string,
     name: string,
     parentId: string | null = null,
   ) {
+    const resolvedName = await this.resolveUniqueName(userId, parentId, name);
+
     const [folder] = await db
       .insert(vfsNodes)
       .values({
         userId,
-        name,
+        name: resolvedName,
         type: "folder",
         parentId,
       })

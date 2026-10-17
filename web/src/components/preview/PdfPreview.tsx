@@ -164,7 +164,18 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
   const [error, setError] = useState<string | null>(null);
   const [showThumbnails, setShowThumbnails] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<"single" | "continuous">("continuous");
-  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
+  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setIsToolbarCollapsed(true);
+    }
+  }, []);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -320,7 +331,7 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
         // Clean rectangular paper page wrapper with sharp corners
         const pageWrapper = document.createElement("div");
         pageWrapper.className =
-          "pdf-page-card relative mb-5 sm:mb-7 shadow-xl rounded-none bg-white overflow-hidden border border-slate-200/50 transition-shadow max-w-full";
+          "pdf-page-card relative mb-5 sm:mb-7 shadow-xl rounded-none bg-white overflow-hidden border border-slate-200/50 transition-shadow shrink-0";
         pageWrapper.setAttribute("data-page-number", String(i));
 
         const canvas = document.createElement("canvas");
@@ -332,7 +343,8 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
         canvas.style.width = `${Math.floor(viewport.width)}px`;
         canvas.style.height = `${Math.floor(viewport.height)}px`;
         canvas.style.display = "block";
-        canvas.style.maxWidth = "100%";
+        canvas.style.maxWidth = "none";
+
 
         const transform =
           outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : undefined;
@@ -437,28 +449,62 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
     }
   };
 
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
+
   // Zoom
   const zoomIn = () =>
     setScale((s) => Math.min(Math.round((s + 0.2) * 10) / 10, 3.5));
   const zoomOut = () =>
     setScale((s) => Math.max(Math.round((s - 0.2) * 10) / 10, 0.35));
   const rotateDoc = () => setRotation((r) => (r + 90) % 360);
-  const resetZoom = () => setScale(1.2);
+  const resetZoom = () => setScale(1.0);
 
-  // Fit Width
+  // Fit Width (Toggles between Fit to Width and 100% original size)
   const fitWidth = () => {
     if (!containerRef.current || !pdfDoc) return;
     const containerWidth =
       containerRef.current.clientWidth - (showThumbnails && window.innerWidth >= 768 ? 240 : 32);
     pdfDoc.getPage(currentPage).then((page) => {
       const defaultViewport = page.getViewport({ scale: 1, rotation });
-      const newScale = Math.max(
-        0.35,
-        (containerWidth / defaultViewport.width) * 0.95,
-      );
-      setScale(Math.round(newScale * 10) / 10);
+      const targetScale =
+        Math.round(Math.max(0.35, (containerWidth / defaultViewport.width) * 0.95) * 10) / 10;
+      // If already fitted, toggle back to 1.0 (100% original size)
+      if (Math.abs(scale - targetScale) < 0.05 && Math.abs(scale - 1.0) >= 0.05) {
+        setScale(1.0);
+      } else {
+        setScale(targetScale);
+      }
     });
   };
+
+  // Smooth mouse drag panning when zoomed in
+  const handlePanMouseDown = (e: React.MouseEvent) => {
+    if (scale <= 1.2 || e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest("button, a, input, select")) return;
+
+    setIsPanning(true);
+    panStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      scrollLeft: scrollMainRef.current?.scrollLeft || 0,
+      scrollTop: scrollMainRef.current?.scrollTop || 0,
+    };
+  };
+
+  const handlePanMouseMove = (e: React.MouseEvent) => {
+    if (!isPanning || !scrollMainRef.current) return;
+    const dx = e.clientX - panStartRef.current.x;
+    const dy = e.clientY - panStartRef.current.y;
+    scrollMainRef.current.scrollLeft = panStartRef.current.scrollLeft - dx;
+    scrollMainRef.current.scrollTop = panStartRef.current.scrollTop - dy;
+  };
+
+  const handlePanMouseUp = () => {
+    setIsPanning(false);
+  };
+
 
   // Keyboard Navigation
   useEffect(() => {
@@ -558,11 +604,11 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
             </button>
           ) : (
             <div className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-2xl bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 shadow-[0_16px_36px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] text-white text-xs">
-              {/* Thumbnails Sidebar Toggle */}
+              {/* Thumbnails Sidebar Toggle (Desktop Only) */}
               <button
                 type="button"
                 onClick={() => setShowThumbnails((v) => !v)}
-                className={`p-1.5 rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                className={`hidden md:inline-flex p-1.5 rounded-lg transition cursor-pointer items-center gap-1 ${
                   showThumbnails
                     ? "bg-blue-600 text-white shadow-sm"
                     : "hover:bg-slate-800 text-slate-300 hover:text-white"
@@ -570,12 +616,10 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
                 title="Toggle Page Previews Sidebar"
               >
                 <Sidebar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span className="text-[11px] hidden md:inline font-medium">
-                  Pages
-                </span>
+                <span className="text-[11px] font-medium">Pages</span>
               </button>
 
-              <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
+              <div className="hidden md:block w-px h-4 bg-slate-700/60 mx-0.5" />
 
               {/* Page Navigation Jumper */}
               <div className="flex items-center gap-0.5">
@@ -650,7 +694,7 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
                 </button>
               </div>
 
-              {/* Fit Width */}
+              {/* Fit Width (Hidden on extra small screens) */}
               <button
                 type="button"
                 onClick={fitWidth}
@@ -661,7 +705,7 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
                 <span>Fit</span>
               </button>
 
-              {/* Rotate */}
+              {/* Rotate (Hidden on extra small screens) */}
               <button
                 type="button"
                 onClick={rotateDoc}
@@ -671,7 +715,7 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
                 <RotateCw className="w-3.5 h-3.5" />
               </button>
 
-              {/* Single / Continuous View Mode Toggle */}
+              {/* Single / Continuous View Mode Toggle (Desktop Only) */}
               <button
                 type="button"
                 onClick={() =>
@@ -691,13 +735,13 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
                 <Layers className="w-3.5 h-3.5" />
               </button>
 
-              <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
+              <div className="hidden sm:block w-px h-4 bg-slate-700/60 mx-0.5" />
 
-              {/* Print Vector PDF */}
+              {/* Print Vector PDF (Hidden on small mobile) */}
               <button
                 type="button"
                 onClick={handlePrint}
-                className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
+                className="hidden sm:inline-flex p-1.5 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
                 title="Print Vector PDF (All Pages)"
               >
                 <Printer className="w-3.5 h-3.5" />
@@ -707,7 +751,7 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
               <button
                 type="button"
                 onClick={() => setIsToolbarCollapsed(true)}
-                className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition cursor-pointer"
+                className="hidden sm:inline-flex p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition cursor-pointer"
                 title="Minimize Toolbar"
               >
                 <ChevronDown className="w-3.5 h-3.5" />
@@ -719,17 +763,9 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Mobile Backdrop for Drawer */}
+        {/* Thumbnails Sidebar with REAL Page Previews (Desktop Only with sleek custom scrollbar) */}
         {showThumbnails && numPages > 0 && pdfDoc && (
-          <div
-            onClick={() => setShowThumbnails(false)}
-            className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-xs z-40 transition-opacity animate-in fade-in"
-          />
-        )}
-
-        {/* Thumbnails Sidebar with REAL Page Previews (Drawer on Mobile, Dock on Desktop) */}
-        {showThumbnails && numPages > 0 && pdfDoc && (
-          <aside className="no-print print-hidden fixed md:relative inset-y-0 left-0 z-50 md:z-20 w-64 md:w-52 bg-slate-900/98 md:bg-slate-900/95 border-r border-slate-800 flex flex-col shrink-0 animate-in slide-in-from-left duration-200 shadow-2xl">
+          <aside className="no-print print-hidden hidden md:flex relative inset-y-0 left-0 z-20 w-52 bg-slate-900/95 border-r border-slate-800 flex-col shrink-0 animate-in slide-in-from-left duration-200 shadow-2xl">
             <div className="p-3 border-b border-slate-800 flex items-center justify-between text-xs text-slate-300 font-semibold">
               <div className="flex items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5 text-rose-400" />
@@ -744,7 +780,7 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+            <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
               {Array.from({ length: numPages }, (_, i) => i + 1).map((pNum) => (
                 <PdfThumbnailItem
                   key={pNum}
@@ -761,56 +797,65 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
         {/* Viewport Canvas Area with responsive horizontal and bottom clearance */}
         <main
           ref={scrollMainRef}
-          className="pdf-scroll-main flex-1 overflow-y-auto overflow-x-auto flex flex-col items-center justify-start pt-4 sm:pt-8 pb-36 sm:pb-44 px-2 sm:px-4 md:px-8 relative bg-slate-950 scroll-smooth will-change-scroll"
+          onMouseDown={handlePanMouseDown}
+          onMouseMove={handlePanMouseMove}
+          onMouseUp={handlePanMouseUp}
+          onMouseLeave={handlePanMouseUp}
+          className={`pdf-scroll-main flex-1 overflow-y-auto overflow-x-auto flex items-start pt-4 sm:pt-8 pb-20 sm:pb-24 px-2 sm:px-4 md:px-8 relative bg-slate-950 will-change-scroll custom-scrollbar ${
+            scale > 1.2 ? (isPanning ? "cursor-grabbing" : "cursor-grab") : "cursor-default"
+          }`}
         >
-          {loading && (
-            <div className="flex flex-col items-center justify-center gap-3 text-slate-400 my-auto">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-              <div className="text-xs font-medium text-slate-300">
-                Rendering PDF vector pages...
+          <div className="min-w-full flex flex-col items-center justify-start m-auto py-1 sm:py-2">
+            {loading && (
+              <div className="flex flex-col items-center justify-center gap-3 text-slate-400 my-auto py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                <div className="text-xs font-medium text-slate-300">
+                  Rendering PDF vector pages...
+                </div>
+                <span className="text-[11px] font-mono text-slate-500">
+                  {fileName}
+                </span>
               </div>
-              <span className="text-[11px] font-mono text-slate-500">
-                {fileName}
-              </span>
-            </div>
-          )}
+            )}
 
-          {error && (
-            <div className="p-6 sm:p-8 bg-slate-900 border border-rose-500/30 rounded-2xl max-w-md text-center space-y-3 shadow-2xl my-auto m-4">
-              <AlertCircle className="w-9 h-9 text-rose-500 mx-auto" />
-              <h4 className="text-sm font-bold text-white">
-                Unable to display PDF
-              </h4>
-              <p className="text-xs text-slate-400 leading-relaxed">{error}</p>
-              <a
-                href={src}
-                download={fileName}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition cursor-pointer shadow-md mt-2"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Download PDF File
-              </a>
-            </div>
-          )}
+            {error && (
+              <div className="p-6 sm:p-8 bg-slate-900 border border-rose-500/30 rounded-2xl max-w-md text-center space-y-3 shadow-2xl my-auto m-4">
+                <AlertCircle className="w-9 h-9 text-rose-500 mx-auto" />
+                <h4 className="text-sm font-bold text-white">
+                  Unable to display PDF
+                </h4>
+                <p className="text-xs text-slate-400 leading-relaxed">{error}</p>
+                <a
+                  href={src}
+                  download={fileName}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition cursor-pointer shadow-md mt-2"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download PDF File
+                </a>
+              </div>
+            )}
 
-          {/* Single Page Canvas with square paper corners */}
-          {!loading && !error && viewMode === "single" && (
-            <div className="flex flex-col items-center justify-start transition-all duration-200 max-w-full">
-              <canvas
-                ref={canvasRef}
-                className="shadow-2xl rounded-none bg-white select-none transition-transform border border-slate-200/50 max-w-full"
+            {/* Single Page Canvas with square paper corners */}
+            {!loading && !error && viewMode === "single" && (
+              <div className="flex flex-col items-center justify-start transition-all duration-200 shrink-0">
+                <canvas
+                  ref={canvasRef}
+                  className="shadow-2xl rounded-none bg-white select-none transition-transform border border-slate-200/50 shrink-0"
+                />
+              </div>
+            )}
+
+            {/* Continuous Scroll Container with square paper corners */}
+            {!loading && !error && viewMode === "continuous" && (
+              <div
+                ref={continuousContainerRef}
+                className="flex flex-col items-center justify-start py-1 sm:py-2 shrink-0"
               />
-            </div>
-          )}
-
-          {/* Continuous Scroll Container with square paper corners and max-w-full */}
-          {!loading && !error && viewMode === "continuous" && (
-            <div
-              ref={continuousContainerRef}
-              className="flex flex-col items-center justify-start w-full py-1 sm:py-2"
-            />
-          )}
+            )}
+          </div>
         </main>
+
       </div>
     </div>
   );

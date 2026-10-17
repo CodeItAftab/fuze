@@ -18,6 +18,67 @@ interface GoogleDriveTokenResponse {
 }
 
 export class GoogleDriveAdapter implements StorageAdapter {
+  private static folderCache = new Map<string, string>();
+
+  async getOrCreateFuzeFolder(accessToken: string): Promise<string> {
+    const cached = GoogleDriveAdapter.folderCache.get(accessToken);
+    if (cached) return cached;
+
+    try {
+      // 1. Search for existing "Fuze" folder in root
+      const query = encodeURIComponent(
+        "name = 'Fuze' and 'root' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+      );
+      const searchRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)&pageSize=1`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
+      );
+
+      if (searchRes.ok) {
+        const searchData = (await searchRes.json()) as {
+          files?: Array<{ id: string; name: string }>;
+        };
+        if (searchData.files && searchData.files.length > 0) {
+          const folderId = searchData.files[0].id;
+          GoogleDriveAdapter.folderCache.set(accessToken, folderId);
+          return folderId;
+        }
+      }
+
+      // 2. If not found, create "Fuze" folder in root
+      const createRes = await fetch(
+        "https://www.googleapis.com/drive/v3/files",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: "Fuze",
+            mimeType: "application/vnd.google-apps.folder",
+            parents: ["root"],
+          }),
+        },
+      );
+
+      if (createRes.ok) {
+        const createData = (await createRes.json()) as { id: string };
+        GoogleDriveAdapter.folderCache.set(accessToken, createData.id);
+        return createData.id;
+      }
+    } catch (err) {
+      console.warn(
+        "[GoogleDriveAdapter] Could not get/create Fuze folder, falling back to root:",
+        err,
+      );
+    }
+
+    return "root";
+  }
+
   async createResumableUploadSession(params: {
     fileName: string;
     mimeType: string;
@@ -25,6 +86,7 @@ export class GoogleDriveAdapter implements StorageAdapter {
     accessToken: string;
     origin?: string;
   }): Promise<UploadSessionResult> {
+    const folderId = await this.getOrCreateFuzeFolder(params.accessToken);
     const origin = params.origin || process.env.CLIENT_ORIGIN || "http://localhost:3000";
     const response = await fetch(
       "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable",
@@ -40,6 +102,7 @@ export class GoogleDriveAdapter implements StorageAdapter {
         body: JSON.stringify({
           name: params.fileName,
           description: "Fuze Distributed File",
+          parents: folderId === "root" ? undefined : [folderId],
         }),
       },
     );
