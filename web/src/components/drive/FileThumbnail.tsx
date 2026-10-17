@@ -6,6 +6,14 @@ import {
   Music,
   Archive,
   Image as ImageIcon,
+  Terminal,
+  FolderKanban,
+  Database,
+  Box,
+  Type,
+  Presentation,
+  FileBox,
+  Disc,
 } from "lucide-react";
 
 export const FOLDER_COLOR_PALETTES = [
@@ -72,15 +80,27 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
   const isPdf = mime.includes("pdf") || name.endsWith(".pdf");
   const isSpreadsheet = /\.(xlsx|xls|csv|tsv)$/i.test(name);
   const isDoc = /\.(docx|doc|txt|rtf|odt)$/i.test(name);
-  const isCode = /\.(ts|tsx|js|jsx|json|py|html|css|sql|sh|yaml|yml)$/i.test(name);
-  const isAudio = mime.startsWith("audio/") || /\.(mp3|wav|ogg|flac|m4a)$/i.test(name);
-  const isArchive = /\.(zip|tar|gz|rar|7z)$/i.test(name);
+  const isCode =
+    /\.(ts|tsx|js|jsx|json|py|html|css|scss|sass|less|sql|sh|bash|zsh|yaml|yml|c|h|cpp|hpp|cc|cxx|rs|go|java|kt|kts|cs|php|rb|swift|scala|lua|r|dart|env|dockerfile|gitignore|toml|ini|graphql|gql|xml|log|md|markdown)$/i.test(
+      name,
+    );
+  const isAudio =
+    mime.startsWith("audio/") ||
+    /\.(mp3|wav|ogg|flac|m4a|aac|wma|aiff|alac)$/i.test(name);
+  const isArchive = /\.(zip|tar|gz|rar|7z|bz2|xz|tgz|cab)$/i.test(name);
+  const isExecutable = /\.(exe|msi|dmg|pkg|app|apk|bin|run|bat|cmd)$/i.test(name);
+  const isProject = /\.(mpp|mpt|mpd|vsd|vsdx)$/i.test(name);
+  const isDatabase = /\.(db|sqlite|sqlite3|mdb|accdb)$/i.test(name);
+  const isPresentation = /\.(pptx|ppt|key|odp)$/i.test(name);
+  const is3D = /\.(stl|obj|fbx|blend|step|stp|dwg|dxf|gltf|glb)$/i.test(name);
+  const isFont = /\.(ttf|otf|woff|woff2|eot)$/i.test(name);
+  const isDiskImage = /\.(iso|img|vmdk|vdi)$/i.test(name);
 
   const [imgError, setImgError] = useState(false);
   const [vidError, setVidError] = useState(false);
   const [docError, setDocError] = useState(false);
   const isDocument =
-    isPdf || isDoc || isSpreadsheet || /\.(pptx|ppt|key|odp|rtf)$/i.test(name);
+    isPdf || isDoc || isSpreadsheet || isPresentation;
 
   const CornerBadges = () => (
     <>
@@ -109,7 +129,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
 
   if (isVideo) {
     return (
-      <div className="w-full h-full bg-slate-900 rounded-lg flex items-center justify-center relative overflow-hidden group-hover:bg-slate-800 transition">
+      <div className="w-full h-full bg-slate-900 rounded-lg flex items-center justify-center relative overflow-hidden group-hover:bg-slate-850 transition">
         {!vidError ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -217,7 +237,9 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
     );
   }
 
+  // Source Code & Markup (C, Python, JS, TS, HTML, Rust, Go, Markdown, etc.)
   if (isCode) {
+    const isMarkdown = ext === "MD" || ext === "MARKDOWN";
     return (
       <div className="w-full h-full bg-slate-900 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-slate-850 transition">
         <div className="w-24 h-28 bg-slate-950 rounded-lg shadow-2xs border border-slate-800 flex flex-col items-center justify-between p-2.5 transition-transform duration-300 group-hover:scale-105">
@@ -236,7 +258,9 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
             <div className="h-1 bg-indigo-500/70 rounded-full w-1/3" />
           </div>
           <div className="w-full pt-1 border-t border-slate-800 flex items-center justify-center">
-            <span className="text-[8px] font-mono text-slate-500 uppercase">Source Code</span>
+            <span className="text-[8px] font-mono text-slate-500 uppercase">
+              {isMarkdown ? "Markdown" : "Source Code"}
+            </span>
           </div>
         </div>
         <CornerBadges />
@@ -244,6 +268,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
     );
   }
 
+  // Audio Tracks
   if (isAudio) {
     return (
       <div className="w-full h-full bg-purple-50/50 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-purple-50/80 transition">
@@ -268,6 +293,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
     );
   }
 
+  // Archives (ZIP, RAR, 7Z, TAR, etc.)
   if (isArchive) {
     return (
       <div className="w-full h-full bg-amber-50/50 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-amber-50/80 transition">
@@ -288,18 +314,211 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
     );
   }
 
-  return (
-    <div className="w-full h-full bg-slate-100/70 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-slate-100 transition">
-      <div className="w-24 h-28 bg-white rounded-lg shadow-2xs border border-slate-200/90 flex flex-col items-center justify-between p-2.5 transition-transform duration-300 group-hover:scale-105 group-hover:shadow-xs">
-        <div className="w-full flex items-center justify-between">
-          <FileText className="w-4 h-4 text-slate-500" />
-          <span className="text-[8px] font-bold bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded uppercase">{ext}</span>
+  // Executables & Installers (.exe, .msi, .dmg, .apk, etc.)
+  if (isExecutable) {
+    return (
+      <div className="w-full h-full bg-violet-50/50 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-violet-50/80 transition">
+        <div className="w-24 h-28 bg-slate-950 rounded-lg shadow-2xs border border-violet-900/40 flex flex-col items-center justify-between p-2.5 transition-transform duration-300 group-hover:scale-105">
+          <div className="w-full flex items-center justify-between">
+            <Terminal className="w-3.5 h-3.5 text-violet-400" />
+            <span className="text-[8px] font-mono font-bold bg-violet-950 text-violet-300 border border-violet-800/60 px-1.5 py-0.2 rounded uppercase">
+              {ext}
+            </span>
+          </div>
+          <div className="w-full space-y-1.5 my-auto px-1">
+            <div className="flex items-center gap-1 font-mono text-[9px] text-violet-400 font-bold">
+              <span>&gt;_</span>
+              <span className="inline-block w-1.5 h-3 bg-violet-400 animate-pulse" />
+            </div>
+            <div className="space-y-1">
+              <div className="h-1 bg-violet-500/60 rounded-full w-4/5" />
+              <div className="h-1 bg-violet-400/40 rounded-full w-3/5" />
+            </div>
+          </div>
+          <div className="w-full pt-1 border-t border-violet-900/50 flex items-center justify-center">
+            <span className="text-[8px] font-bold text-violet-400 uppercase tracking-wide">
+              {ext === "APK" ? "Android App" : ext === "DMG" || ext === "PKG" ? "macOS App" : "Executable"}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center justify-center my-auto">
-          <FileText className="w-7 h-7 text-slate-400" />
+        <CornerBadges />
+      </div>
+    );
+  }
+
+  // Project Management & Diagrams (.mpp, .vsd)
+  if (isProject) {
+    return (
+      <div className="w-full h-full bg-teal-50/50 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-teal-50/80 transition">
+        <div className="w-24 h-28 bg-white rounded-lg shadow-2xs border border-teal-200/80 flex flex-col items-center justify-between p-2.5 transition-transform duration-300 group-hover:scale-105 group-hover:shadow-xs">
+          <div className="w-full flex items-center justify-between">
+            <FolderKanban className="w-4 h-4 text-teal-600" />
+            <span className="text-[8px] font-bold bg-teal-600 text-white px-1.5 py-0.2 rounded uppercase">
+              {ext}
+            </span>
+          </div>
+          <div className="w-full space-y-1.5 my-auto px-1">
+            <div className="w-full bg-teal-50 rounded p-1 space-y-1 border border-teal-200/60">
+              <div className="h-1 bg-teal-500 rounded-full w-3/4" />
+              <div className="h-1 bg-teal-400 rounded-full w-1/2 ml-2" />
+              <div className="h-1 bg-teal-600 rounded-full w-2/3 ml-1" />
+            </div>
+          </div>
+          <div className="w-full pt-1 border-t border-teal-100 flex items-center justify-center">
+            <span className="text-[8px] font-bold text-teal-700 uppercase">
+              {ext.startsWith("V") ? "Diagram" : "Project Plan"}
+            </span>
+          </div>
+        </div>
+        <CornerBadges />
+      </div>
+    );
+  }
+
+  // Databases (.db, .sqlite, .mdb)
+  if (isDatabase) {
+    return (
+      <div className="w-full h-full bg-emerald-50/50 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-emerald-50/80 transition">
+        <div className="w-24 h-28 bg-white rounded-lg shadow-2xs border border-emerald-200/80 flex flex-col items-center justify-between p-2.5 transition-transform duration-300 group-hover:scale-105 group-hover:shadow-xs">
+          <div className="w-full flex items-center justify-between">
+            <Database className="w-4 h-4 text-emerald-600" />
+            <span className="text-[8px] font-bold bg-emerald-600 text-white px-1.5 py-0.2 rounded uppercase">
+              {ext}
+            </span>
+          </div>
+          <div className="flex flex-col items-center justify-center gap-1 my-auto">
+            <div className="w-10 h-2.5 rounded-full border border-emerald-500 bg-emerald-100" />
+            <div className="w-10 h-2.5 rounded-full border border-emerald-500 bg-emerald-100 -mt-1" />
+            <div className="w-10 h-2.5 rounded-full border border-emerald-500 bg-emerald-200 -mt-1" />
+          </div>
+          <div className="w-full pt-1 border-t border-emerald-100 flex items-center justify-center">
+            <span className="text-[8px] font-bold text-emerald-700 uppercase">Database</span>
+          </div>
+        </div>
+        <CornerBadges />
+      </div>
+    );
+  }
+
+  // Presentations (.pptx, .ppt, .key)
+  if (isPresentation) {
+    return (
+      <div className="w-full h-full bg-orange-50/50 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-orange-50/80 transition">
+        <div className="w-24 h-28 bg-white rounded-lg shadow-2xs border border-orange-200/80 flex flex-col items-center justify-between p-2.5 transition-transform duration-300 group-hover:scale-105 group-hover:shadow-xs">
+          <div className="w-full flex items-center justify-between">
+            <Presentation className="w-4 h-4 text-orange-600" />
+            <span className="text-[8px] font-bold bg-orange-600 text-white px-1.5 py-0.2 rounded uppercase">
+              {ext}
+            </span>
+          </div>
+          <div className="w-full my-auto px-1 flex flex-col items-center">
+            <div className="w-12 h-8 rounded border border-orange-300 bg-orange-100/50 flex items-center justify-center">
+              <div className="w-4 h-4 rounded-full border-2 border-orange-500 border-t-transparent" />
+            </div>
+          </div>
+          <div className="w-full pt-1 border-t border-orange-100 flex items-center justify-center">
+            <span className="text-[8px] font-bold text-orange-700 uppercase">Presentation</span>
+          </div>
+        </div>
+        <CornerBadges />
+      </div>
+    );
+  }
+
+  // 3D Models & CAD (.stl, .obj, .blend, .dwg)
+  if (is3D) {
+    return (
+      <div className="w-full h-full bg-sky-50/50 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-sky-50/80 transition">
+        <div className="w-24 h-28 bg-white rounded-lg shadow-2xs border border-sky-200/80 flex flex-col items-center justify-between p-2.5 transition-transform duration-300 group-hover:scale-105 group-hover:shadow-xs">
+          <div className="w-full flex items-center justify-between">
+            <Box className="w-4 h-4 text-sky-600" />
+            <span className="text-[8px] font-bold bg-sky-600 text-white px-1.5 py-0.2 rounded uppercase">
+              {ext}
+            </span>
+          </div>
+          <div className="flex items-center justify-center my-auto">
+            <Box className="w-7 h-7 text-sky-500" />
+          </div>
+          <div className="w-full pt-1 border-t border-sky-100 flex items-center justify-center">
+            <span className="text-[8px] font-bold text-sky-700 uppercase">3D / CAD</span>
+          </div>
+        </div>
+        <CornerBadges />
+      </div>
+    );
+  }
+
+  // Fonts (.ttf, .otf, .woff)
+  if (isFont) {
+    return (
+      <div className="w-full h-full bg-rose-50/50 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-rose-50/80 transition">
+        <div className="w-24 h-28 bg-white rounded-lg shadow-2xs border border-rose-200/80 flex flex-col items-center justify-between p-2.5 transition-transform duration-300 group-hover:scale-105 group-hover:shadow-xs">
+          <div className="w-full flex items-center justify-between">
+            <Type className="w-4 h-4 text-rose-600" />
+            <span className="text-[8px] font-bold bg-rose-600 text-white px-1.5 py-0.2 rounded uppercase">
+              {ext}
+            </span>
+          </div>
+          <div className="flex items-center justify-center my-auto">
+            <span className="text-xl font-serif font-black text-rose-600 tracking-tight">Aa</span>
+          </div>
+          <div className="w-full pt-1 border-t border-rose-100 flex items-center justify-center">
+            <span className="text-[8px] font-bold text-rose-700 uppercase">Font</span>
+          </div>
+        </div>
+        <CornerBadges />
+      </div>
+    );
+  }
+
+  // Disk Images (.iso, .img, .vmdk)
+  if (isDiskImage) {
+    return (
+      <div className="w-full h-full bg-cyan-50/50 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-cyan-50/80 transition">
+        <div className="w-24 h-28 bg-white rounded-lg shadow-2xs border border-cyan-200/80 flex flex-col items-center justify-between p-2.5 transition-transform duration-300 group-hover:scale-105 group-hover:shadow-xs">
+          <div className="w-full flex items-center justify-between">
+            <Disc className="w-4 h-4 text-cyan-600" />
+            <span className="text-[8px] font-bold bg-cyan-600 text-white px-1.5 py-0.2 rounded uppercase">
+              {ext}
+            </span>
+          </div>
+          <div className="flex items-center justify-center my-auto">
+            <Disc className="w-7 h-7 text-cyan-500" />
+          </div>
+          <div className="w-full pt-1 border-t border-cyan-100 flex items-center justify-center">
+            <span className="text-[8px] font-bold text-cyan-700 uppercase">Disk Image</span>
+          </div>
+        </div>
+        <CornerBadges />
+      </div>
+    );
+  }
+
+  // Universal Fallback for any other file (Sleek, standardized, no double icon!)
+  return (
+    <div className="w-full h-full bg-slate-50/70 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-slate-100/80 transition">
+      <div className="w-24 h-28 bg-white rounded-lg shadow-2xs border border-slate-200 flex flex-col items-center justify-between p-2.5 transition-transform duration-300 group-hover:scale-105 group-hover:shadow-xs">
+        <div className="w-full flex items-center justify-between">
+          <FileBox className="w-4 h-4 text-slate-600" />
+          <span className="text-[8px] font-bold font-mono bg-slate-100 text-slate-700 border border-slate-200 px-1.5 py-0.2 rounded uppercase">
+            {ext}
+          </span>
+        </div>
+        <div className="w-full my-auto px-1 flex flex-col items-center gap-1.5">
+          <div className="w-8 h-8 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center shadow-inner">
+            <span className="text-[10px] font-black font-mono text-slate-700">
+              {ext.slice(0, 3)}
+            </span>
+          </div>
+          <div className="w-full space-y-0.5">
+            <div className="h-0.5 bg-slate-200 rounded-full w-4/5 mx-auto" />
+            <div className="h-0.5 bg-slate-100 rounded-full w-3/5 mx-auto" />
+          </div>
         </div>
         <div className="w-full pt-1 border-t border-slate-100 flex items-center justify-center">
-          <span className="text-[8px] font-bold text-slate-500 uppercase">{ext}</span>
+          <span className="text-[8px] font-bold text-slate-600 uppercase tracking-wide">
+            {ext} File
+          </span>
         </div>
       </div>
       <CornerBadges />
