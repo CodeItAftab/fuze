@@ -38,6 +38,7 @@ import {
   triggerBlobDownload,
   DownloadPlan,
 } from "@/lib/download-engine";
+import { decodeTextBuffer } from "@/lib/text-decoder";
 
 export function FilePreviewClient() {
   const router = useRouter();
@@ -163,12 +164,14 @@ export function FilePreviewClient() {
         if (shouldFetchText) {
           try {
             if (activeBlob) {
-              const text = await activeBlob.text();
+              const buf = await activeBlob.arrayBuffer();
+              const text = decodeTextBuffer(buf);
               if (isMounted) setTextContent(text);
             } else if (previewUrl) {
               const res = await fetch(previewUrl, { credentials: "include" });
               if (res.ok && isMounted) {
-                const text = await res.text();
+                const buf = await res.arrayBuffer();
+                const text = decodeTextBuffer(buf);
                 setTextContent(text);
               } else if (!res.ok) {
                 const errJson = await res.json().catch(() => null);

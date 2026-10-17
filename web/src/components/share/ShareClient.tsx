@@ -36,6 +36,7 @@ import {
   DownloadPlan,
   ProgressCallbackData,
 } from "@/lib/download-engine";
+import { decodeTextBuffer } from "@/lib/text-decoder";
 
 export function ShareClient() {
   const params = useParams();
@@ -154,7 +155,8 @@ export function ShareClient() {
       try {
         const res = await fetch(src);
         if (res.ok) {
-          const text = await res.text();
+          const buf = await res.arrayBuffer();
+          const text = decodeTextBuffer(buf);
           setTextContent(text);
         }
       } catch (e) {

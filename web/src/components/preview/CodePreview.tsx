@@ -145,13 +145,26 @@ export function CodePreview({
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Normalize input string: strip BOM and stray null bytes
+  const cleanContent = useMemo(() => {
+    if (!content) return "";
+    let s = content;
+    if (s.charCodeAt(0) === 0xfeff || s.charCodeAt(0) === 0xfffe) {
+      s = s.slice(1);
+    }
+    if (s.includes("\u0000")) {
+      s = s.replace(/\u0000/g, "");
+    }
+    return s;
+  }, [content]);
+
   const handleCopy = () => {
-    void navigator.clipboard.writeText(content);
+    void navigator.clipboard.writeText(cleanContent);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const lines = useMemo(() => content.split(/\r?\n/), [content]);
+  const lines = useMemo(() => cleanContent.split(/\r?\n/), [cleanContent]);
 
   // Map file extension to Prism language grammar
   const grammar = useMemo(() => {
@@ -215,11 +228,11 @@ export function CodePreview({
   // Highlight code safely
   const highlightedHtml = useMemo(() => {
     try {
-      return Prism.highlight(content, grammar || Prism.languages.javascript, extension);
+      return Prism.highlight(cleanContent, grammar || Prism.languages.javascript, extension);
     } catch {
-      return content;
+      return cleanContent;
     }
-  }, [content, grammar, extension]);
+  }, [cleanContent, grammar, extension]);
 
   // Match counter for find search
   const matchCount = useMemo(() => {
@@ -229,11 +242,11 @@ export function CodePreview({
         searchQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
         "gi",
       );
-      return (content.match(regex) || []).length;
+      return (cleanContent.match(regex) || []).length;
     } catch {
       return 0;
     }
-  }, [content, searchQuery]);
+  }, [cleanContent, searchQuery]);
 
   const fontTextClass =
     fontSize === "sm"
@@ -248,28 +261,27 @@ export function CodePreview({
     languageLabels[extension.toLowerCase()] || extension.toUpperCase() || "CODE";
 
   return (
-    <div className="fuze-code-view w-full h-full flex flex-col bg-slate-950 text-slate-100 select-text overflow-hidden font-sans">
+    <div className="fuze-code-view w-full h-full flex flex-col bg-slate-950 text-slate-100 select-text overflow-hidden font-sans relative">
       <style dangerouslySetInnerHTML={{ __html: codeCustomStyles }} />
 
-      {/* Modern Developer Sub-toolbar */}
-      <div className="flex items-center justify-between px-3 sm:px-5 py-2 bg-slate-900/90 border-b border-slate-800/80 text-xs shrink-0 select-none backdrop-blur-md z-20">
-        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400 font-mono text-[11px] font-semibold shrink-0">
-            <FileCode className="w-3.5 h-3.5 text-blue-400" />
+      {/* Floating Bottom Control Bar - Unified with all Fuze Previewers */}
+      <div className="no-print print-hidden absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 transition-all duration-200 max-w-[calc(100vw-1.5rem)]">
+        <div className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-2xl bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 shadow-[0_16px_36px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] text-white text-xs">
+          {/* Language Pill */}
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-400 font-mono text-[11px] font-semibold">
+            <FileCode className="w-3.5 h-3.5" />
             <span>{langLabel}</span>
           </div>
-          <span className="text-slate-400 font-mono text-[11px] shrink-0">
+
+          <span className="text-[11px] font-mono text-slate-400 px-1 hidden xs:inline">
             {lines.length} {lines.length === 1 ? "line" : "lines"}
           </span>
-          <span className="text-slate-500 font-mono text-[11px] hidden sm:inline">
-            • {content.length.toLocaleString()} chars
-          </span>
-        </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Search in Code Input */}
+          <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
+
+          {/* Search in Code */}
           {showSearch ? (
-            <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-800/95 border border-blue-500/50 rounded-lg text-xs animate-in fade-in duration-150">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-800/95 border border-blue-500/50 rounded-lg text-xs animate-in fade-in duration-150">
               <Search className="w-3.5 h-3.5 text-blue-400 shrink-0" />
               <input
                 ref={searchInputRef}
@@ -277,7 +289,7 @@ export function CodePreview({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Find in code..."
-                className="bg-transparent text-white text-xs placeholder:text-slate-500 outline-none w-24 sm:w-36 font-mono"
+                className="bg-transparent text-white text-[11px] placeholder:text-slate-500 outline-none w-20 sm:w-28 font-mono"
                 autoFocus
               />
               {searchQuery.trim() && (
@@ -304,8 +316,8 @@ export function CodePreview({
                 setShowSearch(true);
                 setTimeout(() => searchInputRef.current?.focus(), 50);
               }}
-              className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition cursor-pointer border border-transparent hover:border-slate-700/60"
-              title="Find in code (Ctrl+F)"
+              className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition cursor-pointer"
+              title="Find in code"
             >
               <Search className="w-3.5 h-3.5" />
             </button>
@@ -318,7 +330,7 @@ export function CodePreview({
             className={`flex items-center gap-1 px-2 py-1 rounded-lg border transition cursor-pointer text-[11px] ${
               wordWrap
                 ? "bg-blue-600/20 border-blue-500/40 text-blue-400 font-semibold"
-                : "bg-slate-800/80 border-slate-700/60 text-slate-400 hover:text-white"
+                : "hover:bg-slate-800 border-transparent text-slate-400 hover:text-white"
             }`}
             title="Toggle Word Wrap"
           >
@@ -360,19 +372,19 @@ export function CodePreview({
             </button>
           </div>
 
-          <div className="w-px h-4 bg-slate-800 mx-0.5 hidden sm:block" />
+          <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
 
           {/* Clean Copy Button */}
           <button
             type="button"
             onClick={handleCopy}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition text-xs font-semibold cursor-pointer shadow-xs active:scale-95"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition text-xs font-semibold cursor-pointer shadow-xs active:scale-95"
             title="Copy code to clipboard"
           >
             {copied ? (
               <>
                 <Check className="h-3.5 w-3.5 text-emerald-300" />
-                <span className="text-emerald-300">Copied!</span>
+                <span>Copied!</span>
               </>
             ) : (
               <>
@@ -385,7 +397,7 @@ export function CodePreview({
       </div>
 
       {/* Edge-to-Edge Code Canvas with Sticky Line Numbers Gutter */}
-      <div className="flex-1 overflow-auto custom-scrollbar flex min-w-full bg-slate-950">
+      <div className="flex-1 overflow-auto custom-scrollbar flex min-w-full bg-slate-950 pb-20 sm:pb-24">
         <div className="flex min-w-full">
           {/* Sticky Gutter with Line Numbers */}
           <div
