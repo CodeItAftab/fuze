@@ -55,6 +55,24 @@ const docxCustomStyles = `
     max-width: 100% !important;
     height: auto !important;
   }
+  /* Center images and drawings in centered paragraphs */
+  .fuze-docx-view .docx-wrapper > section.docx p[style*="text-align: center"],
+  .fuze-docx-view .docx-wrapper > section.docx p[style*="text-align:center"],
+  .fuze-docx-view .docx-wrapper > section.docx p.docx-align-center,
+  .fuze-docx-view .docx-wrapper > section.docx .docx-align-center {
+    text-align: center !important;
+  }
+  .fuze-docx-view .docx-wrapper > section.docx p[style*="text-align: center"] img,
+  .fuze-docx-view .docx-wrapper > section.docx p[style*="text-align:center"] img,
+  .fuze-docx-view .docx-wrapper > section.docx p[style*="text-align: center"] > div,
+  .fuze-docx-view .docx-wrapper > section.docx p[style*="text-align:center"] > div,
+  .fuze-docx-view .docx-wrapper > section.docx p[style*="text-align: center"] span > div,
+  .fuze-docx-view .docx-wrapper > section.docx p[style*="text-align:center"] span > div {
+    display: inline-block !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    text-align: center !important;
+  }
 
   /* Full multi-page print rules */
   @media print {
@@ -328,6 +346,22 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
             });
 
             if (!isCancelled) {
+              // Post-processing pass: center images and drawings inside centered paragraphs
+              const paragraphs = containerRef.current.querySelectorAll("p");
+              paragraphs.forEach((p) => {
+                const align = p.style.textAlign || window.getComputedStyle(p).textAlign;
+                if (align === "center") {
+                  p.style.textAlign = "center";
+                  p.querySelectorAll<HTMLElement>("div, img, svg").forEach((el) => {
+                    el.style.marginLeft = "auto";
+                    el.style.marginRight = "auto";
+                    if (el.tagName.toLowerCase() === "img") {
+                      el.style.display = "inline-block";
+                    }
+                  });
+                }
+              });
+
               const sections = containerRef.current.querySelectorAll("section.docx");
               const count = sections.length || 1;
               setPageCount(count);
@@ -475,12 +509,12 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
             </button>
           ) : (
             <div className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-2xl bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 shadow-[0_16px_36px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] text-white text-xs">
-              {/* Sidebar Thumbnails Toggle Button */}
+              {/* Sidebar Thumbnails Toggle Button (Desktop Only) */}
               {pageHtmls.length > 0 && (
                 <button
                   type="button"
                   onClick={() => setShowThumbnails((v) => !v)}
-                  className={`p-1.5 rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                  className={`hidden md:inline-flex p-1.5 rounded-lg transition cursor-pointer items-center gap-1 ${
                     showThumbnails
                       ? "bg-blue-600 text-white shadow-sm"
                       : "hover:bg-slate-800 text-slate-300 hover:text-white"
@@ -488,14 +522,12 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
                   title="Toggle Pages Preview Sidebar"
                 >
                   <Sidebar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  <span className="text-[11px] hidden md:inline font-medium">
-                    Pages
-                  </span>
+                  <span className="text-[11px] font-medium">Pages</span>
                 </button>
               )}
 
               {pageHtmls.length > 0 && (
-                <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
+                <div className="hidden md:block w-px h-4 bg-slate-700/60 mx-0.5" />
               )}
 
               {/* Page Navigation Jumper */}
@@ -561,7 +593,7 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
                 </button>
               </div>
 
-              {/* Fit Width */}
+              {/* Fit Width (Hidden on extra small screens) */}
               <button
                 type="button"
                 onClick={fitWidth}
@@ -572,13 +604,13 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
                 <span>Fit</span>
               </button>
 
-              <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
+              <div className="hidden sm:block w-px h-4 bg-slate-700/60 mx-0.5" />
 
-              {/* Print All Pages */}
+              {/* Print All Pages (Hidden on small mobile) */}
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
+                className="hidden sm:inline-flex p-1.5 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
                 title="Print All Pages"
               >
                 <Printer className="w-3.5 h-3.5" />
@@ -588,7 +620,7 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
               <button
                 type="button"
                 onClick={() => setIsToolbarCollapsed(true)}
-                className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition cursor-pointer"
+                className="hidden sm:inline-flex p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition cursor-pointer"
                 title="Minimize Toolbar"
               >
                 <ChevronDown className="w-3.5 h-3.5" />
@@ -600,17 +632,9 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Mobile Backdrop for Drawer */}
+        {/* Thumbnails Sidebar: Desktop Only with sleek custom scrollbar */}
         {showThumbnails && pageHtmls.length > 0 && (
-          <div
-            onClick={() => setShowThumbnails(false)}
-            className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-xs z-40 transition-opacity animate-in fade-in"
-          />
-        )}
-
-        {/* Thumbnails Sidebar: Responsive Drawer on Mobile, Dock on Desktop */}
-        {showThumbnails && pageHtmls.length > 0 && (
-          <aside className="no-print print-hidden fixed md:relative inset-y-0 left-0 z-50 md:z-20 w-64 md:w-52 bg-slate-900/98 md:bg-slate-900/95 border-r border-slate-800 flex flex-col shrink-0 animate-in slide-in-from-left duration-200 shadow-2xl">
+          <aside className="no-print print-hidden hidden md:flex relative inset-y-0 left-0 z-20 w-52 bg-slate-900/95 border-r border-slate-800 flex-col shrink-0 animate-in slide-in-from-left duration-200 shadow-2xl">
             <div className="p-3 border-b border-slate-800 flex items-center justify-between text-xs text-slate-300 font-semibold">
               <div className="flex items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5 text-blue-400" />
@@ -625,7 +649,7 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+            <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
               {pageHtmls.map((html, idx) => (
                 <DocxPageThumbnail
                   key={idx}

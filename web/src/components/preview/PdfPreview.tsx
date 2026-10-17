@@ -558,11 +558,11 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
             </button>
           ) : (
             <div className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-2xl bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 shadow-[0_16px_36px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] text-white text-xs">
-              {/* Thumbnails Sidebar Toggle */}
+              {/* Thumbnails Sidebar Toggle (Desktop Only) */}
               <button
                 type="button"
                 onClick={() => setShowThumbnails((v) => !v)}
-                className={`p-1.5 rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                className={`hidden md:inline-flex p-1.5 rounded-lg transition cursor-pointer items-center gap-1 ${
                   showThumbnails
                     ? "bg-blue-600 text-white shadow-sm"
                     : "hover:bg-slate-800 text-slate-300 hover:text-white"
@@ -570,12 +570,10 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
                 title="Toggle Page Previews Sidebar"
               >
                 <Sidebar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span className="text-[11px] hidden md:inline font-medium">
-                  Pages
-                </span>
+                <span className="text-[11px] font-medium">Pages</span>
               </button>
 
-              <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
+              <div className="hidden md:block w-px h-4 bg-slate-700/60 mx-0.5" />
 
               {/* Page Navigation Jumper */}
               <div className="flex items-center gap-0.5">
@@ -650,7 +648,7 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
                 </button>
               </div>
 
-              {/* Fit Width */}
+              {/* Fit Width (Hidden on extra small screens) */}
               <button
                 type="button"
                 onClick={fitWidth}
@@ -661,7 +659,7 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
                 <span>Fit</span>
               </button>
 
-              {/* Rotate */}
+              {/* Rotate (Hidden on extra small screens) */}
               <button
                 type="button"
                 onClick={rotateDoc}
@@ -671,7 +669,7 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
                 <RotateCw className="w-3.5 h-3.5" />
               </button>
 
-              {/* Single / Continuous View Mode Toggle */}
+              {/* Single / Continuous View Mode Toggle (Desktop Only) */}
               <button
                 type="button"
                 onClick={() =>
@@ -691,13 +689,13 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
                 <Layers className="w-3.5 h-3.5" />
               </button>
 
-              <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
+              <div className="hidden sm:block w-px h-4 bg-slate-700/60 mx-0.5" />
 
-              {/* Print Vector PDF */}
+              {/* Print Vector PDF (Hidden on small mobile) */}
               <button
                 type="button"
                 onClick={handlePrint}
-                className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
+                className="hidden sm:inline-flex p-1.5 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
                 title="Print Vector PDF (All Pages)"
               >
                 <Printer className="w-3.5 h-3.5" />
@@ -707,7 +705,7 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
               <button
                 type="button"
                 onClick={() => setIsToolbarCollapsed(true)}
-                className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition cursor-pointer"
+                className="hidden sm:inline-flex p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition cursor-pointer"
                 title="Minimize Toolbar"
               >
                 <ChevronDown className="w-3.5 h-3.5" />
@@ -719,17 +717,9 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Mobile Backdrop for Drawer */}
+        {/* Thumbnails Sidebar with REAL Page Previews (Desktop Only with sleek custom scrollbar) */}
         {showThumbnails && numPages > 0 && pdfDoc && (
-          <div
-            onClick={() => setShowThumbnails(false)}
-            className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-xs z-40 transition-opacity animate-in fade-in"
-          />
-        )}
-
-        {/* Thumbnails Sidebar with REAL Page Previews (Drawer on Mobile, Dock on Desktop) */}
-        {showThumbnails && numPages > 0 && pdfDoc && (
-          <aside className="no-print print-hidden fixed md:relative inset-y-0 left-0 z-50 md:z-20 w-64 md:w-52 bg-slate-900/98 md:bg-slate-900/95 border-r border-slate-800 flex flex-col shrink-0 animate-in slide-in-from-left duration-200 shadow-2xl">
+          <aside className="no-print print-hidden hidden md:flex relative inset-y-0 left-0 z-20 w-52 bg-slate-900/95 border-r border-slate-800 flex-col shrink-0 animate-in slide-in-from-left duration-200 shadow-2xl">
             <div className="p-3 border-b border-slate-800 flex items-center justify-between text-xs text-slate-300 font-semibold">
               <div className="flex items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5 text-rose-400" />
@@ -744,7 +734,7 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+            <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
               {Array.from({ length: numPages }, (_, i) => i + 1).map((pNum) => (
                 <PdfThumbnailItem
                   key={pNum}
