@@ -77,7 +77,6 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
 
   const [imgError, setImgError] = useState(false);
   const [vidError, setVidError] = useState(false);
-  const [docError, setDocError] = useState(false);
 
   const isImage =
     mime.startsWith("image/") ||
@@ -106,8 +105,6 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
   const isFont = /\.(ttf|otf|woff|woff2|eot)$/i.test(name);
   const isDiskImage = /\.(iso|img|vmdk|vdi|cue)$/i.test(name);
   const isCert = /\.(pem|crt|cer|key|p12|pfx|pub)$/i.test(name);
-
-  const isDocument = isPdf || isDoc || isSpreadsheet || isPresentation;
 
   const CornerBadges = () => (
     <>
@@ -158,23 +155,7 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
     );
   }
 
-  // 3. Native Document Thumbnail (When cloud provider returned a raster preview)
-  if (isDocument && !docError) {
-    return (
-      <div className="w-full h-full bg-slate-50/50 rounded-lg flex items-center justify-center relative overflow-hidden group-hover:bg-slate-50 transition p-2">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={`${apiUrl}/files/${file.id}/thumbnail?size=large`}
-          alt={file.name}
-          loading="lazy"
-          decoding="async"
-          onError={() => setDocError(true)}
-          className="max-w-full max-h-full object-contain rounded-xs shadow-xs border border-slate-200/60 bg-white transition-transform duration-300 group-hover:scale-105"
-        />
-        <CornerBadges />
-      </div>
-    );
-  }
+
 
   // 4. STANDARDIZED VECTOR PREVIEWS FOR ALL FILES WITHOUT THUMBNAILS:
 
@@ -366,16 +347,25 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
               {ext}
             </span>
           </div>
-          <div className="w-full grid grid-cols-3 gap-0.5 my-auto bg-emerald-100/60 p-1 rounded border border-emerald-200/60">
-            <div className="h-1.5 bg-emerald-200/80 rounded-xs" />
-            <div className="h-1.5 bg-emerald-200/80 rounded-xs" />
-            <div className="h-1.5 bg-emerald-200/80 rounded-xs" />
-            <div className="h-1.5 bg-white rounded-xs" />
-            <div className="h-1.5 bg-white rounded-xs" />
-            <div className="h-1.5 bg-white rounded-xs" />
+          <div className="w-full bg-emerald-50/80 rounded p-1.5 space-y-1 border border-emerald-200/70 my-auto">
+            <div className="grid grid-cols-3 gap-1 pb-1 border-b border-emerald-200">
+              <div className="h-1.5 bg-emerald-500 rounded-xs" />
+              <div className="h-1.5 bg-emerald-500 rounded-xs" />
+              <div className="h-1.5 bg-emerald-500 rounded-xs" />
+            </div>
+            <div className="grid grid-cols-3 gap-1">
+              <div className="h-1 bg-emerald-300/80 rounded-xs" />
+              <div className="h-1 bg-emerald-200/80 rounded-xs" />
+              <div className="h-1 bg-emerald-300/80 rounded-xs" />
+            </div>
+            <div className="grid grid-cols-3 gap-1">
+              <div className="h-1 bg-emerald-200/80 rounded-xs" />
+              <div className="h-1 bg-emerald-300/80 rounded-xs" />
+              <div className="h-1 bg-emerald-200/80 rounded-xs" />
+            </div>
           </div>
           <div className="w-full pt-1 border-t border-emerald-100 flex items-center justify-center">
-            <span className="text-[8px] font-bold text-emerald-700 uppercase">Spreadsheet</span>
+            <span className="text-[8px] font-bold text-emerald-700 uppercase tracking-wide">Spreadsheet</span>
           </div>
         </div>
         <CornerBadges />
@@ -394,14 +384,17 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
               {ext}
             </span>
           </div>
-          <div className="w-full space-y-1.5 my-auto px-1 opacity-70">
-            <div className="h-1 bg-blue-300 rounded-full w-full" />
-            <div className="h-1 bg-blue-200 rounded-full w-5/6" />
-            <div className="h-1 bg-blue-200 rounded-full w-2/3" />
+          <div className="w-full bg-blue-50/70 rounded p-1.5 space-y-1.5 border border-blue-200/60 my-auto">
+            <div className="h-1.5 bg-blue-500 rounded-full w-2/3" />
+            <div className="space-y-1">
+              <div className="h-1 bg-blue-300/90 rounded-full w-full" />
+              <div className="h-1 bg-blue-300/90 rounded-full w-5/6" />
+              <div className="h-1 bg-blue-200/80 rounded-full w-3/4" />
+            </div>
           </div>
           <div className="w-full pt-1 border-t border-blue-100 flex items-center justify-center">
-            <span className="text-[8px] font-bold text-blue-700 uppercase">
-              {ext === "TXT" ? "Text File" : "Word Doc"}
+            <span className="text-[8px] font-bold text-blue-700 uppercase tracking-wide">
+              {ext === "TXT" ? "Text File" : "Word Document"}
             </span>
           </div>
         </div>
@@ -416,16 +409,26 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
       <div className="w-full h-full bg-rose-50/50 rounded-lg flex items-center justify-center relative overflow-hidden p-3 group-hover:bg-rose-50/80 transition">
         <div className="w-24 h-28 bg-white rounded-lg shadow-2xs border border-rose-200/80 flex flex-col items-center justify-between p-2.5 transition-transform duration-300 group-hover:scale-105 group-hover:shadow-xs">
           <div className="w-full flex items-center justify-between">
-            <span className="text-[9px] font-bold text-rose-600 tracking-wider">PDF</span>
-            <span className="w-2 h-2 rounded-full bg-rose-500" />
+            <FileText className="w-4 h-4 text-rose-600" />
+            <span className="text-[8px] font-bold bg-rose-600 text-white px-1.5 py-0.2 rounded uppercase">
+              PDF
+            </span>
           </div>
-          <div className="w-full space-y-1.5 my-auto px-1 opacity-70">
-            <div className="h-1 bg-rose-300 rounded-full w-full" />
-            <div className="h-1 bg-rose-200 rounded-full w-4/5" />
-            <div className="h-1 bg-rose-200 rounded-full w-3/5" />
+          <div className="w-full bg-rose-50/70 rounded p-1.5 space-y-1.5 border border-rose-200/60 my-auto">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-xs bg-rose-500" />
+              <div className="h-1.5 bg-rose-400 rounded-full w-3/5" />
+            </div>
+            <div className="space-y-1">
+              <div className="h-1 bg-rose-300/80 rounded-full w-full" />
+              <div className="h-1 bg-rose-300/80 rounded-full w-4/5" />
+              <div className="h-1 bg-rose-200/70 rounded-full w-3/5" />
+            </div>
           </div>
           <div className="w-full pt-1 border-t border-rose-100 flex items-center justify-center">
-            <span className="text-[8px] font-bold text-rose-700 uppercase">Document</span>
+            <span className="text-[8px] font-bold text-rose-700 uppercase tracking-wide">
+              PDF Document
+            </span>
           </div>
         </div>
         <CornerBadges />
@@ -444,13 +447,25 @@ export function FileThumbnail({ file }: FileThumbnailProps) {
               {ext}
             </span>
           </div>
-          <div className="w-full my-auto px-1 flex flex-col items-center">
-            <div className="w-12 h-8 rounded border border-orange-300 bg-orange-100/50 flex items-center justify-center">
-              <div className="w-4 h-4 rounded-full border-2 border-orange-500 border-t-transparent" />
+          <div className="w-full bg-orange-50/70 rounded p-1.5 space-y-1 border border-orange-200/60 my-auto flex flex-col items-center">
+            <div className="w-full flex items-center justify-between pb-0.5 border-b border-orange-200/60">
+              <div className="h-1 bg-orange-500 rounded-full w-1/2" />
+              <div className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+            </div>
+            <div className="w-full flex items-center gap-1.5 pt-0.5">
+              <div className="w-5 h-4 rounded-xs bg-orange-200/80 flex items-center justify-center">
+                <div className="w-2.5 h-2.5 rounded-full border border-orange-500 border-t-transparent" />
+              </div>
+              <div className="space-y-0.5 flex-1">
+                <div className="h-0.5 bg-orange-300 rounded-full w-full" />
+                <div className="h-0.5 bg-orange-300 rounded-full w-4/5" />
+              </div>
             </div>
           </div>
           <div className="w-full pt-1 border-t border-orange-100 flex items-center justify-center">
-            <span className="text-[8px] font-bold text-orange-700 uppercase">Presentation</span>
+            <span className="text-[8px] font-bold text-orange-700 uppercase tracking-wide">
+              Presentation
+            </span>
           </div>
         </div>
         <CornerBadges />
