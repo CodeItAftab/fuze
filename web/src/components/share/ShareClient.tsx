@@ -443,15 +443,17 @@ export function ShareClient() {
                 !isCsv &&
                 !isMarkdown &&
                 !isTextOrCode && (
-                  <UnsupportedPreview
-                    fileName={plan.file.name}
-                    fileSize={plan.file.size}
-                    mimeType={plan.file.mimeType}
-                    downloadUrl={streamSrc}
-                    onDownload={handleDownload}
-                    onOpenDetails={() => setShowDetails(true)}
-                    plan={plan}
-                  />
+                  <div className="w-full h-full flex items-center justify-center p-4 sm:p-8 overflow-auto">
+                    <UnsupportedPreview
+                      fileName={plan.file.name}
+                      fileSize={plan.file.size}
+                      mimeType={plan.file.mimeType}
+                      downloadUrl={streamSrc}
+                      onDownload={handleDownload}
+                      onOpenDetails={() => setShowDetails(true)}
+                      plan={plan}
+                    />
+                  </div>
                 )}
             </div>
           )}

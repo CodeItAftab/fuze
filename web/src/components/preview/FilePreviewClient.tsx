@@ -454,16 +454,18 @@ export function FilePreviewClient() {
                 !isExcel &&
                 !isTextOrCode &&
                 !isMarkdown && (
-                  <UnsupportedPreview
-                    fileName={plan.file.name}
-                    fileSize={plan.file.size}
-                    mimeType={plan.file.mimeType}
-                    downloadUrl={streamSrc}
-                    onDownload={handleDownload}
-                    onOpenDetails={() => setShowDetails(true)}
-                    onShare={() => setShareOpen(true)}
-                    plan={plan}
-                  />
+                  <div className="w-full h-full flex items-center justify-center p-4 sm:p-8 overflow-auto">
+                    <UnsupportedPreview
+                      fileName={plan.file.name}
+                      fileSize={plan.file.size}
+                      mimeType={plan.file.mimeType}
+                      downloadUrl={streamSrc}
+                      onDownload={handleDownload}
+                      onOpenDetails={() => setShowDetails(true)}
+                      onShare={() => setShareOpen(true)}
+                      plan={plan}
+                    />
+                  </div>
                 )}
             </div>
           )}
