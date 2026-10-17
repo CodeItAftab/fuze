@@ -5,13 +5,12 @@ import * as XLSX from "xlsx";
 import {
   Search,
   Table,
-  Copy,
-  Check,
   FileSpreadsheet,
   Download,
   Loader2,
   AlertCircle,
 } from "lucide-react";
+
 
 interface SpreadsheetPreviewProps {
   content?: string | null;
@@ -51,7 +50,6 @@ export function SpreadsheetPreview({
   const [sheets, setSheets] = useState<SheetData[]>([]);
   const [activeSheetIndex, setActiveSheetIndex] = useState(0);
   const [tableSearch, setTableSearch] = useState("");
-  const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -185,17 +183,6 @@ export function SpreadsheetPreview({
     return filteredRowsWithIndex.slice(0, 1000);
   }, [filteredRowsWithIndex]);
 
-  const handleCopy = () => {
-    if (content) {
-      void navigator.clipboard.writeText(content);
-    } else {
-      const csvStr = currentSheet.rows.map((r) => r.join(",")).join("\n");
-      void navigator.clipboard.writeText(csvStr);
-    }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   if (loading) {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-slate-400 p-12 bg-slate-950">
@@ -258,26 +245,9 @@ export function SpreadsheetPreview({
               className="w-full pl-8 pr-3 py-1 bg-white border border-slate-300 rounded text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition"
             />
           </div>
-
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 transition text-[11px] font-medium cursor-pointer shrink-0"
-          >
-            {copied ? (
-              <>
-                <Check className="h-3.5 w-3.5 text-emerald-600" />
-                <span className="text-emerald-600 font-semibold">Copied</span>
-              </>
-            ) : (
-              <>
-                <Copy className="h-3.5 w-3.5" />
-                <span>Copy Raw</span>
-              </>
-            )}
-          </button>
         </div>
       </div>
+
 
       {/* Grid Table with Authentic Column Letters and Row Numbers */}
       <div className="flex-1 overflow-auto bg-white custom-scrollbar relative">

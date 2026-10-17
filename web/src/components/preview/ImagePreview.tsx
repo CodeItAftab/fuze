@@ -24,29 +24,73 @@ export function ImagePreview({ src, fileName }: ImagePreviewProps) {
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
 
   // Touch tracking for pinch-to-zoom on mobile
   const touchStartDistRef = useRef<number | null>(null);
   const touchStartZoomRef = useRef(1);
 
   const clampZoom = (z: number) => {
-    return Math.min(Math.max(Math.round(z * 100) / 100, 0.2), 5);
+    return Math.min(Math.max(Math.round(z * 100) / 100, 0.5), 4);
   };
 
+  /**
+   * Clamps panning offsets so the image cannot be dragged out of viewport view.
+   */
+  const clampPosition = useCallback(
+    (pos: { x: number; y: number }, currentZoom: number) => {
+      if (!containerRef.current || !imgRef.current) return { x: 0, y: 0 };
+      if (currentZoom <= 1.02) return { x: 0, y: 0 };
+
+      const containerW = containerRef.current.clientWidth;
+      const containerH = containerRef.current.clientHeight;
+      const imgW = imgRef.current.offsetWidth || 400;
+      const imgH = imgRef.current.offsetHeight || 300;
+
+      const isPerpendicular = rotation === 90 || rotation === 270;
+      const effectiveImgW = isPerpendicular ? imgH : imgW;
+      const effectiveImgH = isPerpendicular ? imgW : imgH;
+
+      const scaledW = effectiveImgW * currentZoom;
+      const scaledH = effectiveImgH * currentZoom;
+
+      const maxOffsetX = Math.max(0, (scaledW - containerW) / 2 + 50);
+      const maxOffsetY = Math.max(0, (scaledH - containerH) / 2 + 50);
+
+      return {
+        x: Math.min(Math.max(pos.x, -maxOffsetX), maxOffsetX),
+        y: Math.min(Math.max(pos.y, -maxOffsetY), maxOffsetY),
+      };
+    },
+    [rotation]
+  );
+
   const handleZoomIn = () => {
-    setZoom((z) => clampZoom(z * 1.25));
+    setZoom((z) => {
+      const next = clampZoom(z * 1.25);
+      setPosition((pos) => clampPosition(pos, next));
+      return next;
+    });
   };
 
   const handleZoomOut = () => {
     setZoom((z) => {
       const next = clampZoom(z / 1.25);
-      if (next <= 1) setPosition({ x: 0, y: 0 });
+      if (next <= 1.02) {
+        setPosition({ x: 0, y: 0 });
+      } else {
+        setPosition((pos) => clampPosition(pos, next));
+      }
       return next;
     });
   };
 
   const handleRotate = () => {
-    setRotation((r) => (r + 90) % 360);
+    setRotation((r) => {
+      const nextR = (r + 90) % 360;
+      setPosition({ x: 0, y: 0 });
+      return nextR;
+    });
   };
 
   const handleReset = () => {
@@ -62,6 +106,7 @@ export function ImagePreview({ src, fileName }: ImagePreviewProps) {
       handleReset();
     } else {
       setZoom(2);
+      setPosition({ x: 0, y: 0 });
     }
   };
 
@@ -71,14 +116,18 @@ export function ImagePreview({ src, fileName }: ImagePreviewProps) {
     const factor = e.deltaY < 0 ? 1.15 : 0.87;
     setZoom((prev) => {
       const next = clampZoom(prev * factor);
-      if (next <= 1) setPosition({ x: 0, y: 0 });
+      if (next <= 1.02) {
+        setPosition({ x: 0, y: 0 });
+      } else {
+        setPosition((pos) => clampPosition(pos, next));
+      }
       return next;
     });
   };
 
   // Mouse pan drag handling
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (zoom <= 1) return;
+    if (zoom <= 1.02) return;
     setIsDragging(true);
     dragStartRef.current = {
       x: e.clientX - position.x,
@@ -88,10 +137,11 @@ export function ImagePreview({ src, fileName }: ImagePreviewProps) {
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDragging) return;
-    setPosition({
+    const nextPos = {
       x: e.clientX - dragStartRef.current.x,
       y: e.clientY - dragStartRef.current.y,
-    });
+    };
+    setPosition(clampPosition(nextPos, zoom));
   };
 
   const handleMouseUp = () => {
@@ -100,7 +150,7 @@ export function ImagePreview({ src, fileName }: ImagePreviewProps) {
 
   // Touch gestures for mobile devices
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length === 1 && zoom > 1) {
+    if (e.touches.length === 1 && zoom > 1.02) {
       setIsDragging(true);
       dragStartRef.current = {
         x: e.touches[0].clientX - position.x,
@@ -117,18 +167,21 @@ export function ImagePreview({ src, fileName }: ImagePreviewProps) {
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (e.touches.length === 1 && isDragging && zoom > 1) {
-      setPosition({
+    if (e.touches.length === 1 && isDragging && zoom > 1.02) {
+      const nextPos = {
         x: e.touches[0].clientX - dragStartRef.current.x,
         y: e.touches[0].clientY - dragStartRef.current.y,
-      });
+      };
+      setPosition(clampPosition(nextPos, zoom));
     } else if (e.touches.length === 2 && touchStartDistRef.current !== null) {
       const dist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
         e.touches[0].clientY - e.touches[1].clientY
       );
       const scaleDelta = dist / touchStartDistRef.current;
-      setZoom(clampZoom(touchStartZoomRef.current * scaleDelta));
+      const nextZoom = clampZoom(touchStartZoomRef.current * scaleDelta);
+      setZoom(nextZoom);
+      setPosition((pos) => clampPosition(pos, nextZoom));
     }
   };
 
@@ -151,7 +204,7 @@ export function ImagePreview({ src, fileName }: ImagePreviewProps) {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       className={`relative w-full h-full flex flex-col items-center justify-center overflow-hidden select-none bg-slate-950 ${
-        zoom > 1 ? (isDragging ? "cursor-grabbing" : "cursor-grab") : "cursor-default"
+        zoom > 1.02 ? (isDragging ? "cursor-grabbing" : "cursor-grab") : "cursor-default"
       }`}
     >
       {/* Floating Bottom Toolbar - Sleek Ergonomic Pill */}
@@ -159,7 +212,7 @@ export function ImagePreview({ src, fileName }: ImagePreviewProps) {
         <button
           type="button"
           onClick={handleZoomOut}
-          disabled={zoom <= 0.25}
+          disabled={zoom <= 0.5}
           className="p-1.5 hover:bg-slate-800 rounded-full transition disabled:opacity-30 cursor-pointer text-slate-300 hover:text-white"
           title="Zoom Out (-)"
         >
@@ -178,7 +231,7 @@ export function ImagePreview({ src, fileName }: ImagePreviewProps) {
         <button
           type="button"
           onClick={handleZoomIn}
-          disabled={zoom >= 5}
+          disabled={zoom >= 4}
           className="p-1.5 hover:bg-slate-800 rounded-full transition disabled:opacity-30 cursor-pointer text-slate-300 hover:text-white"
           title="Zoom In (+)"
         >
@@ -225,6 +278,7 @@ export function ImagePreview({ src, fileName }: ImagePreviewProps) {
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
+            ref={imgRef}
             src={src}
             alt={fileName}
             draggable={false}
@@ -235,4 +289,5 @@ export function ImagePreview({ src, fileName }: ImagePreviewProps) {
     </div>
   );
 }
+
 
