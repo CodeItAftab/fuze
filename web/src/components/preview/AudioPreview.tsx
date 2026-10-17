@@ -27,6 +27,7 @@ export function AudioPreview({ src, fileName, mimeType }: AudioPreviewProps) {
         src={src}
         controls
         controlsList="nodownload"
+        crossOrigin="use-credentials"
         onContextMenu={(e) => e.preventDefault()}
         className="w-full max-w-md shadow-2xl rounded-full outline-none"
       >

@@ -99,8 +99,12 @@ export function CodePreview({
       case "java":
         return Prism.languages.java;
       case "c":
+      case "h":
         return Prism.languages.c;
       case "cpp":
+      case "hpp":
+      case "cc":
+      case "cxx":
         return Prism.languages.cpp;
       default:
         return Prism.languages.plain || Prism.languages.javascript;

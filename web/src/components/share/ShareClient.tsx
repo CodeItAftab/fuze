@@ -141,9 +141,14 @@ export function ShareClient() {
 
     const isText =
       filePlan.file.mimeType?.startsWith("text/") ||
-      ["txt", "json", "js", "ts", "tsx", "jsx", "py", "html", "css", "md", "markdown", "csv", "tsv", "log", "sql", "sh", "yaml", "yml"].includes(
-        fileExt,
-      );
+      [
+        "txt", "json", "js", "ts", "tsx", "jsx", "py", "html", "css", "scss",
+        "xml", "log", "sql", "sh", "bash", "zsh", "yaml", "yml",
+        "c", "h", "cpp", "hpp", "cc", "cxx", "rs", "go", "java", "kt", "kts",
+        "cs", "php", "rb", "swift", "scala", "lua", "r", "dart",
+        "env", "dockerfile", "gitignore", "toml", "ini", "graphql", "gql",
+        "md", "markdown", "csv", "tsv",
+      ].includes(fileExt);
 
     if (isText && src) {
       try {

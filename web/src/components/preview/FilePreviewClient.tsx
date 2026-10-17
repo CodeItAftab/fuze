@@ -87,10 +87,13 @@ export function FilePreviewClient() {
     (mime.startsWith("text/") ||
       [
         "txt", "json", "js", "ts", "tsx", "jsx", "py", "html", "css", "scss",
-        "xml", "log", "sql", "sh", "bash", "yaml", "yml",
-        "c", "cpp", "rs", "go", "java", "env", "dockerfile",
+        "xml", "log", "sql", "sh", "bash", "zsh", "yaml", "yml",
+        "c", "h", "cpp", "hpp", "cc", "cxx", "rs", "go", "java", "kt", "kts",
+        "cs", "php", "rb", "swift", "scala", "lua", "r", "dart",
+        "env", "dockerfile", "gitignore", "toml", "ini", "graphql", "gql",
       ].includes(ext)) &&
-    !isMarkdown;
+    !isMarkdown &&
+    !isCsv;
 
   const renderIcon = () => {
     if (isImage) return <ImageIcon className="w-5 h-5 text-emerald-400" />;
@@ -116,6 +119,7 @@ export function FilePreviewClient() {
         setPlan(data);
 
         let previewUrl = data.streamUrl || data.downloadUrl;
+        let activeBlob: Blob | null = null;
 
         // When chunked across multiple clouds or for DOCX/Excel/PDF, assemble chunks
         const isDocOrSheet = isDocx || isExcel;
@@ -124,6 +128,7 @@ export function FilePreviewClient() {
             const { blob: assembledBlob, objectUrl: assembledUrl } =
               await downloadAndAssembleChunks(data);
             if (!isMounted) return;
+            activeBlob = assembledBlob;
             setBlob(assembledBlob);
             previewUrl = assembledUrl;
           } catch (e: any) {
@@ -138,19 +143,40 @@ export function FilePreviewClient() {
           setStreamSrc(previewUrl);
         }
 
+        const fileNameLower = data.file.name.toLowerCase();
+        const fileExt = fileNameLower.includes(".")
+          ? fileNameLower.split(".").pop() || ""
+          : "";
+        const fileMime = (data.file.mimeType || "").toLowerCase();
+
         const shouldFetchText =
-          data.file.mimeType?.startsWith("text/") ||
+          fileMime.startsWith("text/") ||
           [
             "txt", "json", "js", "ts", "tsx", "jsx", "py", "html", "css", "scss",
-            "md", "markdown", "csv", "tsv", "log", "sql", "sh", "yaml", "yml",
-          ].includes(data.file.name.split(".").pop()?.toLowerCase() || "");
+            "xml", "log", "sql", "sh", "bash", "zsh", "yaml", "yml",
+            "c", "h", "cpp", "hpp", "cc", "cxx", "rs", "go", "java", "kt", "kts",
+            "cs", "php", "rb", "swift", "scala", "lua", "r", "dart",
+            "env", "dockerfile", "gitignore", "toml", "ini", "graphql", "gql",
+            "md", "markdown", "csv", "tsv",
+          ].includes(fileExt);
 
-        if (shouldFetchText && previewUrl) {
+        if (shouldFetchText) {
           try {
-            const res = await fetch(previewUrl);
-            if (res.ok && isMounted) {
-              const text = await res.text();
-              setTextContent(text);
+            if (activeBlob) {
+              const text = await activeBlob.text();
+              if (isMounted) setTextContent(text);
+            } else if (previewUrl) {
+              const res = await fetch(previewUrl, { credentials: "include" });
+              if (res.ok && isMounted) {
+                const text = await res.text();
+                setTextContent(text);
+              } else if (!res.ok) {
+                const errJson = await res.json().catch(() => null);
+                console.warn("Failed fetching text preview content:", res.status, errJson);
+                if (isMounted && res.status >= 400) {
+                  setError(errJson?.error || `Failed to load file content (HTTP ${res.status})`);
+                }
+              }
             }
           } catch (e) {
             console.warn("Failed fetching text preview content:", e);

@@ -14,6 +14,7 @@ export function VideoPreview({ src, mimeType }: VideoPreviewProps) {
         src={src}
         controls
         controlsList="nodownload"
+        crossOrigin="use-credentials"
         onContextMenu={(e) => e.preventDefault()}
         playsInline
         className="max-h-[82vh] max-w-[90vw] rounded-2xl shadow-2xl bg-black outline-none"
