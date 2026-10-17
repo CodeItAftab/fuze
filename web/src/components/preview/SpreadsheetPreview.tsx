@@ -3,7 +3,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import * as XLSX from "xlsx";
 import {
-  Search,
   Table,
   FileSpreadsheet,
   Download,
@@ -49,7 +48,6 @@ export function SpreadsheetPreview({
 }: SpreadsheetPreviewProps) {
   const [sheets, setSheets] = useState<SheetData[]>([]);
   const [activeSheetIndex, setActiveSheetIndex] = useState(0);
-  const [tableSearch, setTableSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -165,23 +163,13 @@ export function SpreadsheetPreview({
     totalRows: 0,
   };
 
-  const filteredRowsWithIndex = useMemo(() => {
-    if (!tableSearch.trim()) {
-      return currentSheet.rows.map((row, idx) => ({ row, originalIndex: idx + 1 }));
-    }
-    const q = tableSearch.toLowerCase();
-    const result: { row: string[]; originalIndex: number }[] = [];
-    currentSheet.rows.forEach((row, idx) => {
-      if (row.some((cell) => cell.toLowerCase().includes(q))) {
-        result.push({ row, originalIndex: idx + 1 });
-      }
-    });
-    return result;
-  }, [currentSheet.rows, tableSearch]);
+  const rowsWithIndex = useMemo(() => {
+    return currentSheet.rows.map((row, idx) => ({ row, originalIndex: idx + 1 }));
+  }, [currentSheet.rows]);
 
   const displayedRows = useMemo(() => {
-    return filteredRowsWithIndex.slice(0, 1000);
-  }, [filteredRowsWithIndex]);
+    return rowsWithIndex.slice(0, 1000);
+  }, [rowsWithIndex]);
 
   if (loading) {
     return (
@@ -221,30 +209,17 @@ export function SpreadsheetPreview({
   return (
     <div className="w-full h-full flex flex-col bg-white rounded-none border-0 overflow-hidden select-text">
       {/* Top Header / Formula Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3 py-2 bg-slate-100/90 border-b border-slate-300 text-xs shrink-0">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-slate-100/90 border-b border-slate-300 text-xs shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <FileSpreadsheet className="h-4 w-4 text-emerald-600 shrink-0" />
           <span className="font-semibold text-slate-800 truncate">{fileName}</span>
           <span className="text-slate-500 text-[11px] shrink-0 font-mono">
-            ({filteredRowsWithIndex.length}{" "}
-            {filteredRowsWithIndex.length === 1 ? "row" : "rows"}
-            {filteredRowsWithIndex.length !== currentSheet.totalRows &&
-              ` of ${currentSheet.totalRows}`}
-            )
+            ({currentSheet.totalRows} {currentSheet.totalRows === 1 ? "row" : "rows"})
           </span>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="relative flex-1 sm:w-56">
-            <Search className="h-3.5 w-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              value={tableSearch}
-              onChange={(e) => setTableSearch(e.target.value)}
-              placeholder="Filter cells..."
-              className="w-full pl-8 pr-3 py-1 bg-white border border-slate-300 rounded text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition"
-            />
-          </div>
+        <div className="text-[11px] text-slate-500 font-mono shrink-0">
+          {currentSheet.maxCols} {currentSheet.maxCols === 1 ? "column" : "columns"}
         </div>
       </div>
 
@@ -294,9 +269,9 @@ export function SpreadsheetPreview({
           </tbody>
         </table>
 
-        {filteredRowsWithIndex.length > 1000 && (
+        {rowsWithIndex.length > 1000 && (
           <div className="p-2.5 text-center text-xs text-slate-500 bg-slate-50 border-t border-slate-300 font-mono">
-            Showing first 1,000 rows. Filter with search bar above to see specific rows.
+            Showing first 1,000 rows.
           </div>
         )}
       </div>
@@ -310,7 +285,6 @@ export function SpreadsheetPreview({
               type="button"
               onClick={() => {
                 setActiveSheetIndex(index);
-                setTableSearch("");
               }}
               className={`px-3 py-1 rounded-t text-xs transition cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                 activeSheetIndex === index

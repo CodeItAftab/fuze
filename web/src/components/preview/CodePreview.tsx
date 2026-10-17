@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo } from "react";
 import Prism from "prismjs";
 import "prismjs/components/prism-javascript";
 import "prismjs/components/prism-typescript";
@@ -26,8 +26,6 @@ import {
   Check,
   FileCode,
   WrapText,
-  Search,
-  X,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
@@ -143,10 +141,7 @@ export function CodePreview({
   const [copied, setCopied] = useState(false);
   const [wordWrap, setWordWrap] = useState(false);
   const [fontSize, setFontSize] = useState<"sm" | "base" | "lg">("base");
-  const [showSearch, setShowSearch] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
-  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Normalize input string: strip BOM and stray null bytes
   const cleanContent = useMemo(() => {
@@ -237,19 +232,6 @@ export function CodePreview({
     }
   }, [cleanContent, grammar, extension]);
 
-  // Match counter for find search
-  const matchCount = useMemo(() => {
-    if (!searchQuery.trim()) return 0;
-    try {
-      const regex = new RegExp(
-        searchQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-        "gi",
-      );
-      return (cleanContent.match(regex) || []).length;
-    } catch {
-      return 0;
-    }
-  }, [cleanContent, searchQuery]);
 
   const fontTextClass =
     fontSize === "sm"
@@ -296,49 +278,6 @@ export function CodePreview({
 
             <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
 
-            {/* Search in Code */}
-            {showSearch ? (
-              <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-800/95 border border-blue-500/50 rounded-lg text-xs animate-in fade-in duration-150">
-                <Search className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Find in code..."
-                  className="bg-transparent text-white text-[11px] placeholder:text-slate-500 outline-none w-20 sm:w-28 font-mono"
-                  autoFocus
-                />
-                {searchQuery.trim() && (
-                  <span className="text-[10px] font-mono px-1 py-0.2 bg-slate-700/80 rounded text-slate-300">
-                    {matchCount}
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchQuery("");
-                    setShowSearch(false);
-                  }}
-                  className="p-0.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition cursor-pointer"
-                  title="Close Search"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setShowSearch(true);
-                  setTimeout(() => searchInputRef.current?.focus(), 50);
-                }}
-                className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition cursor-pointer"
-                title="Find in code"
-              >
-                <Search className="w-3.5 h-3.5" />
-              </button>
-            )}
 
             {/* Word Wrap Toggle */}
             <button
