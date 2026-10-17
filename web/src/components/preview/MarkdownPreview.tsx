@@ -12,6 +12,8 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 interface MarkdownPreviewProps {
@@ -23,6 +25,7 @@ export function MarkdownPreview({ content, fileName }: MarkdownPreviewProps) {
   const [viewMode, setViewMode] = useState<"preview" | "raw">("preview");
   const [copied, setCopied] = useState(false);
   const [scale, setScale] = useState(1);
+  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
 
   // Normalize input string: strip BOM (0xFEFF / 0xFFFE) and null bytes
   const cleanContent = useMemo(() => {
@@ -91,115 +94,148 @@ export function MarkdownPreview({ content, fileName }: MarkdownPreviewProps) {
         }}
       />
 
-      {/* Floating Bottom Control Bar */}
-      <div className="no-print print-hidden absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-2xl bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 shadow-[0_16px_36px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] text-white text-xs max-w-[calc(100vw-1.5rem)]">
-        <div className="flex items-center gap-1.5 text-slate-300 font-mono text-[11px] pr-2 border-r border-slate-700/60">
-          <BookOpen className="w-3.5 h-3.5 text-blue-400" />
-          <span>Markdown</span>
-          <span className="text-slate-400 text-[10px] bg-slate-800 px-1.5 py-0.5 rounded ml-1 font-mono">
-            {stats.words} words
-          </span>
-        </div>
-
-        {/* View Mode Toggle: Preview vs Raw */}
-        <div className="flex items-center bg-slate-800/80 p-0.5 rounded-xl border border-slate-700/60">
+      {/* Floating Bottom Control Bar - Fully Responsive & Collapsible */}
+      <div className="no-print print-hidden absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 transition-all duration-200 max-w-[calc(100vw-1.5rem)]">
+        {isToolbarCollapsed ? (
           <button
             type="button"
-            onClick={() => setViewMode("preview")}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium transition cursor-pointer ${
-              viewMode === "preview"
-                ? "bg-blue-600 text-white shadow-xs"
-                : "text-slate-400 hover:text-white"
-            }`}
+            onClick={() => setIsToolbarCollapsed(false)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 shadow-2xl text-slate-300 hover:text-white text-xs cursor-pointer transition hover:bg-slate-800"
+            title="Expand Controls"
           >
-            <Eye className="w-3 h-3" />
-            <span>Preview</span>
+            <BookOpen className="w-3.5 h-3.5 text-blue-400" />
+            <span className="font-mono text-[11px] font-semibold">MD</span>
+            <span className="text-slate-500">•</span>
+            <span className="font-mono text-[11px]">{stats.words} words</span>
+            <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
           </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("raw")}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium transition cursor-pointer ${
-              viewMode === "raw"
-                ? "bg-blue-600 text-white shadow-xs"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            <Code className="w-3 h-3" />
-            <span>Raw</span>
-          </button>
-        </div>
+        ) : (
+          <div className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-2xl bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 shadow-[0_16px_36px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] text-white text-xs">
+            {/* Format Pill */}
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-400 font-mono text-[11px] font-semibold shrink-0">
+              <BookOpen className="w-3.5 h-3.5" />
+              <span className="hidden xs:inline">MD</span>
+            </div>
 
-        {/* Zoom Controls (Preview mode only) */}
-        {viewMode === "preview" && (
-          <div className="flex items-center gap-0.5 border-l border-slate-700/60 pl-1.5">
-            <button
-              type="button"
-              onClick={zoomOut}
-              disabled={scale <= 0.6}
-              className="p-1.5 hover:bg-slate-800 disabled:opacity-30 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
-              title="Zoom Out (-)"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-
-            <span className="text-[11px] font-mono text-slate-300 min-w-9 text-center">
-              {Math.round(scale * 100)}%
+            <span className="text-[11px] font-mono text-slate-400 px-1 hidden md:inline shrink-0">
+              {stats.words} {stats.words === 1 ? "word" : "words"}
             </span>
 
-            <button
-              type="button"
-              onClick={zoomIn}
-              disabled={scale >= 2.0}
-              className="p-1.5 hover:bg-slate-800 disabled:opacity-30 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
-              title="Zoom In (+)"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
+            <div className="hidden xs:block w-px h-4 bg-slate-700/60 mx-0.5" />
 
-            {scale !== 1 && (
+            {/* View Mode Toggle: Preview vs Raw */}
+            <div className="flex items-center bg-slate-800/80 p-0.5 rounded-xl border border-slate-700/60 shrink-0">
               <button
                 type="button"
-                onClick={resetZoom}
-                className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
-                title="Reset Zoom"
+                onClick={() => setViewMode("preview")}
+                className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-medium transition cursor-pointer ${
+                  viewMode === "preview"
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "text-slate-400 hover:text-white"
+                }`}
+                title="Preview Mode"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
+                <Eye className="w-3 h-3" />
+                <span className="hidden xs:inline">Preview</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("raw")}
+                className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-medium transition cursor-pointer ${
+                  viewMode === "raw"
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "text-slate-400 hover:text-white"
+                }`}
+                title="Raw Markdown"
+              >
+                <Code className="w-3 h-3" />
+                <span className="hidden xs:inline">Raw</span>
+              </button>
+            </div>
+
+            {/* Zoom Controls (Preview mode only, desktop/tablet only) */}
+            {viewMode === "preview" && (
+              <div className="hidden sm:flex items-center gap-0.5 border-l border-slate-700/60 pl-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={zoomOut}
+                  disabled={scale <= 0.6}
+                  className="p-1.5 hover:bg-slate-800 disabled:opacity-30 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
+                  title="Zoom Out (-)"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+
+                <span className="text-[11px] font-mono text-slate-300 min-w-9 text-center">
+                  {Math.round(scale * 100)}%
+                </span>
+
+                <button
+                  type="button"
+                  onClick={zoomIn}
+                  disabled={scale >= 2.0}
+                  className="p-1.5 hover:bg-slate-800 disabled:opacity-30 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
+                  title="Zoom In (+)"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+
+                {scale !== 1 && (
+                  <button
+                    type="button"
+                    onClick={resetZoom}
+                    className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
+                    title="Reset Zoom"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             )}
+
+            <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
+
+            {/* Copy Button - Always visible, never cut off */}
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition text-xs font-semibold cursor-pointer shadow-xs active:scale-95 shrink-0"
+              title="Copy Markdown content"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copy</span>
+                </>
+              )}
+            </button>
+
+            {/* Print Button (Hidden on small mobile) */}
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="hidden sm:inline-flex p-1.5 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition cursor-pointer shrink-0"
+              title="Print Markdown Document"
+            >
+              <Printer className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Minimize Toolbar Chevron */}
+            <button
+              type="button"
+              onClick={() => setIsToolbarCollapsed(true)}
+              className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition cursor-pointer ml-0.5 shrink-0"
+              title="Minimize toolbar"
+            >
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
-
-        <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
-
-        {/* Copy Button */}
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="flex items-center gap-1 px-2.5 sm:px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition text-xs font-semibold cursor-pointer shadow-xs active:scale-95"
-          title="Copy Markdown content"
-        >
-          {copied ? (
-            <>
-              <Check className="w-3.5 h-3.5 text-emerald-300" />
-              <span>Copied!</span>
-            </>
-          ) : (
-            <>
-              <Copy className="w-3.5 h-3.5" />
-              <span>Copy</span>
-            </>
-          )}
-        </button>
-
-        {/* Print Button (Hidden on small mobile) */}
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="hidden sm:inline-flex p-1.5 hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition cursor-pointer"
-          title="Print Markdown Document"
-        >
-          <Printer className="w-3.5 h-3.5" />
-        </button>
       </div>
 
       {/* Main Viewport Content Area */}
