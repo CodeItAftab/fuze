@@ -8,6 +8,9 @@ import {
   Maximize2,
   RotateCcw,
   RefreshCw,
+  ChevronUp,
+  ChevronDown,
+  Image as ImageIcon,
 } from "lucide-react";
 
 interface ImagePreviewProps {
@@ -18,6 +21,18 @@ interface ImagePreviewProps {
 export function ImagePreview({ src, fileName }: ImagePreviewProps) {
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
+  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setIsToolbarCollapsed(true);
+    }
+  }, []);
 
   // Pan offsets
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -208,59 +223,92 @@ export function ImagePreview({ src, fileName }: ImagePreviewProps) {
       }`}
     >
       {/* Floating Bottom Toolbar - Sleek Ergonomic Pill */}
-      <div className="absolute bottom-6 z-20 flex items-center gap-1 sm:gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-xl text-white shadow-[0_16px_36px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.08)] border border-slate-700/60 text-xs">
-        <button
-          type="button"
-          onClick={handleZoomOut}
-          disabled={zoom <= 0.5}
-          className="p-1.5 hover:bg-slate-800 rounded-full transition disabled:opacity-30 cursor-pointer text-slate-300 hover:text-white"
-          title="Zoom Out (-)"
-        >
-          <ZoomOut className="h-4 w-4" />
-        </button>
+      <div className="absolute bottom-4 sm:bottom-6 z-20 max-w-[calc(100vw-1.5rem)] transition-all duration-200">
+        {isToolbarCollapsed ? (
+          <button
+            type="button"
+            onClick={() => setIsToolbarCollapsed(false)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 shadow-2xl text-slate-300 hover:text-white text-xs cursor-pointer transition hover:bg-slate-800"
+            title="Expand Image Controls"
+          >
+            <ImageIcon className="w-3.5 h-3.5 text-blue-400" />
+            <span className="font-mono text-[11px] font-semibold">{Math.round(zoom * 100)}%</span>
+            {rotation !== 0 && (
+              <>
+                <span className="text-slate-500">•</span>
+                <span className="font-mono text-[11px]">{rotation}°</span>
+              </>
+            )}
+            <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+          </button>
+        ) : (
+          <div className="flex items-center gap-1 sm:gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-xl text-white shadow-[0_16px_36px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.08)] border border-slate-700/60 text-xs">
+            <button
+              type="button"
+              onClick={handleZoomOut}
+              disabled={zoom <= 0.5}
+              className="p-1.5 hover:bg-slate-800 rounded-full transition disabled:opacity-30 cursor-pointer text-slate-300 hover:text-white"
+              title="Zoom Out (-)"
+            >
+              <ZoomOut className="h-4 w-4" />
+            </button>
 
-        <button
-          type="button"
-          onClick={handleReset}
-          className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-md hover:bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer min-w-12 text-center"
-          title="Reset to Fit"
-        >
-          {Math.round(zoom * 100)}%
-        </button>
-
-        <button
-          type="button"
-          onClick={handleZoomIn}
-          disabled={zoom >= 4}
-          className="p-1.5 hover:bg-slate-800 rounded-full transition disabled:opacity-30 cursor-pointer text-slate-300 hover:text-white"
-          title="Zoom In (+)"
-        >
-          <ZoomIn className="h-4 w-4" />
-        </button>
-
-        <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
-
-        <button
-          type="button"
-          onClick={handleRotate}
-          className="p-1.5 hover:bg-slate-800 rounded-full transition cursor-pointer text-slate-300 hover:text-white"
-          title="Rotate 90° Clockwise"
-        >
-          <RotateCw className="h-4 w-4" />
-        </button>
-
-        {isTransformed && (
-          <>
-            <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
             <button
               type="button"
               onClick={handleReset}
-              className="text-[11px] font-medium text-blue-400 hover:text-blue-300 px-2 py-1 rounded-full hover:bg-slate-800 transition cursor-pointer"
-              title="Reset View"
+              className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-md hover:bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer min-w-12 text-center"
+              title="Reset to Fit"
             >
-              Fit
+              {Math.round(zoom * 100)}%
             </button>
-          </>
+
+            <button
+              type="button"
+              onClick={handleZoomIn}
+              disabled={zoom >= 4}
+              className="p-1.5 hover:bg-slate-800 rounded-full transition disabled:opacity-30 cursor-pointer text-slate-300 hover:text-white"
+              title="Zoom In (+)"
+            >
+              <ZoomIn className="h-4 w-4" />
+            </button>
+
+            <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
+
+            <button
+              type="button"
+              onClick={handleRotate}
+              className="p-1.5 hover:bg-slate-800 rounded-full transition cursor-pointer text-slate-300 hover:text-white"
+              title="Rotate 90° Clockwise"
+            >
+              <RotateCw className="h-4 w-4" />
+            </button>
+
+            {isTransformed && (
+              <>
+                <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="text-[11px] font-medium text-blue-400 hover:text-blue-300 px-2 py-1 rounded-full hover:bg-slate-800 transition cursor-pointer"
+                  title="Reset View"
+                >
+                  Fit
+                </button>
+              </>
+            )}
+
+            <div className="w-px h-4 bg-slate-700/60 mx-0.5" />
+
+            {/* Minimize Toolbar */}
+            <button
+              type="button"
+              onClick={() => setIsToolbarCollapsed(true)}
+              className="p-1 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition cursor-pointer ml-0.5"
+              title="Minimize toolbar"
+            >
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+          </div>
         )}
       </div>
 

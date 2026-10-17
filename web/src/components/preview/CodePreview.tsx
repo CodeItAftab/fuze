@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Prism from "prismjs";
 import "prismjs/components/prism-javascript";
 import "prismjs/components/prism-typescript";
@@ -141,7 +141,18 @@ export function CodePreview({
   const [copied, setCopied] = useState(false);
   const [wordWrap, setWordWrap] = useState(false);
   const [fontSize, setFontSize] = useState<"sm" | "base" | "lg">("base");
-  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
+  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setIsToolbarCollapsed(true);
+    }
+  }, []);
 
   // Normalize input string: strip BOM and stray null bytes
   const cleanContent = useMemo(() => {

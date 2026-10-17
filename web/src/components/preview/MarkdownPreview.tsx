@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { marked } from "marked";
 import {
   Copy,
@@ -25,7 +25,18 @@ export function MarkdownPreview({ content, fileName }: MarkdownPreviewProps) {
   const [viewMode, setViewMode] = useState<"preview" | "raw">("preview");
   const [copied, setCopied] = useState(false);
   const [scale, setScale] = useState(1);
-  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
+  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setIsToolbarCollapsed(true);
+    }
+  }, []);
 
   // Normalize input string: strip BOM (0xFEFF / 0xFFFE) and null bytes
   const cleanContent = useMemo(() => {

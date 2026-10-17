@@ -164,7 +164,18 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
   const [error, setError] = useState<string | null>(null);
   const [showThumbnails, setShowThumbnails] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<"single" | "continuous">("continuous");
-  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
+  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setIsToolbarCollapsed(true);
+    }
+  }, []);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);

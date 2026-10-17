@@ -225,7 +225,18 @@ export function DocxPreview({ src, blob, fileName }: DocxPreviewProps) {
   const [pageHtmls, setPageHtmls] = useState<string[]>([]);
   const [showThumbnails, setShowThumbnails] = useState(false);
   const [fallbackHtml, setFallbackHtml] = useState<string | null>(null);
-  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
+  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setIsToolbarCollapsed(true);
+    }
+  }, []);
 
   // Auto-fit document on small screens (mobile/tablet)
   const computeResponsiveFit = useCallback(() => {
