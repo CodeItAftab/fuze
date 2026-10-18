@@ -1,3 +1,8 @@
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
+import { pipeline } from "node:stream/promises";
+import { Readable } from "node:stream";
 import {
   db,
   providerIdentities,
@@ -9,6 +14,7 @@ import { eq, and, ne, inArray } from "drizzle-orm";
 import { getStorageAdapter } from "../adapters/factory.js";
 import { TokenService } from "../services/token.service.js";
 import { socketManager } from "../websocket/socket-manager.js";
+import { PROVIDER_MAX_FILE_LIMITS } from "../services/chunk-decision.service.js";
 
 export interface ProviderMigrationJobData {
   userId: string;
@@ -94,11 +100,26 @@ export async function executeProviderMigration(
 
     for (const chunk of chunks) {
       const chunkSize = chunk.byteEnd - chunk.byteStart;
-      const dest = otherProviders.find(
-        (p) => p.quotaTotal - p.quotaUsed >= chunkSize,
-      );
+
+      // Filter and prioritize destination clouds:
+      // 1. Exclude providers where chunk size exceeds provider's single-file upload limit (e.g. Dropbox 140MB limit)
+      // 2. Exclude providers without enough free space
+      // 3. Sort by most remaining free space
+      const eligibleProviders = otherProviders
+        .filter((p) => {
+          const maxLimit = PROVIDER_MAX_FILE_LIMITS[p.provider] ?? Infinity;
+          return p.quotaTotal - p.quotaUsed >= chunkSize && chunkSize <= maxLimit;
+        })
+        .sort((a, b) => (b.quotaTotal - b.quotaUsed) - (a.quotaTotal - a.quotaUsed));
+
+      const dest = eligibleProviders[0];
 
       if (dest) {
+        const tempFilePath = path.join(
+          os.tmpdir(),
+          `fuze_mig_${chunk.id}_${Date.now()}.tmp`,
+        );
+
         try {
           console.log(
             `   → Migrating chunk #${chunk.chunkIndex} (${formatBytes(chunkSize)}) from ${providerName} to ${dest.provider.toUpperCase()}...`,
@@ -107,26 +128,36 @@ export async function executeProviderMigration(
           const destAdapter = getStorageAdapter(dest.provider);
           const destToken = await TokenService.getValidAccessToken(dest.id);
 
-          // 1. Download chunk from old cloud
+          // 1. Download chunk directly to disk via stream (0 MB heap memory spike!)
           const downloadUrl = await sourceAdapter.getDownloadUrl({
             providerFileId: chunk.providerFileId,
             accessToken: sourceToken,
           });
           const fileStream = await fetch(downloadUrl);
-          if (!fileStream.ok) {
+          if (!fileStream.ok || !fileStream.body) {
             throw new Error(
               `Failed downloading chunk from ${providerName} (HTTP ${fileStream.status})`,
             );
           }
-          const fileBlob = await fileStream.arrayBuffer();
 
-          // 2. Upload to new cloud
+          await pipeline(
+            Readable.fromWeb(fileStream.body as any),
+            fs.createWriteStream(tempFilePath),
+          );
+
+          const stat = await fs.promises.stat(tempFilePath);
+          const actualSize = stat.size;
+
+          // 2. Upload to new cloud via streamable Blob
           const destSession = await destAdapter.createResumableUploadSession({
             fileName: `migrated-${chunk.id}`,
             mimeType: "application/octet-stream",
-            size: chunkSize,
+            size: actualSize,
             accessToken: destToken,
           });
+
+          // Lazy Blob streamed directly from disk file without loading entire chunk into RAM
+          const fileBlob = await fs.openAsBlob(tempFilePath);
 
           let uploadRes: Response;
           if (destSession.uploadType === "multipart") {
@@ -136,17 +167,13 @@ export async function executeProviderMigration(
                 formData.append(k, v);
               }
             }
-            const blob = new Blob([fileBlob], {
-              type: "application/octet-stream",
-            });
-            formData.append("file", blob, `migrated-${chunk.id}`);
+            formData.append("file", fileBlob, `migrated-${chunk.id}`);
             uploadRes = await fetch(destSession.sessionUrl, {
               method: destSession.httpMethod || "POST",
               headers: destSession.headers,
               body: formData,
             });
           } else {
-            const byteLen = fileBlob.byteLength;
             const uploadHeaders: Record<string, string> = {
               "Content-Type": "application/octet-stream",
               ...(destSession.headers || {}),
@@ -154,9 +181,9 @@ export async function executeProviderMigration(
 
             // Non-multipart resumable upload sessions (OneDrive, Google Drive) require Content-Range
             if (dest.provider !== "dropbox") {
-              const rangeEnd = Math.max(0, byteLen - 1);
-              uploadHeaders["Content-Range"] = `bytes 0-${rangeEnd}/${byteLen}`;
-              uploadHeaders["Content-Length"] = String(byteLen);
+              const rangeEnd = Math.max(0, actualSize - 1);
+              uploadHeaders["Content-Range"] = `bytes 0-${rangeEnd}/${actualSize}`;
+              uploadHeaders["Content-Length"] = String(actualSize);
             }
 
             uploadRes = await fetch(destSession.sessionUrl, {
@@ -210,7 +237,7 @@ export async function executeProviderMigration(
             .where(eq(fileChunks.id, chunk.id));
 
           // 4. Update destination quota
-          dest.quotaUsed += chunkSize;
+          dest.quotaUsed += actualSize;
           await db
             .update(providerIdentities)
             .set({ quotaUsed: dest.quotaUsed })
@@ -238,6 +265,9 @@ export async function executeProviderMigration(
           console.error(
             `     ✗ Failed migrating chunk ${chunk.id}: ${message}`,
           );
+        } finally {
+          // Always clean up the temporary file on disk
+          await fs.promises.unlink(tempFilePath).catch(() => {});
         }
       } else {
         failedChunksCount++;
