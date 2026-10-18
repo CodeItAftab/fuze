@@ -20,12 +20,12 @@ export interface DecisionResult {
 }
 
 // Provider-specific single-file limits on free tier
-const PROVIDER_MAX_FILE_LIMITS: Record<string, number> = {
+export const PROVIDER_MAX_FILE_LIMITS: Record<string, number> = {
   google_drive: 5 * 1024 * 1024 * 1024 * 1024, // 5 TB
   one_drive: 250 * 1024 * 1024 * 1024, // 250 GB
   pcloud: 10 * 1024 * 1024 * 1024, // 10 GB
   box: 250 * 1024 * 1024, // 250 MB (standard account single-file upload ceiling)
-  dropbox: 150 * 1024 * 1024, // 150 MB
+  dropbox: 140 * 1024 * 1024, // 140 MB (hard cap for Dropbox single files/upload)
 };
 
 // Provider throughput and capability preference weights for Whole files
