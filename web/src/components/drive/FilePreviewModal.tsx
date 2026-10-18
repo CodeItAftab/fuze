@@ -150,6 +150,30 @@ export function FilePreviewModal({
     [mime, ext, isMarkdown],
   );
 
+  const isFullBleedPreview = useMemo(
+    () =>
+      isImage ||
+      isVideo ||
+      isAudio ||
+      isPdf ||
+      isDocx ||
+      isExcel ||
+      isCsv ||
+      isMarkdown ||
+      isTextOrCode,
+    [
+      isImage,
+      isVideo,
+      isAudio,
+      isPdf,
+      isDocx,
+      isExcel,
+      isCsv,
+      isMarkdown,
+      isTextOrCode,
+    ],
+  );
+
   useEffect(() => {
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -331,7 +355,7 @@ export function FilePreviewModal({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex flex-col bg-slate-950/95 backdrop-blur-md animate-in fade-in duration-150 select-none font-sans print:static print:h-auto print:bg-white print:backdrop-none print:overflow-visible"
+      className="fixed inset-0 h-screen h-[100dvh] z-50 flex flex-col bg-slate-950/95 backdrop-blur-md animate-in fade-in duration-150 select-none font-sans print:static print:h-auto print:bg-white print:backdrop-none print:overflow-visible"
     >
       <div className="no-print print-hidden print:hidden h-14 px-4 sm:px-6 bg-slate-900/90 border-b border-slate-800/80 flex items-center justify-between text-white shrink-0 gap-3">
         <div className="flex items-center gap-3 min-w-0">
@@ -386,7 +410,7 @@ export function FilePreviewModal({
 
       <div
         className={`flex-1 overflow-hidden flex relative ${
-          isPdf || isDocx
+          !loading && !error && isFullBleedPreview
             ? "items-stretch justify-center p-0"
             : "items-center justify-center p-3 sm:p-6 overflow-auto"
         }`}

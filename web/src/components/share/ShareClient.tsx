@@ -287,7 +287,7 @@ export function ShareClient() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-slate-950 text-white font-sans select-none overflow-hidden">
+    <div className="h-screen h-[100dvh] flex flex-col bg-slate-950 text-white font-sans select-none overflow-hidden">
       {/* Sleek Dark Header */}
       <header className="h-14 bg-slate-900 border-b border-slate-800 px-3 sm:px-6 flex items-center justify-between shrink-0 z-30 shadow-xs">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-2">

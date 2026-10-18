@@ -223,7 +223,7 @@ export function ImagePreview({ src, fileName }: ImagePreviewProps) {
       }`}
     >
       {/* Floating Bottom Toolbar - Sleek Ergonomic Pill */}
-      <div className="absolute bottom-4 sm:bottom-6 z-20 max-w-[calc(100vw-1.5rem)] transition-all duration-200">
+      <div className="absolute bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:bottom-6 left-1/2 -translate-x-1/2 z-20 max-w-[calc(100vw-1.5rem)] transition-all duration-200">
         {isToolbarCollapsed ? (
           <button
             type="button"

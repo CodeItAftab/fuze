@@ -584,7 +584,7 @@ export function PdfPreview({ src, fileName, blob }: PdfPreviewProps) {
 
       {/* Modern Glassmorphic Floating Toolbar - Fully Responsive */}
       {!loading && !error && (
-        <div className="no-print print-hidden absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 transition-all duration-200 max-w-[calc(100vw-1.5rem)]">
+        <div className="no-print print-hidden absolute bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:bottom-6 left-1/2 -translate-x-1/2 z-30 transition-all duration-200 max-w-[calc(100vw-1.5rem)]">
           {isToolbarCollapsed ? (
             <button
               type="button"

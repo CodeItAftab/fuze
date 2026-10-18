@@ -278,7 +278,7 @@ export function FilePreviewClient() {
   return (
     <div
       ref={containerRef}
-      className="h-screen flex flex-col bg-slate-950 text-white font-sans select-none overflow-hidden print:h-auto print:w-auto print:overflow-visible print:bg-white"
+      className="h-screen h-[100dvh] flex flex-col bg-slate-950 text-white font-sans select-none overflow-hidden print:h-auto print:w-auto print:overflow-visible print:bg-white"
     >
       {/* Unified Sleek Dark Header - Hidden when printing */}
       <header className="no-print print-hidden print:hidden h-14 bg-slate-900/90 border-b border-slate-800/80 px-3 sm:px-6 flex items-center justify-between shrink-0 z-30 backdrop-blur-md">
