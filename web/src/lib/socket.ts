@@ -11,22 +11,84 @@ class WebSocketClient {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 2000;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   connect() {
     if (typeof window === "undefined") return;
-    if (this.socket && this.socket.readyState === WebSocket.OPEN) return;
+    if (
+      this.socket &&
+      (this.socket.readyState === WebSocket.OPEN ||
+        this.socket.readyState === WebSocket.CONNECTING)
+    ) {
+      return;
+    }
 
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:4000/ws";
-    this.socket = new WebSocket(wsUrl);
+    // 1. Guard against connecting on public / auth / preview routes
+    const pathname = window.location.pathname;
+    const isPublicOrAuth =
+      pathname.startsWith("/login") ||
+      pathname.startsWith("/register") ||
+      pathname.startsWith("/forgot-password") ||
+      pathname.startsWith("/reset-password") ||
+      pathname.startsWith("/verify-email") ||
+      pathname.startsWith("/share") ||
+      pathname.startsWith("/terms") ||
+      pathname.startsWith("/privacy") ||
+      pathname === "/";
+
+    if (isPublicOrAuth) {
+      this.disconnect();
+      return;
+    }
+
+    // 2. Guard against connecting without an active session or token
+    const token = localStorage.getItem("fuze_token");
+    const hasSessionCookie = document.cookie
+      .split(";")
+      .some((c) => c.trim().startsWith("fuze_session="));
+    const user = useAuthStore.getState().user;
+
+    if (!token && !hasSessionCookie && !user) {
+      return;
+    }
+
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
+    const baseWsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:4000/ws";
+    let wsUrl = baseWsUrl;
+    if (token) {
+      try {
+        const url = new URL(baseWsUrl, window.location.origin);
+        url.searchParams.set("token", token);
+        wsUrl = url.toString();
+      } catch {
+        wsUrl = baseWsUrl;
+      }
+    }
+
+    try {
+      this.socket = new WebSocket(wsUrl);
+    } catch (err) {
+      console.error("Failed to construct WebSocket:", err);
+      return;
+    }
 
     this.socket.onopen = () => {
-      this.reconnectAttempts = 0;
-      console.log("⚡ Connected to Fuze Real-Time WebSocket");
+      console.log("⚡ WebSocket connection established, validating credentials...");
+      // NOTE: Do not reset reconnectAttempts here.
+      // Reset only once the server confirms auth via { type: "CONNECTED" }.
     };
 
     this.socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        if (data.type === "CONNECTED") {
+          this.reconnectAttempts = 0;
+          console.log("⚡ Connected to Fuze Real-Time WebSocket");
+        }
         this.handleEvent(data);
       } catch (err) {
         console.error("Failed to parse WS message:", err);
@@ -34,22 +96,44 @@ class WebSocketClient {
     };
 
     this.socket.onclose = (event) => {
-      if (event.code === 4001 || event.reason === "Session Revoked") {
-        console.warn("⚠️ WebSocket closed due to remote session revocation");
+      const isAuthFailure =
+        event.code === 1008 ||
+        event.code === 4001 ||
+        event.reason === "Unauthorized" ||
+        event.reason === "Invalid Token" ||
+        event.reason === "Session Revoked";
+
+      if (isAuthFailure) {
+        console.warn(
+          `🔒 WebSocket closed due to auth failure (${event.code}: ${event.reason || "Unauthorized"}) - Halting reconnection.`,
+        );
         this.disconnect();
-        useAuthStore.getState().clearAuth();
-        if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-          window.location.href = "/login?revoked=true";
+
+        if (event.code === 4001 || event.reason === "Session Revoked") {
+          useAuthStore.getState().clearAuth();
+          if (
+            typeof window !== "undefined" &&
+            !window.location.pathname.startsWith("/login")
+          ) {
+            window.location.href = "/login?revoked=true";
+          }
         }
         return;
       }
 
       if (this.reconnectAttempts < this.maxReconnectAttempts) {
         this.reconnectAttempts++;
-        setTimeout(
+        console.log(
+          `🔄 WebSocket disconnected (Code: ${event.code}). Retrying in ${
+            (this.reconnectDelay * this.reconnectAttempts) / 1000
+          }s (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`,
+        );
+        this.reconnectTimer = setTimeout(
           () => this.connect(),
           this.reconnectDelay * this.reconnectAttempts,
         );
+      } else {
+        console.warn("⚠️ WebSocket max reconnect attempts reached. Giving up.");
       }
     };
   }
@@ -116,7 +200,16 @@ class WebSocketClient {
   }
 
   disconnect() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.reconnectAttempts = 0;
     if (this.socket) {
+      this.socket.onopen = null;
+      this.socket.onmessage = null;
+      this.socket.onerror = null;
+      this.socket.onclose = null;
       this.socket.close();
       this.socket = null;
     }

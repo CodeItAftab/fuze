@@ -9,15 +9,22 @@ export function DashboardClientProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const { checkSession } = useAuthStore();
+  const { checkSession, user } = useAuthStore();
 
   useEffect(() => {
     // 1. Initial session verification
     void checkSession();
-
-    // 2. Establish real-time socket connection for live updates and instant session revocation signals
-    socketClient.connect();
   }, [checkSession]);
+
+  useEffect(() => {
+    // 2. Establish real-time socket connection only when authenticated
+    if (user) {
+      socketClient.connect();
+    }
+    return () => {
+      socketClient.disconnect();
+    };
+  }, [user]);
 
   return <>{children}</>;
 }
