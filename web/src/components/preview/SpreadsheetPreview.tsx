@@ -277,7 +277,7 @@ export function SpreadsheetPreview({
       </div>
 
       {/* Bottom Sheet Tabs & Status Bar (Authentic Excel/Sheets Style) */}
-      <div className="flex items-center justify-between px-2 py-1 bg-[#f1f3f4] border-t border-slate-300 overflow-x-auto shrink-0 text-xs select-none">
+      <div className="flex items-center justify-between px-2 pt-1 pb-[calc(0.25rem+env(safe-area-inset-bottom,0px))] bg-[#f1f3f4] border-t border-slate-300 overflow-x-auto shrink-0 text-xs select-none">
         <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar">
           {sheets.map((sheet, index) => (
             <button

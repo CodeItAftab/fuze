@@ -108,6 +108,7 @@ class WebSocketClient {
         break;
 
       case "PROVIDER_DISCONNECTED":
+      case "PROVIDER_MIGRATION_FAILED":
         store.setMigrationProgress(null);
         void store.refreshProviders();
         break;

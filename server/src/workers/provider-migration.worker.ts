@@ -90,6 +90,8 @@ export async function executeProviderMigration(
     const sourceToken =
       await TokenService.getValidAccessToken(providerIdentityId);
 
+    let failedChunksCount = 0;
+
     for (const chunk of chunks) {
       const chunkSize = chunk.byteEnd - chunk.byteStart;
       const dest = otherProviders.find(
@@ -111,6 +113,11 @@ export async function executeProviderMigration(
             accessToken: sourceToken,
           });
           const fileStream = await fetch(downloadUrl);
+          if (!fileStream.ok) {
+            throw new Error(
+              `Failed downloading chunk from ${providerName} (HTTP ${fileStream.status})`,
+            );
+          }
           const fileBlob = await fileStream.arrayBuffer();
 
           // 2. Upload to new cloud
@@ -139,11 +146,22 @@ export async function executeProviderMigration(
               body: formData,
             });
           } else {
+            const byteLen = fileBlob.byteLength;
+            const uploadHeaders: Record<string, string> = {
+              "Content-Type": "application/octet-stream",
+              ...(destSession.headers || {}),
+            };
+
+            // Non-multipart resumable upload sessions (OneDrive, Google Drive) require Content-Range
+            if (dest.provider !== "dropbox") {
+              const rangeEnd = Math.max(0, byteLen - 1);
+              uploadHeaders["Content-Range"] = `bytes 0-${rangeEnd}/${byteLen}`;
+              uploadHeaders["Content-Length"] = String(byteLen);
+            }
+
             uploadRes = await fetch(destSession.sessionUrl, {
               method: destSession.httpMethod || "PUT",
-              headers: destSession.headers || {
-                "Content-Type": "application/octet-stream",
-              },
+              headers: uploadHeaders,
               body: fileBlob,
             });
           }
@@ -198,22 +216,31 @@ export async function executeProviderMigration(
             .set({ quotaUsed: dest.quotaUsed })
             .where(eq(providerIdentities.id, dest.id));
 
-          // 5. Delete from old cloud
-          await sourceAdapter.deleteFile({
-            providerFileId: chunk.providerFileId,
-            accessToken: sourceToken,
-          });
+          // 5. Delete from old cloud (best effort, chunk already safely relocated)
+          try {
+            await sourceAdapter.deleteFile({
+              providerFileId: chunk.providerFileId,
+              accessToken: sourceToken,
+            });
+          } catch (delErr) {
+            console.warn(
+              `     ⚠️ Could not delete old chunk on ${providerName} (already safely migrated):`,
+              delErr,
+            );
+          }
 
           console.log(
             `     ✓ Chunk #${chunk.chunkIndex} successfully moved to ${dest.provider.toUpperCase()}`,
           );
         } catch (err: unknown) {
+          failedChunksCount++;
           const message = err instanceof Error ? err.message : String(err);
           console.error(
             `     ✗ Failed migrating chunk ${chunk.id}: ${message}`,
           );
         }
       } else {
+        failedChunksCount++;
         console.warn(
           `     ⚠️ No remaining provider has enough space for chunk ${chunk.id} (${formatBytes(chunkSize)})`,
         );
@@ -236,6 +263,24 @@ export async function executeProviderMigration(
           percent,
         },
       });
+    }
+
+    if (failedChunksCount > 0) {
+      console.error(
+        `[Worker: ProviderMigration] ❌ Migration failed for ${failedChunksCount}/${totalChunks} chunk(s). Aborting provider disconnection to protect user data.`,
+      );
+      socketManager.broadcastToUser(userId, {
+        type: "PROVIDER_MIGRATION_FAILED",
+        payload: {
+          providerId: providerIdentityId,
+          failedChunks: failedChunksCount,
+          totalChunks,
+          error: `Failed to migrate ${failedChunksCount} of ${totalChunks} chunks. Provider was kept connected to prevent data loss.`,
+        },
+      });
+      throw new Error(
+        `Migration incomplete: ${failedChunksCount}/${totalChunks} chunk(s) failed to transfer.`,
+      );
     }
   }
 
@@ -294,6 +339,11 @@ export async function executeProviderMigration(
       );
       await db.delete(vfsNodes).where(inArray(vfsNodes.id, affectedNodeIds));
     }
+
+    // Explicitly purge all file_chunks linked to this provider
+    await db
+      .delete(fileChunks)
+      .where(eq(fileChunks.providerIdentityId, providerIdentityId));
   }
 
   // -------------------------------------------------------------
@@ -305,6 +355,18 @@ export async function executeProviderMigration(
   await db
     .delete(uploadChunks)
     .where(eq(uploadChunks.providerIdentityId, providerIdentityId));
+
+  // Verify no orphaned chunks reference this provider identity before deletion
+  const remainingChunks = await db
+    .select({ id: fileChunks.id })
+    .from(fileChunks)
+    .where(eq(fileChunks.providerIdentityId, providerIdentityId));
+
+  if (remainingChunks.length > 0) {
+    throw new Error(
+      `Cannot disconnect ${providerName}: ${remainingChunks.length} file chunk(s) are still linked to this provider identity.`,
+    );
+  }
 
   await db
     .delete(providerIdentities)
