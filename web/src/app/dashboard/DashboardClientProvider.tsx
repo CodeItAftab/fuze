@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import { useAuthStore } from "@/stores/auth.store";
 import { socketClient } from "@/lib/socket";
+import { ToastContainer } from "@/components/ui/ToastContainer";
+import { FloatingTransferHub } from "@/components/transfers/FloatingTransferHub";
 
 export function DashboardClientProvider({
   children,
@@ -12,12 +14,10 @@ export function DashboardClientProvider({
   const { checkSession, user } = useAuthStore();
 
   useEffect(() => {
-    // 1. Initial session verification
     void checkSession();
   }, [checkSession]);
 
   useEffect(() => {
-    // 2. Establish real-time socket connection only when authenticated
     if (user) {
       socketClient.connect();
     }
@@ -26,5 +26,11 @@ export function DashboardClientProvider({
     };
   }, [user]);
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <FloatingTransferHub />
+      <ToastContainer />
+    </>
+  );
 }

@@ -1,40 +1,14 @@
 import { create } from "zustand";
 
-export interface VfsItem {
-  id: string;
-  name: string;
-  type: "file" | "folder";
-  size: number;
-  mimeType: string | null;
-  parentId: string | null;
-  starred: boolean;
-  trashedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-  providerBadge?: string | null;
-}
+import {
+  VfsItem,
+  ProviderSummary,
+  StorageSummary,
+  MigrationProgress,
+  BreadcrumbItem,
+} from "@/types";
 
-export interface ProviderSummary {
-  id: string;
-  provider: "google_drive" | "one_drive" | "dropbox" | "box" | "pcloud";
-  accountEmail: string | null;
-  quotaTotal: number;
-  quotaUsed: number;
-  isRevoked?: boolean;
-}
-
-export interface StorageSummary {
-  totalPoolBytes: number;
-  usedPoolBytes: number;
-  freePoolBytes: number;
-}
-
-export interface MigrationProgress {
-  providerId: string;
-  completed: number;
-  total: number;
-  percent: number;
-}
+export type { VfsItem, ProviderSummary, StorageSummary, MigrationProgress };
 
 interface DriveState {
   currentFolderId: string | null;

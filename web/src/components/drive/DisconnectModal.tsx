@@ -1,33 +1,47 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ProviderSummary } from "@/stores/drive.store";
-import { AlertTriangle, X, RefreshCw, Trash2, ArrowRight } from "lucide-react";
+import {
+  ProviderSummary,
+  DisconnectAction,
+  DisconnectPreviewResult,
+} from "@/types";
+import { DisconnectHeader } from "./disconnect/DisconnectHeader";
+import { DisconnectStorageSummary } from "./disconnect/DisconnectStorageSummary";
+import { DisconnectOptionCard } from "./disconnect/DisconnectOptionCard";
+import { DisconnectFooter } from "./disconnect/DisconnectFooter";
+import { toast } from "@/stores/toast.store";
+import { useDriveStore } from "@/stores/drive.store";
+import {
+  ArrowRightLeft,
+  ShieldCheck,
+  Trash2,
+  FolderArchive,
+  Sparkles,
+  Loader2,
+} from "lucide-react";
 
-export interface DisconnectPreviewResult {
-  provider: string;
-  accountEmail: string | null;
-  totalBytesOnProvider: number;
-  affectedFilesCount: number;
-  wholeFilesCount: number;
-  chunkedFilesCount: number;
-  canMigrate: boolean;
-  remainingFreeBytes: number;
-  otherProvidersCount: number;
+interface DisconnectModalProps {
+  provider: ProviderSummary;
+  onClose: () => void;
+  onSuccess: () => void;
 }
 
 export function DisconnectModal({
   provider,
   onClose,
   onSuccess,
-}: {
-  provider: ProviderSummary;
-  onClose: () => void;
-  onSuccess: () => void;
-}) {
+}: DisconnectModalProps) {
   const [preview, setPreview] = useState<DisconnectPreviewResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedAction, setSelectedAction] =
+    useState<DisconnectAction>("smart_unlink");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const providerDisplayName = provider.provider
+    .replace("_", " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 
   useEffect(() => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -37,123 +51,196 @@ export function DisconnectModal({
       .then((res) => res.json())
       .then((data: DisconnectPreviewResult) => {
         setPreview(data);
+        if (data.wholeFilesCount > 0) setSelectedAction("smart_unlink");
+        else if (data.canMigrate) setSelectedAction("migrate");
+        else setSelectedAction("delete");
         setIsLoading(false);
       })
       .catch(() => setIsLoading(false));
   }, [provider.id]);
 
-  const handleAction = async (action: "migrate" | "delete") => {
-    setIsSubmitting(true);
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-    await fetch(`${apiUrl}/providers/${provider.id}/disconnect`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
-    });
-    setIsSubmitting(false);
-    onSuccess();
-    onClose();
-  };
-
-  const formatBytes = (bytes: number) => {
-    if (!bytes || bytes === 0) return "0 B";
-    const gb = bytes / (1024 * 1024 * 1024);
-    if (gb >= 1) return `${gb.toFixed(2)} GB`;
-    const mb = bytes / (1024 * 1024);
-    if (mb >= 1) return `${mb.toFixed(2)} MB`;
-    const kb = bytes / 1024;
-    if (kb >= 1) return `${kb.toFixed(1)} KB`;
-    return `${bytes} B`;
-  };
-
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !isSubmitting) onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [onClose, isSubmitting]);
+
+  const handleConfirm = async () => {
+    setIsSubmitting(true);
+
+    // ⚡ INSTANT FEEDBACK: Populate the migration store right now so the Migrations page is never delayed
+    if (
+      selectedAction === "migrate" ||
+      (selectedAction === "smart_unlink" && sharedChunksCount > 0)
+    ) {
+      useDriveStore.getState().setMigrationProgress({
+        providerId: provider.id,
+        completed: 0,
+        total: sharedChunksCount || 1,
+        percent: 0,
+        mode: selectedAction === "migrate" ? "client" : "server",
+        statusText: "Preparing migration & allocating cloud storage...",
+      });
+      toast.info(
+        "Migration Started",
+        "Preparing files and allocating storage in background...",
+      );
+    } else if (selectedAction === "smart_unlink") {
+      toast.info(
+        "Unlinking Storage",
+        "Preserving your whole files intact in native cloud...",
+      );
+    } else {
+      toast.warning(
+        "Deleting Provider",
+        "Purging associated chunks and reclaiming storage...",
+      );
+    }
+
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    try {
+      const res = await fetch(`${apiUrl}/providers/${provider.id}/disconnect`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: selectedAction }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to disconnect provider");
+      }
+
+      onSuccess();
+      onClose();
+    } catch (err: unknown) {
+      setIsSubmitting(false);
+      useDriveStore.getState().setMigrationProgress(null);
+      toast.error(
+        "Disconnection Failed",
+        err instanceof Error ? err.message : "Network error",
+      );
+    }
+  };
+
+  const otherCloudsCount = preview?.otherProvidersCount ?? 0;
+  const canMigrateAll = preview?.canMigrate ?? false;
+  const sharedChunksCount = preview?.chunkedFilesCount ?? 0;
+  const wholeFilesCount = preview?.wholeFilesCount ?? 0;
 
   return (
     <div
-      onClick={onClose}
-      className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4"
+      onClick={() => !isSubmitting && onClose()}
+      className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-3 sm:p-4 animate-in fade-in duration-150"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md border border-slate-200 p-6 text-xs font-sans animate-in fade-in zoom-in-95 duration-100"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200/90 p-5 sm:p-6 text-xs font-sans animate-in zoom-in-95 duration-150 flex flex-col max-h-[92vh]"
       >
-        <div className="flex items-center justify-between gap-3 mb-3 min-w-0">
-          <div className="flex items-center gap-3 text-rose-600 font-bold text-sm min-w-0 flex-1">
-            <AlertTriangle className="h-5 w-5 shrink-0" />
-            <span className="truncate">
-              Disconnect {provider.provider.replace("_", " ").toUpperCase()}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition shrink-0 cursor-pointer"
-            aria-label="Close modal"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+        <DisconnectHeader
+          providerDisplayName={providerDisplayName}
+          accountEmail={provider.accountEmail}
+          isSubmitting={isSubmitting}
+          onClose={onClose}
+        />
 
         {isLoading ? (
-          <div className="py-8 text-center text-slate-400">
-            Checking stored files...
+          <div className="py-16 text-center text-slate-500 space-y-2.5">
+            <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-600" />
+            <p className="text-xs font-medium">
+              Analyzing storage allocations...
+            </p>
           </div>
         ) : (
-          <div className="space-y-4">
-            <p className="text-slate-600 leading-relaxed">
-              This provider currently holds{" "}
-              <strong className="text-slate-900">
-                {preview?.affectedFilesCount || 0} file
-                {(preview?.affectedFilesCount || 0) === 1 ? "" : "s"}
-              </strong>{" "}
-              ({formatBytes(preview?.totalBytesOnProvider || 0)}).
-            </p>
+          <div className="space-y-4 pt-3.5 overflow-y-auto pr-0.5">
+            <DisconnectStorageSummary
+              totalBytes={preview?.totalBytesOnProvider || 0}
+              wholeFilesCount={wholeFilesCount}
+              sharedChunksCount={sharedChunksCount}
+            />
 
-            {preview?.canMigrate ? (
-              <div className="space-y-2 pt-2">
-                <button
-                  disabled={isSubmitting}
-                  onClick={() => handleAction("migrate")}
-                  className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center justify-between transition cursor-pointer"
-                >
-                  <span className="flex items-center gap-2">
-                    <RefreshCw className="h-4 w-4" /> Migrate files to other
-                    clouds
+            <div className="space-y-2.5">
+              <p className="text-[11px] font-medium text-slate-500 px-0.5">
+                Choose disconnection strategy:
+              </p>
+
+              {/* 1. Move All Files */}
+              <DisconnectOptionCard
+                title="1. Move All Files"
+                badge={
+                  <span className="px-1.5 py-0.2 bg-blue-100 text-blue-700 font-bold text-[9px] rounded-full uppercase">
+                    Client-First
                   </span>
-                  <ArrowRight className="h-4 w-4" />
-                </button>
+                }
+                icon={ArrowRightLeft}
+                theme="blue"
+                isSelected={selectedAction === "migrate"}
+                isDisabled={!canMigrateAll}
+                disabledReason={
+                  otherCloudsCount === 0
+                    ? "Requires at least one other connected cloud account."
+                    : "Remaining clouds do not have enough free capacity."
+                }
+                description="Transfers all files and chunks from this cloud to your other connected storage providers so your Fuze Drive remains intact."
+                onSelect={() => setSelectedAction("migrate")}
+              />
 
-                <button
-                  disabled={isSubmitting}
-                  onClick={() => handleAction("delete")}
-                  className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-700 font-semibold flex items-center justify-center gap-2 transition cursor-pointer"
-                >
-                  <Trash2 className="h-4 w-4" /> Delete files permanently
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-[11px]">
-                  Not enough free space across other connected clouds to migrate
-                  these files.
-                </div>
-                <button
-                  disabled={isSubmitting}
-                  onClick={() => handleAction("delete")}
-                  className="w-full py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold transition"
-                >
-                  Delete Files & Disconnect
-                </button>
-              </div>
-            )}
+              {/* 2. Smart Evacuate */}
+              <DisconnectOptionCard
+                title="2. Smart Evacuate"
+                badge={
+                  <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-700 font-bold text-[9px] rounded-full uppercase flex items-center gap-0.5">
+                    <Sparkles className="h-2.5 w-2.5" /> Recommended
+                  </span>
+                }
+                icon={ShieldCheck}
+                theme="emerald"
+                isSelected={selectedAction === "smart_unlink"}
+                description={
+                  <div className="space-y-1.5">
+                    <p>
+                      {sharedChunksCount === 0
+                        ? `All files stored on this cloud are whole files. They will stay 100% intact in your ${providerDisplayName} account with 0 MB transfer bandwidth.`
+                        : otherCloudsCount > 0 && canMigrateAll
+                          ? `Whole files stay safe in your ${providerDisplayName} account. Only the ${sharedChunksCount} shared chunk(s) will be moved to your other clouds.`
+                          : `Whole files stay safe in your ${providerDisplayName} account. Missing parts will be consolidated into this cloud with a 1-click restore script.`}
+                    </p>
+                    {sharedChunksCount > 0 && (
+                      <div className="p-2 rounded-lg bg-emerald-600/10 border border-emerald-200 text-[10.5px] text-emerald-800 flex items-start gap-1.5">
+                        <FolderArchive className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>
+                          Fuze will deploy a <code>_fuze_recovery/</code> folder
+                          with a 1-click restore script.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                }
+                onSelect={() => setSelectedAction("smart_unlink")}
+              />
+
+              {/* 3. Delete All Files */}
+              <DisconnectOptionCard
+                title="3. Delete All Files"
+                icon={Trash2}
+                theme="rose"
+                isSelected={selectedAction === "delete"}
+                description="Permanently deletes all files stored on this cloud. Any associated multi-cloud chunks on other clouds will be cascade-purged to reclaim storage."
+                onSelect={() => setSelectedAction("delete")}
+              />
+            </div>
           </div>
+        )}
+
+        {!isLoading && (
+          <DisconnectFooter
+            selectedAction={selectedAction}
+            isSubmitting={isSubmitting}
+            onCancel={onClose}
+            onConfirm={handleConfirm}
+          />
         )}
       </div>
     </div>

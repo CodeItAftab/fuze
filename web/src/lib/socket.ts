@@ -1,5 +1,10 @@
-import { useDriveStore, VfsItem, MigrationProgress } from "@/stores/drive.store";
+import {
+  useDriveStore,
+  VfsItem,
+  MigrationProgress,
+} from "@/stores/drive.store";
 import { useAuthStore } from "@/stores/auth.store";
+import { toast } from "@/stores/toast.store";
 
 export interface WebSocketEventMessage {
   type: string;
@@ -57,7 +62,8 @@ class WebSocketClient {
       this.reconnectTimer = null;
     }
 
-    const baseWsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:4000/ws";
+    const baseWsUrl =
+      process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:4000/ws";
     let wsUrl = baseWsUrl;
     if (token) {
       try {
@@ -77,7 +83,9 @@ class WebSocketClient {
     }
 
     this.socket.onopen = () => {
-      console.log("⚡ WebSocket connection established, validating credentials...");
+      console.log(
+        "⚡ WebSocket connection established, validating credentials...",
+      );
       // NOTE: Do not reset reconnectAttempts here.
       // Reset only once the server confirms auth via { type: "CONNECTED" }.
     };
@@ -146,7 +154,10 @@ class WebSocketClient {
         console.warn("⚠️ Received SESSION_REVOKED event from server");
         this.disconnect();
         useAuthStore.getState().clearAuth();
-        if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+        if (
+          typeof window !== "undefined" &&
+          !window.location.pathname.startsWith("/login")
+        ) {
           window.location.href = "/login?revoked=true";
         }
         break;
@@ -160,7 +171,11 @@ class WebSocketClient {
         break;
 
       case "FILE_RENAMED":
-        if (data.payload && typeof data.payload === "object" && "id" in data.payload) {
+        if (
+          data.payload &&
+          typeof data.payload === "object" &&
+          "id" in data.payload
+        ) {
           const updated = data.payload as Partial<VfsItem> & { id: string };
           store.addItem(updated as VfsItem);
         }
@@ -170,7 +185,11 @@ class WebSocketClient {
         let itemId: string | null = null;
         if (typeof data.payload === "string") {
           itemId = data.payload;
-        } else if (data.payload && typeof data.payload === "object" && "id" in data.payload) {
+        } else if (
+          data.payload &&
+          typeof data.payload === "object" &&
+          "id" in data.payload
+        ) {
           itemId = String((data.payload as { id: string }).id);
         }
         if (itemId) {
@@ -180,6 +199,13 @@ class WebSocketClient {
       }
 
       case "PROVIDER_CONNECTED":
+        void store.refreshProviders();
+        toast.success(
+          "Storage Connected",
+          "New cloud provider linked successfully!",
+        );
+        break;
+
       case "PROVIDER_STATUS_CHANGED":
       case "QUOTA_UPDATED":
         void store.refreshProviders();
@@ -192,9 +218,18 @@ class WebSocketClient {
         break;
 
       case "PROVIDER_DISCONNECTED":
+        store.setMigrationProgress(null);
+        void store.refreshProviders();
+        toast.success("Storage Unlinked", "Cloud account unlinked safely.");
+        break;
+
       case "PROVIDER_MIGRATION_FAILED":
         store.setMigrationProgress(null);
         void store.refreshProviders();
+        toast.error(
+          "Migration Incomplete",
+          "One or more chunks failed to relocate. Recovery kit deployed.",
+        );
         break;
     }
   }

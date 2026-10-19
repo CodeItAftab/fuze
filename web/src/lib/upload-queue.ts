@@ -1,30 +1,11 @@
 import { useDriveStore } from "@/stores/drive.store";
+import { QueueItem, TransferStatus } from "@/types";
+import { formatSpeed } from "@/utils/formatters";
+import { toast } from "@/stores/toast.store";
 
-export interface QueueItem {
-  id: string;
-  file: File;
-  sessionId?: string;
-  progress: number;
-  uploadedBytes: number;
-  totalBytes: number;
-  status: "queued" | "uploading" | "completed" | "failed" | "cancelled";
-  error?: string;
-  strategy?: "whole" | "chunked";
-  currentSpeed?: string;
-  parentId?: string | null;
-  abortController?: AbortController;
-  activeXhr?: XMLHttpRequest | null;
-}
+export type { QueueItem, TransferStatus };
 
 type QueueListener = (items: QueueItem[]) => void;
-
-function formatSpeed(bytesPerSec: number): string {
-  if (bytesPerSec <= 0 || !Number.isFinite(bytesPerSec)) return "";
-  const mb = bytesPerSec / (1024 * 1024);
-  if (mb >= 1) return `${mb.toFixed(1)} MB/s`;
-  const kb = bytesPerSec / 1024;
-  return `${kb.toFixed(0)} KB/s`;
-}
 
 export class UploadQueueManager {
   private queue: QueueItem[] = [];
@@ -93,6 +74,7 @@ export class UploadQueueManager {
         item.progress = 100;
         item.uploadedBytes = item.file.size;
         item.currentSpeed = undefined;
+        toast.success("Upload Complete", item.file.name);
       }
     } catch (err: unknown) {
       if (item.status !== "cancelled") {
@@ -193,7 +175,8 @@ export class UploadQueueManager {
       if (item.status === "uploading") {
         this.cancelUpload(id);
       } else if (item.sessionId && item.status !== "completed") {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+        const apiUrl =
+          process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
         fetch(`${apiUrl}/uploads/${item.sessionId}/abort`, {
           method: "POST",
           credentials: "include",
@@ -220,8 +203,14 @@ export class UploadQueueManager {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
     for (const item of this.queue) {
       if (item.status === "uploading") {
-        if (item.activeXhr) try { item.activeXhr.abort(); } catch {}
-        if (item.abortController) try { item.abortController.abort(); } catch {}
+        if (item.activeXhr)
+          try {
+            item.activeXhr.abort();
+          } catch {}
+        if (item.abortController)
+          try {
+            item.abortController.abort();
+          } catch {}
       }
       if (item.sessionId && item.status !== "completed") {
         fetch(`${apiUrl}/uploads/${item.sessionId}/abort`, {
@@ -305,7 +294,8 @@ export class UploadQueueManager {
           if (!urlRes.ok) {
             const errJson = await urlRes.json().catch(() => ({}));
             throw new Error(
-              errJson.error || `Failed to get upload URL for chunk ${chunk.index}`,
+              errJson.error ||
+                `Failed to get upload URL for chunk ${chunk.index}`,
             );
           }
 
@@ -428,7 +418,9 @@ export class UploadQueueManager {
             if (instruction.uploadType === "multipart") {
               const formData = new FormData();
               if (instruction.formDataFields) {
-                for (const [k, v] of Object.entries(instruction.formDataFields)) {
+                for (const [k, v] of Object.entries(
+                  instruction.formDataFields,
+                )) {
                   formData.append(k, v);
                 }
               }
@@ -457,7 +449,9 @@ export class UploadQueueManager {
       }
 
       if (!uploadSuccess) {
-        throw lastChunkError || new Error(`Upload failed for chunk ${chunk.index}`);
+        throw (
+          lastChunkError || new Error(`Upload failed for chunk ${chunk.index}`)
+        );
       }
 
       // Extract real cloud provider file identifier if returned
