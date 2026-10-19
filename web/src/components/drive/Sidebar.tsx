@@ -3,23 +3,13 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  HardDrive,
-  Trash2,
-  Cloud,
-  FolderPlus,
-  Upload,
-  ShieldCheck,
-  Settings,
-  LogOut,
-  X,
-  Lock,
-  Star,
-} from "lucide-react";
+import { FolderPlus, Upload, LogOut, X, Lock } from "lucide-react";
 import { useDriveStore } from "@/stores/drive.store";
 import { useAuthStore } from "@/stores/auth.store";
 import { uploadQueueManager } from "@/lib/upload-queue";
 import { FuzeLogo } from "@/components/brand/FuzeLogo";
+import { DASHBOARD_NAV_ITEMS } from "@/config/navigation.config";
+import { StorageMeterCard } from "./StorageMeterCard";
 
 interface SidebarProps {
   onNewFolderClick: () => void;
@@ -28,21 +18,31 @@ interface SidebarProps {
 export function Sidebar({ onNewFolderClick }: SidebarProps) {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
-  const {
-    currentFolderId,
-    providers,
-    storageSummary,
-    refreshProviders,
-    isMobileSidebarOpen,
-    setMobileSidebarOpen,
-  } = useDriveStore();
+  const { currentFolderId, isMobileSidebarOpen, setMobileSidebarOpen } =
+    useDriveStore();
+  const migrationProgress = useDriveStore((state) => state.migrationProgress);
 
   const [showNewMenu, setShowNewMenu] = useState(false);
+  const [activeUploadCount, setActiveUploadCount] = useState(0);
   const newMenuRef = useRef<HTMLDivElement>(null);
 
+  // 1. Subscribe to active uploads count
+  useEffect(() => {
+    const unsub = uploadQueueManager.subscribe((items) => {
+      const count = items.filter(
+        (i) => i.status === "uploading" || i.status === "queued",
+      ).length;
+      setActiveUploadCount(count);
+    });
+    return () => {
+      unsub();
+    };
+  }, []);
+
+  // 2. Dropdown outside-click / ESC handler
   useEffect(() => {
     if (!showNewMenu) return;
-    const handleClickOutside = (e: MouseEvent) => {
+    const handleClick = (e: MouseEvent) => {
       if (
         newMenuRef.current &&
         !newMenuRef.current.contains(e.target as Node)
@@ -50,42 +50,18 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
         setShowNewMenu(false);
       }
     };
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setShowNewMenu(false);
-      }
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowNewMenu(false);
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
     };
   }, [showNewMenu]);
 
-  useEffect(() => {
-    void refreshProviders();
-  }, [refreshProviders]);
-
-  const formatBytes = (bytes: number) => {
-    if (!bytes || bytes <= 0) return "0 B";
-    const gb = bytes / (1024 * 1024 * 1024);
-    if (gb >= 1) return `${gb.toFixed(1)} GB`;
-    const mb = bytes / (1024 * 1024);
-    if (mb >= 1) return `${mb.toFixed(0)} MB`;
-    return `${bytes} B`;
-  };
-
-  const poolPercent =
-    storageSummary.totalPoolBytes > 0
-      ? Math.min(
-          100,
-          Math.round(
-            (storageSummary.usedPoolBytes / storageSummary.totalPoolBytes) *
-              100,
-          ),
-        )
-      : 0;
+  const closeMobile = () => setMobileSidebarOpen(false);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -93,11 +69,7 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
       e.target.value = "";
     }
     setShowNewMenu(false);
-    setMobileSidebarOpen(false);
-  };
-
-  const closeMobile = () => {
-    setMobileSidebarOpen(false);
+    closeMobile();
   };
 
   return (
@@ -110,7 +82,7 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
         />
       )}
 
-      {/* Main Sidebar - Responsive drawer on mobile, elegant column on desktop */}
+      {/* Main Sidebar Column */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-white border-r border-slate-200 p-4 flex flex-col justify-between h-full shrink-0 select-none transition-transform duration-200 ease-in-out lg:static lg:w-64 lg:max-w-none lg:bg-slate-50/70 lg:border-r lg:border-slate-200/80 lg:shadow-none lg:translate-x-0 ${
           isMobileSidebarOpen
@@ -119,7 +91,7 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
         }`}
       >
         <div className="space-y-4">
-          {/* App Brand Logo Header */}
+          {/* Logo & Mobile Close */}
           <div className="flex items-center justify-between pt-0.5 pb-3.5 border-b border-slate-200/70">
             <Link
               href="/dashboard"
@@ -132,8 +104,6 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
                 className="transition-opacity group-hover:opacity-90"
               />
             </Link>
-
-            {/* Mobile Close Button */}
             <button
               onClick={closeMobile}
               aria-label="Close menu"
@@ -143,7 +113,7 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
             </button>
           </div>
 
-          {/* New Upload Button & Dropdown (Hidden on mobile where FAB is used) */}
+          {/* "+ New" Action Button */}
           <div ref={newMenuRef} className="relative hidden lg:block">
             {user?.emailVerified === true ? (
               <button
@@ -189,80 +159,51 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
             )}
           </div>
 
-          {/* Navigation Links matching mockup */}
-          <div className="space-y-1">
-            <Link
-              href="/dashboard"
-              onClick={closeMobile}
-              className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs transition ${
-                pathname === "/dashboard" ||
-                pathname.startsWith("/dashboard/folder")
-                  ? "bg-blue-50 font-semibold text-blue-700"
-                  : "text-slate-600 hover:bg-slate-100 font-normal"
-              }`}
-            >
-              <HardDrive className="h-4 w-4" />
-              <span>My Drive</span>
-            </Link>
+          {/* 🗺️ Config-Mapped Navigation Items */}
+          <nav className="space-y-1">
+            {DASHBOARD_NAV_ITEMS.map((item) => {
+              const active = item.isActive(pathname);
+              const Icon = item.icon;
+              const badge = item.getBadge?.({
+                activeUploads: activeUploadCount,
+                migrationPercent: migrationProgress?.percent,
+              });
+              const isSpinningMigration =
+                item.href === "/dashboard/migrations" && migrationProgress;
 
-            <Link
-              href="/dashboard/starred"
-              onClick={closeMobile}
-              className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs transition ${
-                pathname === "/dashboard/starred"
-                  ? "bg-blue-50 font-semibold text-blue-700"
-                  : "text-slate-600 hover:bg-slate-100 font-normal"
-              }`}
-            >
-              <Star
-                className={`h-4 w-4 ${
-                  pathname === "/dashboard/starred"
-                    ? "text-amber-500 fill-amber-400"
-                    : "text-slate-500"
-                }`}
-              />
-              <span>Starred</span>
-            </Link>
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={closeMobile}
+                  className={`flex items-center justify-between px-3 py-2 rounded-md text-xs transition ${
+                    active
+                      ? "bg-blue-50 font-semibold text-blue-700"
+                      : "text-slate-600 hover:bg-slate-100 font-normal"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Icon
+                      className={`h-4 w-4 ${
+                        isSpinningMigration
+                          ? "animate-spin text-emerald-600"
+                          : ""
+                      }`}
+                    />
+                    <span>{item.label}</span>
+                  </div>
+                  {badge && (
+                    <span
+                      className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${badge.colorClass}`}
+                    >
+                      {badge.text}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
 
-            <Link
-              href="/dashboard/storage"
-              onClick={closeMobile}
-              className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs transition ${
-                pathname === "/dashboard/storage"
-                  ? "bg-blue-50 font-semibold text-blue-700"
-                  : "text-slate-600 hover:bg-slate-100 font-normal"
-              }`}
-            >
-              <Cloud className="h-4 w-4" />
-              <span>Connected Clouds</span>
-            </Link>
-
-            <Link
-              href="/dashboard/settings"
-              onClick={closeMobile}
-              className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs transition ${
-                pathname === "/dashboard/settings"
-                  ? "bg-blue-50 font-semibold text-blue-700"
-                  : "text-slate-600 hover:bg-slate-100 font-normal"
-              }`}
-            >
-              <Settings className="h-4 w-4" />
-              <span>Settings</span>
-            </Link>
-
-            <Link
-              href="/dashboard/trash"
-              onClick={closeMobile}
-              className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs transition ${
-                pathname === "/dashboard/trash"
-                  ? "bg-blue-50 font-semibold text-blue-700"
-                  : "text-slate-600 hover:bg-slate-100 font-normal"
-              }`}
-            >
-              <Trash2 className="h-4 w-4" />
-              <span>Trash</span>
-            </Link>
-
+            {/* Sign Out Button */}
             <button
               onClick={() => {
                 closeMobile();
@@ -273,111 +214,11 @@ export function Sidebar({ onNewFolderClick }: SidebarProps) {
               <LogOut className="h-4 w-4" />
               <span>Sign Out</span>
             </button>
-          </div>
+          </nav>
         </div>
 
-        {/* Multi-Color Storage Meter Card */}
-        <div className="p-3 bg-white border border-slate-200/90 rounded-xl shadow-2xs">
-          <div className="flex justify-between items-center font-semibold text-slate-700 mb-1.5 text-xs">
-            <span>Storage Pool</span>
-            <span className="text-blue-600 font-medium">
-              {storageSummary.totalPoolBytes > 0
-                ? `${formatBytes(storageSummary.usedPoolBytes)} / ${formatBytes(storageSummary.totalPoolBytes)}`
-                : providers.length > 0
-                  ? "0 B / 0 B"
-                  : "0 / 0 GB"}
-            </span>
-          </div>
-
-          {/* Segmented Multi-Color Progress Bar */}
-          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden flex mb-2">
-            {providers.length > 0 && storageSummary.usedPoolBytes > 0 ? (
-              providers.map((p) => {
-                if (p.quotaUsed <= 0) return null;
-                const total = Math.max(storageSummary.totalPoolBytes, 1);
-                const pct = Math.max(
-                  3,
-                  Number(((p.quotaUsed / total) * 100).toFixed(1)),
-                );
-                const colorMap: Record<string, string> = {
-                  google_drive: "bg-amber-500",
-                  one_drive: "bg-blue-500",
-                  pcloud: "bg-sky-400",
-                  dropbox: "bg-indigo-600",
-                  box: "bg-emerald-500",
-                };
-                return (
-                  <div
-                    key={p.id}
-                    className={`${colorMap[p.provider] || "bg-indigo-600"} h-full transition-all duration-300`}
-                    style={{ width: `${pct}%` }}
-                    title={`${p.provider}: ${formatBytes(p.quotaUsed)}`}
-                  />
-                );
-              })
-            ) : providers.length > 0 ? (
-              <div
-                className="bg-emerald-500/20 h-full w-full"
-                title="Storage Ready"
-              />
-            ) : (
-              <div
-                className="bg-slate-200 h-full w-full"
-                title="No accounts linked"
-              />
-            )}
-          </div>
-
-          {/* Provider Legend Breakdown Dots */}
-          {providers.length > 0 && (
-            <div className="flex flex-wrap gap-x-2.5 gap-y-1 mb-2 pt-0.5">
-              {providers.map((p) => {
-                const labelMap: Record<string, string> = {
-                  google_drive: "Google Drive",
-                  one_drive: "OneDrive",
-                  dropbox: "Dropbox",
-                  pcloud: "pCloud",
-                  box: "Box",
-                };
-                const dotColorMap: Record<string, string> = {
-                  google_drive: "bg-amber-500",
-                  one_drive: "bg-blue-500",
-                  pcloud: "bg-sky-400",
-                  dropbox: "bg-indigo-600",
-                  box: "bg-emerald-500",
-                };
-                return (
-                  <div
-                    key={p.id}
-                    className="flex items-center gap-1 text-[9px] text-slate-500"
-                  >
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotColorMap[p.provider] || "bg-indigo-600"}`}
-                    />
-                    <span>{labelMap[p.provider] || p.provider}</span>
-                    <span className="text-slate-400 font-mono">
-                      ({formatBytes(p.quotaUsed)})
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          <div className="text-[10px] text-slate-500 flex justify-between items-center border-t border-slate-100 pt-1.5">
-            <span>
-              {providers.length}{" "}
-              {providers.length === 1 ? "account" : "accounts"} linked
-            </span>
-            <span className="text-emerald-600 font-medium">
-              {storageSummary.freePoolBytes > 0
-                ? `${formatBytes(storageSummary.freePoolBytes)} free`
-                : providers.length > 0
-                  ? "100% free"
-                  : "Connect clouds"}
-            </span>
-          </div>
-        </div>
+        {/* 📊 Modular Storage Meter Card */}
+        <StorageMeterCard />
       </aside>
     </>
   );

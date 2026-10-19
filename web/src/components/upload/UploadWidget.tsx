@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { uploadQueueManager, QueueItem } from "@/lib/upload-queue";
+import { uploadQueueManager } from "@/lib/upload-queue";
+import { QueueItem } from "@/types";
+import { formatBytes } from "@/utils/formatters";
 import {
   ChevronDown,
   ChevronUp,
@@ -15,17 +17,6 @@ import {
   Clock,
   Ban,
 } from "lucide-react";
-
-function formatBytes(bytes: number): string {
-  if (!bytes || bytes === 0) return "0 B";
-  const gb = bytes / (1024 * 1024 * 1024);
-  if (gb >= 1) return `${gb.toFixed(2)} GB`;
-  const mb = bytes / (1024 * 1024);
-  if (mb >= 1) return `${mb.toFixed(1)} MB`;
-  const kb = bytes / 1024;
-  if (kb >= 1) return `${kb.toFixed(0)} KB`;
-  return `${bytes} B`;
-}
 
 interface UploadWidgetProps {
   onOpenChange?: (isOpen: boolean) => void;

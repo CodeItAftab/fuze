@@ -1,11 +1,8 @@
 import { create } from "zustand";
 
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  emailVerified?: boolean;
-}
+import { User } from "@/types";
+
+export type { User };
 
 interface AuthState {
   user: User | null;

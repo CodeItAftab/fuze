@@ -8,14 +8,17 @@ import {
   uploadChunks,
   vfsNodes,
 } from "../db/index.js";
-import { eq, and, ne, sql } from "drizzle-orm";
+import { eq, and, ne, sql, inArray } from "drizzle-orm";
 import { encrypt, decrypt } from "../utils/crypto.js";
 import { getStorageAdapter, SupportedProvider } from "../adapters/factory.js";
 import { socketManager } from "../websocket/socket-manager.js";
 import { ProviderCleanupService } from "../services/provider-cleanup.service.js";
 import { providerMigrationQueue } from "../workers/provider-migration.worker.js";
 import IORedis from "ioredis";
-import { TokenService, ProviderAuthExpiredError } from "../services/token.service.js";
+import {
+  TokenService,
+  ProviderAuthExpiredError,
+} from "../services/token.service.js";
 
 const redis = new IORedis(process.env.REDIS_URL || "redis://localhost:6379", {
   lazyConnect: true,
@@ -43,14 +46,16 @@ setInterval(() => {
 const COOKIE_NAME = "fuze_session";
 
 function getClientOrigin(request: FastifyRequest): string {
-  const envOrigins = new Set([
-    process.env.CLIENT_ORIGIN,
-    process.env.CLIENT_URL,
-    ...(process.env.ALLOWED_ORIGINS
-      ? process.env.ALLOWED_ORIGINS.split(",").map((s) => s.trim())
-      : []),
-    process.env.NODE_ENV !== "production" ? "http://localhost:3000" : null,
-  ].filter(Boolean) as string[]);
+  const envOrigins = new Set(
+    [
+      process.env.CLIENT_ORIGIN,
+      process.env.CLIENT_URL,
+      ...(process.env.ALLOWED_ORIGINS
+        ? process.env.ALLOWED_ORIGINS.split(",").map((s) => s.trim())
+        : []),
+      process.env.NODE_ENV !== "production" ? "http://localhost:3000" : null,
+    ].filter(Boolean) as string[],
+  );
 
   const origin = ((request.headers.origin as string) || "").trim();
   if (envOrigins.has(origin)) {
@@ -139,7 +144,8 @@ export async function providerRoutes(fastify: FastifyInstance) {
       const rawCookie = request.cookies[COOKIE_NAME];
       if (rawCookie) {
         const unsigned = request.unsignCookie(rawCookie);
-        const token = unsigned.valid && unsigned.value ? unsigned.value : rawCookie;
+        const token =
+          unsigned.valid && unsigned.value ? unsigned.value : rawCookie;
         try {
           const decoded = fastify.jwt.verify<{ userId: string }>(token);
           userId = decoded.userId;
@@ -179,8 +185,10 @@ export async function providerRoutes(fastify: FastifyInstance) {
     const { provider } = request.params;
 
     let canonicalProvider: SupportedProvider = "google_drive";
-    if (provider === "google" || provider === "google_drive") canonicalProvider = "google_drive";
-    else if (provider === "onedrive" || provider === "one_drive") canonicalProvider = "one_drive";
+    if (provider === "google" || provider === "google_drive")
+      canonicalProvider = "google_drive";
+    else if (provider === "onedrive" || provider === "one_drive")
+      canonicalProvider = "one_drive";
     else if (provider === "dropbox") canonicalProvider = "dropbox";
     else if (provider === "box") canonicalProvider = "box";
     else if (provider === "pcloud") canonicalProvider = "pcloud";
@@ -236,7 +244,9 @@ export async function providerRoutes(fastify: FastifyInstance) {
     try {
       await redis.set(`oauth_state:${state}`, statePayload, "EX", 600);
     } catch (err: any) {
-      fastify.log.warn(`[OAuth] Redis state store failed (${err.message}). Using memory fallback.`);
+      fastify.log.warn(
+        `[OAuth] Redis state store failed (${err.message}). Using memory fallback.`,
+      );
     }
 
     let authUrl = "";
@@ -384,7 +394,9 @@ export async function providerRoutes(fastify: FastifyInstance) {
             await redis.del(`oauth_state:${state}`).catch(() => {});
           }
         } catch (err: any) {
-          fastify.log.warn(`[OAuth] Redis state fetch failed (${err.message}).`);
+          fastify.log.warn(
+            `[OAuth] Redis state fetch failed (${err.message}).`,
+          );
         }
       }
 
@@ -584,7 +596,10 @@ export async function providerRoutes(fastify: FastifyInstance) {
               },
             );
             const tData = (await tokenRes.json()) as any;
-            if (!tokenRes.ok || (tData.result !== undefined && tData.result !== 0)) {
+            if (
+              !tokenRes.ok ||
+              (tData.result !== undefined && tData.result !== 0)
+            ) {
               throw new Error(
                 tData.error ||
                   tData.error_description ||
@@ -675,7 +690,8 @@ export async function providerRoutes(fastify: FastifyInstance) {
           if (
             expectedEmail &&
             accountEmail &&
-            expectedEmail.trim().toLowerCase() !== accountEmail.trim().toLowerCase()
+            expectedEmail.trim().toLowerCase() !==
+              accountEmail.trim().toLowerCase()
           ) {
             const displayName = canonicalProvider
               .replace("_", " ")
@@ -780,7 +796,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
     async (
       request: FastifyRequest<{
         Params: { id: string };
-        Body: { action: "delete" | "migrate" };
+        Body: { action: "delete" | "migrate" | "smart_unlink" };
       }>,
       reply: FastifyReply,
     ) => {
@@ -794,19 +810,49 @@ export async function providerRoutes(fastify: FastifyInstance) {
       const { id } = request.params;
       const { action } = request.body || { action: "delete" };
 
-      // 1. Check if any finalized chunks are stored on this provider
+      // 1. Fetch chunks on this provider
       const chunks = await db
-        .select({ id: fileChunks.id })
+        .select({ id: fileChunks.id, vfsNodeId: fileChunks.vfsNodeId })
         .from(fileChunks)
         .where(eq(fileChunks.providerIdentityId, id));
 
-      if (chunks.length === 0) {
-        // Clean up any stale in-flight upload chunks first
+      // 2. FAST-PATH: If 0 chunks exist, or if Smart Evacuate has no multi-cloud split chunks
+      let needsWorker = chunks.length > 0;
+      if (action === "smart_unlink" && chunks.length > 0) {
+        const nodeIds = Array.from(new Set(chunks.map((c) => c.vfsNodeId)));
+        const siblingChunks = await db
+          .select({ id: fileChunks.id, providerIdentityId: fileChunks.providerIdentityId })
+          .from(fileChunks)
+          .where(
+            and(
+              inArray(fileChunks.vfsNodeId, nodeIds),
+              ne(fileChunks.providerIdentityId, id),
+            ),
+          );
+
+        // If 0 sibling chunks on other clouds, ALL files are whole files!
+        if (siblingChunks.length === 0) {
+          needsWorker = false;
+        }
+      }
+
+      if (!needsWorker) {
+        // Clean up in-flight uploads, chunks, and orphaned VFS nodes synchronously
         await db
           .delete(uploadChunks)
           .where(eq(uploadChunks.providerIdentityId, id));
 
-        // Instant disconnect for empty providers
+        if (action === "smart_unlink") {
+          const nodeIds = Array.from(new Set(chunks.map((c) => c.vfsNodeId)));
+          if (nodeIds.length > 0) {
+            await db.delete(fileChunks).where(inArray(fileChunks.vfsNodeId, nodeIds));
+            await db.delete(vfsNodes).where(inArray(vfsNodes.id, nodeIds));
+          }
+        }
+
+        await db
+          .delete(fileChunks)
+          .where(eq(fileChunks.providerIdentityId, id));
         await db
           .delete(providerIdentities)
           .where(
@@ -822,16 +868,16 @@ export async function providerRoutes(fastify: FastifyInstance) {
         });
 
         fastify.log.info(
-          `[Providers] Provider [${id}] has 0 stored chunks. Disconnected instantly without worker.`,
+          `[Providers] Provider [${id}] fast-path disconnected instantly without worker.`,
         );
 
         return reply.send({
           success: true,
-          message: "Provider disconnected immediately (no files stored).",
+          message: "Provider unlinked instantly (whole files preserved in cloud).",
         });
       }
 
-      // 2. When chunks exist, queue asynchronous BullMQ background job for migration/cleanup
+      // 3. Heavy evacuation needed: queue background BullMQ worker
       const job = await providerMigrationQueue.add("disconnect-provider", {
         userId: user.userId,
         providerIdentityId: id,
@@ -894,7 +940,11 @@ export async function providerRoutes(fastify: FastifyInstance) {
 
         socketManager.broadcastToUser(user.userId, {
           type: "PROVIDER_STATUS_CHANGED",
-          payload: { providerId: id, provider: identity.provider, isRevoked: false },
+          payload: {
+            providerId: id,
+            provider: identity.provider,
+            isRevoked: false,
+          },
         });
 
         return reply.send({ quota, isRevoked: false });

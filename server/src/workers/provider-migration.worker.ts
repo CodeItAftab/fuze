@@ -15,19 +15,126 @@ import { getStorageAdapter } from "../adapters/factory.js";
 import { TokenService } from "../services/token.service.js";
 import { socketManager } from "../websocket/socket-manager.js";
 import { PROVIDER_MAX_FILE_LIMITS } from "../services/chunk-decision.service.js";
+import { CascadePurgeService } from "../services/cascade-purge.service.js";
+import { RecoveryKitService } from "../services/recovery-kit.service.js";
 
 export interface ProviderMigrationJobData {
   userId: string;
   providerIdentityId: string;
-  action: "migrate" | "delete";
+  action: "migrate" | "delete" | "smart_unlink";
 }
 
-function formatBytes(bytes: number) {
-  if (bytes === 0) return "0 B";
-  const gb = bytes / (1024 * 1024 * 1024);
-  if (gb >= 1) return `${gb.toFixed(2)} GB`;
-  const mb = bytes / (1024 * 1024);
-  return `${mb.toFixed(1)} MB`;
+/**
+ * Transfers a single chunk from source provider to destination provider via streaming.
+ */
+async function transferChunk(
+  sourceProvider: any,
+  sourceToken: string,
+  destProvider: any,
+  destToken: string,
+  chunk: any,
+  chunkSize: number,
+  targetFileName?: string,
+  targetMimeType?: string,
+): Promise<string> {
+  const tempFilePath = path.join(
+    os.tmpdir(),
+    `fuze_transfer_${chunk.id}_${Date.now()}.tmp`,
+  );
+
+  try {
+    const sourceAdapter = getStorageAdapter(sourceProvider.provider);
+    const destAdapter = getStorageAdapter(destProvider.provider);
+
+    // 1. Download stream directly to disk
+    const downloadUrl = await sourceAdapter.getDownloadUrl({
+      providerFileId: chunk.providerFileId,
+      accessToken: sourceToken,
+    });
+    const fileStream = await fetch(downloadUrl);
+    if (!fileStream.ok || !fileStream.body) {
+      throw new Error(`Download failed with status HTTP ${fileStream.status}`);
+    }
+
+    await pipeline(
+      Readable.fromWeb(fileStream.body as any),
+      fs.createWriteStream(tempFilePath),
+    );
+
+    const stat = await fs.promises.stat(tempFilePath);
+    const actualSize = stat.size;
+    const fileName = targetFileName || `fuze_chunk_${chunk.id}`;
+    const mimeType = targetMimeType || "application/octet-stream";
+
+    // 2. Upload stream to destination
+    const destSession = await destAdapter.createResumableUploadSession({
+      fileName,
+      mimeType,
+      size: actualSize,
+      accessToken: destToken,
+    });
+
+    const fileBlob = await fs.openAsBlob(tempFilePath);
+    let uploadRes: Response;
+
+    if (destSession.uploadType === "multipart") {
+      const formData = new FormData();
+      if (destSession.formDataFields) {
+        for (const [k, v] of Object.entries(destSession.formDataFields)) {
+          formData.append(k, v);
+        }
+      }
+      formData.append("file", fileBlob, fileName);
+      uploadRes = await fetch(destSession.sessionUrl, {
+        method: destSession.httpMethod || "POST",
+        headers: destSession.headers,
+        body: formData,
+      });
+    } else {
+      const uploadHeaders: Record<string, string> = {
+        "Content-Type": mimeType,
+        ...(destSession.headers || {}),
+      };
+      if (destProvider.provider !== "dropbox") {
+        uploadHeaders["Content-Range"] =
+          `bytes 0-${actualSize - 1}/${actualSize}`;
+        uploadHeaders["Content-Length"] = String(actualSize);
+      }
+      uploadRes = await fetch(destSession.sessionUrl, {
+        method: destSession.httpMethod || "PUT",
+        headers: uploadHeaders,
+        body: fileBlob,
+      });
+    }
+
+    if (!uploadRes.ok) {
+      const errText = await uploadRes.text().catch(() => "");
+      throw new Error(
+        `Upload to destination failed (${uploadRes.status}): ${errText}`,
+      );
+    }
+
+    // 3. Extract real destination providerFileId
+    const resData: any = await uploadRes.json().catch(() => ({}));
+    const newFileId: string =
+      resData.entries?.[0]?.id || // Box returns { entries: [{ id: "12345" }] }
+      resData.id ||               // Google Drive & OneDrive return { id: "..." }
+      (resData.fileids?.[0] ? String(resData.fileids[0]) : null) || // pCloud
+      resData.path_lower ||       // Dropbox
+      `migrated_${chunk.id}`;
+
+    // 4. Delete old chunk from source provider only after confirmed upload
+    await sourceAdapter
+      .deleteFile({
+        providerFileId: chunk.providerFileId,
+        accessToken: sourceToken,
+      })
+      .catch(() => {});
+
+    return newFileId;
+  } finally {
+    await fs.promises.unlink(tempFilePath).catch(() => {});
+  }
 }
 
 export async function executeProviderMigration(
@@ -38,7 +145,7 @@ export async function executeProviderMigration(
   const { userId, providerIdentityId, action } = data;
 
   console.log(
-    `[Worker: ProviderMigration] 🚀 Job #${jobId} started: Disconnect request for Provider Identity [${providerIdentityId}] (Action: ${action.toUpperCase()})`,
+    `[Worker: ProviderMigration] 🚀 Job #${jobId} started: Provider [${providerIdentityId}] (Action: ${action.toUpperCase()})`,
   );
 
   const [targetProvider] = await db
@@ -52,30 +159,244 @@ export async function executeProviderMigration(
     );
 
   if (!targetProvider) {
-    console.warn(
-      `[Worker: ProviderMigration] ⚠️ Provider identity [${providerIdentityId}] not found in database. Exiting.`,
-    );
+    console.warn(`[Worker: ProviderMigration] ⚠️ Provider not found.`);
     return;
   }
 
   const providerName = targetProvider.provider.toUpperCase();
-  console.log(
-    `[Worker: ProviderMigration] 📦 Target: ${providerName} (${targetProvider.accountEmail || "no email"})`,
-  );
+  let targetToken = "";
+  try {
+    targetToken = await TokenService.getValidAccessToken(providerIdentityId);
+  } catch (err) {
+    console.warn(
+      `[Worker: ProviderMigration] Note: Source token expired or invalid for ${providerName}. Proceeding with best effort.`,
+    );
+  }
 
-  const chunks = await db
+  const localChunks = await db
     .select()
     .from(fileChunks)
     .where(eq(fileChunks.providerIdentityId, providerIdentityId));
 
-  const totalChunks = chunks.length;
-  console.log(
-    `[Worker: ProviderMigration] Found ${totalChunks} chunk(s) stored on ${providerName}.`,
-  );
+  const totalChunks = localChunks.length;
   let processed = 0;
 
+  // Pre-load all affected VFS nodes to preserve real filenames and extensions
+  const affectedNodeIds = Array.from(
+    new Set(localChunks.map((c) => c.vfsNodeId)),
+  );
+  const nodes =
+    affectedNodeIds.length > 0
+      ? await db
+          .select()
+          .from(vfsNodes)
+          .where(inArray(vfsNodes.id, affectedNodeIds))
+      : [];
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+
   // -------------------------------------------------------------
-  // ACTION: MIGRATE CHUNKS
+  // ACTION: SMART EVACUATE (Smart Preservation + Reverse Consolidation)
+  // -------------------------------------------------------------
+  if (action === "smart_unlink") {
+    const otherProviders = await db
+      .select()
+      .from(providerIdentities)
+      .where(
+        and(
+          eq(providerIdentities.userId, userId),
+          ne(providerIdentities.id, providerIdentityId),
+        ),
+      );
+
+    for (const nodeId of affectedNodeIds) {
+      const allChunksForNode = await db
+        .select()
+        .from(fileChunks)
+        .where(eq(fileChunks.vfsNodeId, nodeId))
+        .orderBy(fileChunks.chunkIndex);
+
+      const node = nodeMap.get(nodeId);
+
+      // 1. Whole File (totalChunks === 1) -> 0 MB transfer! Left intact in cloud
+      if (allChunksForNode.length === 1) {
+        await db.delete(fileChunks).where(eq(fileChunks.vfsNodeId, nodeId));
+        await db.delete(vfsNodes).where(eq(vfsNodes.id, nodeId));
+        console.log(
+          `[SmartEvacuate] ✓ Preserved whole file intact in ${providerName}: ${node?.name || nodeId}`,
+        );
+        continue;
+      }
+
+      // 2. Chunked File: Are all chunks already on this provider?
+      const chunksOnOthers = allChunksForNode.filter(
+        (c) => c.providerIdentityId !== providerIdentityId,
+      );
+
+      if (chunksOnOthers.length === 0) {
+        // Prevent ghost files: delete chunks and parent VFS node
+        await db.delete(fileChunks).where(eq(fileChunks.vfsNodeId, nodeId));
+        await db.delete(vfsNodes).where(eq(vfsNodes.id, nodeId));
+        console.log(
+          `[SmartEvacuate] ✓ All ${allChunksForNode.length} parts already in ${providerName}: ${node?.name || nodeId}`,
+        );
+        continue;
+      }
+
+      // 3. Chunks are split: Try FORWARD evacuation first (move this cloud's chunk to remaining clouds)
+      const chunkOnThisCloud = allChunksForNode.find(
+        (c) => c.providerIdentityId === providerIdentityId,
+      );
+
+      let forwardSuccess = false;
+
+      if (chunkOnThisCloud && otherProviders.length > 0) {
+        const chunkSize = chunkOnThisCloud.byteEnd - chunkOnThisCloud.byteStart;
+        const eligible = otherProviders
+          .filter((p) => {
+            const limit = PROVIDER_MAX_FILE_LIMITS[p.provider] ?? Infinity;
+            return (
+              p.quotaTotal - p.quotaUsed >= chunkSize && chunkSize <= limit
+            );
+          })
+          .sort(
+            (a, b) => b.quotaTotal - b.quotaUsed - (a.quotaTotal - a.quotaUsed),
+          );
+
+        const dest = eligible[0];
+        if (dest) {
+          try {
+            const destToken = await TokenService.getValidAccessToken(dest.id);
+            const targetFileName =
+              allChunksForNode.length === 1
+                ? node?.name || `file_${chunkOnThisCloud.id}`
+                : `${node?.name || "chunk"}.part${chunkOnThisCloud.chunkIndex}`;
+            const targetMime = node?.mimeType || "application/octet-stream";
+
+            const newFileId = await transferChunk(
+              targetProvider,
+              targetToken,
+              dest,
+              destToken,
+              chunkOnThisCloud,
+              chunkSize,
+              targetFileName,
+              targetMime,
+            );
+
+            await db
+              .update(fileChunks)
+              .set({ providerIdentityId: dest.id, providerFileId: newFileId })
+              .where(eq(fileChunks.id, chunkOnThisCloud.id));
+
+            dest.quotaUsed += chunkSize;
+            await db
+              .update(providerIdentities)
+              .set({ quotaUsed: dest.quotaUsed })
+              .where(eq(providerIdentities.id, dest.id));
+
+            forwardSuccess = true;
+            console.log(
+              `[SmartEvacuate] ✓ Forward evacuated chunk to ${dest.provider}`,
+            );
+          } catch {}
+        }
+      }
+
+      if (forwardSuccess) continue;
+
+      // 4. FORWARD failed (other clouds full): Try REVERSE CONSOLIDATION!
+      // Pull missing chunks from other clouds into this disconnecting provider
+      let reverseSuccess = true;
+      const bytesNeeded = chunksOnOthers.reduce(
+        (sum, c) => sum + (c.byteEnd - c.byteStart),
+        0,
+      );
+      const targetFreeBytes =
+        targetProvider.quotaTotal - targetProvider.quotaUsed;
+
+      if (targetFreeBytes >= bytesNeeded) {
+        console.log(
+          `[SmartEvacuate] 🔄 Initiating Reverse Consolidation: Pulling ${chunksOnOthers.length} parts into ${providerName}...`,
+        );
+
+        for (const remoteChunk of chunksOnOthers) {
+          const [remoteProvider] = await db
+            .select()
+            .from(providerIdentities)
+            .where(eq(providerIdentities.id, remoteChunk.providerIdentityId));
+
+          if (!remoteProvider) {
+            reverseSuccess = false;
+            break;
+          }
+
+          try {
+            const remoteToken = await TokenService.getValidAccessToken(
+              remoteProvider.id,
+            );
+            const chunkSize = remoteChunk.byteEnd - remoteChunk.byteStart;
+
+            const node = nodeMap.get(remoteChunk.vfsNodeId);
+            const targetFileName = `${node?.name || "chunk"}.part${remoteChunk.chunkIndex}`;
+            const targetMime = node?.mimeType || "application/octet-stream";
+
+            const newFileId = await transferChunk(
+              remoteProvider,
+              remoteToken,
+              targetProvider,
+              targetToken,
+              remoteChunk,
+              chunkSize,
+              targetFileName,
+              targetMime,
+            );
+
+            // Update chunk location to target provider
+            await db
+              .update(fileChunks)
+              .set({
+                providerIdentityId: providerIdentityId,
+                providerFileId: newFileId,
+              })
+              .where(eq(fileChunks.id, remoteChunk.id));
+
+            // Refund quota on remote cloud!
+            await db
+              .update(providerIdentities)
+              .set({
+                quotaUsed: remoteProvider.quotaUsed - chunkSize,
+              })
+              .where(eq(providerIdentities.id, remoteProvider.id));
+
+            targetProvider.quotaUsed += chunkSize;
+            console.log(
+              `[SmartEvacuate] ✓ Reverse consolidated chunk to ${providerName}`,
+            );
+          } catch {
+            reverseSuccess = false;
+            break;
+          }
+        }
+      } else {
+        reverseSuccess = false;
+      }
+
+      // 5. If BOTH forward evacuation and reverse consolidation failed -> Cascade Purge
+      if (!reverseSuccess) {
+        await CascadePurgeService.purgeUnsalvageableFile(
+          userId,
+          nodeId,
+          providerIdentityId,
+        );
+      }
+    }
+
+    // Deploy Recovery Kit with RESTORE_ALL_FILES.bat to provider before unlinking
+    await RecoveryKitService.deployRecoveryKit(userId, providerIdentityId);
+  }
+
+  // -------------------------------------------------------------
+  // ACTION: MOVE ALL FILES (Standard Full Evacuation)
   // -------------------------------------------------------------
   if (action === "migrate") {
     const otherProviders = await db
@@ -88,201 +409,63 @@ export async function executeProviderMigration(
         ),
       );
 
-    console.log(
-      `[Worker: ProviderMigration] Checking ${otherProviders.length} remaining cloud account(s) for available capacity...`,
-    );
-
-    const sourceAdapter = getStorageAdapter(targetProvider.provider);
-    const sourceToken =
-      await TokenService.getValidAccessToken(providerIdentityId);
-
-    let failedChunksCount = 0;
-
-    for (const chunk of chunks) {
+    for (const chunk of localChunks) {
       const chunkSize = chunk.byteEnd - chunk.byteStart;
-
-      // Filter and prioritize destination clouds:
-      // 1. Exclude providers where chunk size exceeds provider's single-file upload limit (e.g. Dropbox 140MB limit)
-      // 2. Exclude providers without enough free space
-      // 3. Sort by most remaining free space
-      const eligibleProviders = otherProviders
+      const eligible = otherProviders
         .filter((p) => {
-          const maxLimit = PROVIDER_MAX_FILE_LIMITS[p.provider] ?? Infinity;
-          return p.quotaTotal - p.quotaUsed >= chunkSize && chunkSize <= maxLimit;
+          const limit = PROVIDER_MAX_FILE_LIMITS[p.provider] ?? Infinity;
+          return p.quotaTotal - p.quotaUsed >= chunkSize && chunkSize <= limit;
         })
-        .sort((a, b) => (b.quotaTotal - b.quotaUsed) - (a.quotaTotal - a.quotaUsed));
-
-      const dest = eligibleProviders[0];
-
-      if (dest) {
-        const tempFilePath = path.join(
-          os.tmpdir(),
-          `fuze_mig_${chunk.id}_${Date.now()}.tmp`,
+        .sort(
+          (a, b) => b.quotaTotal - b.quotaUsed - (a.quotaTotal - a.quotaUsed),
         );
 
+      const dest = eligible[0];
+
+      if (dest) {
         try {
-          console.log(
-            `   → Migrating chunk #${chunk.chunkIndex} (${formatBytes(chunkSize)}) from ${providerName} to ${dest.provider.toUpperCase()}...`,
-          );
-
-          const destAdapter = getStorageAdapter(dest.provider);
           const destToken = await TokenService.getValidAccessToken(dest.id);
+          const node = nodeMap.get(chunk.vfsNodeId);
+          const targetFileName = `${node?.name || "chunk"}.part${chunk.chunkIndex}`;
+          const targetMime = node?.mimeType || "application/octet-stream";
 
-          // 1. Download chunk directly to disk via stream (0 MB heap memory spike!)
-          const downloadUrl = await sourceAdapter.getDownloadUrl({
-            providerFileId: chunk.providerFileId,
-            accessToken: sourceToken,
-          });
-          const fileStream = await fetch(downloadUrl);
-          if (!fileStream.ok || !fileStream.body) {
-            throw new Error(
-              `Failed downloading chunk from ${providerName} (HTTP ${fileStream.status})`,
-            );
-          }
-
-          await pipeline(
-            Readable.fromWeb(fileStream.body as any),
-            fs.createWriteStream(tempFilePath),
+          const newFileId = await transferChunk(
+            targetProvider,
+            targetToken,
+            dest,
+            destToken,
+            chunk,
+            chunkSize,
+            targetFileName,
+            targetMime,
           );
 
-          const stat = await fs.promises.stat(tempFilePath);
-          const actualSize = stat.size;
-
-          // 2. Upload to new cloud via streamable Blob
-          const destSession = await destAdapter.createResumableUploadSession({
-            fileName: `migrated-${chunk.id}`,
-            mimeType: "application/octet-stream",
-            size: actualSize,
-            accessToken: destToken,
-          });
-
-          // Lazy Blob streamed directly from disk file without loading entire chunk into RAM
-          const fileBlob = await fs.openAsBlob(tempFilePath);
-
-          let uploadRes: Response;
-          if (destSession.uploadType === "multipart") {
-            const formData = new FormData();
-            if (destSession.formDataFields) {
-              for (const [k, v] of Object.entries(destSession.formDataFields)) {
-                formData.append(k, v);
-              }
-            }
-            formData.append("file", fileBlob, `migrated-${chunk.id}`);
-            uploadRes = await fetch(destSession.sessionUrl, {
-              method: destSession.httpMethod || "POST",
-              headers: destSession.headers,
-              body: formData,
-            });
-          } else {
-            const uploadHeaders: Record<string, string> = {
-              "Content-Type": "application/octet-stream",
-              ...(destSession.headers || {}),
-            };
-
-            // Non-multipart resumable upload sessions (OneDrive, Google Drive) require Content-Range
-            if (dest.provider !== "dropbox") {
-              const rangeEnd = Math.max(0, actualSize - 1);
-              uploadHeaders["Content-Range"] = `bytes 0-${rangeEnd}/${actualSize}`;
-              uploadHeaders["Content-Length"] = String(actualSize);
-            }
-
-            uploadRes = await fetch(destSession.sessionUrl, {
-              method: destSession.httpMethod || "PUT",
-              headers: uploadHeaders,
-              body: fileBlob,
-            });
-          }
-
-          if (!uploadRes.ok) {
-            const errBody = await uploadRes.text().catch(() => "");
-            throw new Error(
-              `Upload to ${dest.provider} failed (HTTP ${uploadRes.status}): ${errBody}`,
-            );
-          }
-
-          // Extract the real providerFileId from destination response
-          let uploadedFileId: string | null = null;
-          try {
-            const uploadJson = (await uploadRes.json()) as any;
-            if (
-              Array.isArray(uploadJson?.entries) &&
-              uploadJson.entries[0]?.id
-            ) {
-              uploadedFileId = String(uploadJson.entries[0].id); // Box
-            } else if (typeof uploadJson?.id === "string") {
-              uploadedFileId = uploadJson.id; // Google Drive, OneDrive
-            } else if (typeof uploadJson?.path_display === "string") {
-              uploadedFileId = uploadJson.path_display; // Dropbox
-            } else if (
-              Array.isArray(uploadJson?.fileids) &&
-              uploadJson.fileids[0]
-            ) {
-              uploadedFileId = String(uploadJson.fileids[0]); // pCloud
-            }
-          } catch {
-            // Non-JSON or empty response
-          }
-
-          if (!uploadedFileId) {
-            uploadedFileId = `migrated-${chunk.id}`;
-          }
-
-          // 3. Update chunk in database with the real providerFileId
           await db
             .update(fileChunks)
-            .set({
-              providerIdentityId: dest.id,
-              providerFileId: uploadedFileId,
-            })
+            .set({ providerIdentityId: dest.id, providerFileId: newFileId })
             .where(eq(fileChunks.id, chunk.id));
 
-          // 4. Update destination quota
-          dest.quotaUsed += actualSize;
+          dest.quotaUsed += chunkSize;
           await db
             .update(providerIdentities)
             .set({ quotaUsed: dest.quotaUsed })
             .where(eq(providerIdentities.id, dest.id));
-
-          // 5. Delete from old cloud (best effort, chunk already safely relocated)
-          try {
-            await sourceAdapter.deleteFile({
-              providerFileId: chunk.providerFileId,
-              accessToken: sourceToken,
-            });
-          } catch (delErr) {
-            console.warn(
-              `     ⚠️ Could not delete old chunk on ${providerName} (already safely migrated):`,
-              delErr,
-            );
-          }
-
-          console.log(
-            `     ✓ Chunk #${chunk.chunkIndex} successfully moved to ${dest.provider.toUpperCase()}`,
+        } catch {
+          await CascadePurgeService.purgeUnsalvageableFile(
+            userId,
+            chunk.vfsNodeId,
+            providerIdentityId,
           );
-        } catch (err: unknown) {
-          failedChunksCount++;
-          const message = err instanceof Error ? err.message : String(err);
-          console.error(
-            `     ✗ Failed migrating chunk ${chunk.id}: ${message}`,
-          );
-        } finally {
-          // Always clean up the temporary file on disk
-          await fs.promises.unlink(tempFilePath).catch(() => {});
         }
       } else {
-        failedChunksCount++;
-        console.warn(
-          `     ⚠️ No remaining provider has enough space for chunk ${chunk.id} (${formatBytes(chunkSize)})`,
+        await CascadePurgeService.purgeUnsalvageableFile(
+          userId,
+          chunk.vfsNodeId,
+          providerIdentityId,
         );
       }
 
       processed++;
-      const percent = Math.round((processed / totalChunks) * 100);
-      console.log(
-        `[Worker: ProviderMigration] Progress: ${processed}/${totalChunks} chunks (${percent}%)`,
-      );
-
-      // Broadcast real-time progress via WebSocket
       socketManager.broadcastToUser(userId, {
         type: "PROVIDER_CLEANUP_PROGRESS",
         payload: {
@@ -290,114 +473,48 @@ export async function executeProviderMigration(
           action: "migrate",
           completed: processed,
           total: totalChunks,
-          percent,
+          percent: Math.round((processed / totalChunks) * 100),
         },
       });
-    }
-
-    if (failedChunksCount > 0) {
-      console.error(
-        `[Worker: ProviderMigration] ❌ Migration failed for ${failedChunksCount}/${totalChunks} chunk(s). Aborting provider disconnection to protect user data.`,
-      );
-      socketManager.broadcastToUser(userId, {
-        type: "PROVIDER_MIGRATION_FAILED",
-        payload: {
-          providerId: providerIdentityId,
-          failedChunks: failedChunksCount,
-          totalChunks,
-          error: `Failed to migrate ${failedChunksCount} of ${totalChunks} chunks. Provider was kept connected to prevent data loss.`,
-        },
-      });
-      throw new Error(
-        `Migration incomplete: ${failedChunksCount}/${totalChunks} chunk(s) failed to transfer.`,
-      );
     }
   }
 
   // -------------------------------------------------------------
-  // ACTION: DELETE
+  // ACTION: DELETE ALL FILES
   // -------------------------------------------------------------
   if (action === "delete") {
-    console.log(
-      `[Worker: ProviderMigration] Deleting all ${totalChunks} chunks from ${providerName}...`,
-    );
     const adapter = getStorageAdapter(targetProvider.provider);
 
-    try {
-      const accessToken =
-        await TokenService.getValidAccessToken(providerIdentityId);
-      for (const chunk of chunks) {
-        try {
-          await adapter.deleteFile({
-            providerFileId: chunk.providerFileId,
-            accessToken,
-          });
-          console.log(`   ✓ Deleted cloud chunk: ${chunk.providerFileId}`);
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : String(err);
-          console.error(
-            `   ✗ Error deleting chunk ${chunk.providerFileId}: ${message}`,
-          );
-        }
-        processed++;
-        const percent = Math.round((processed / totalChunks) * 100);
-        socketManager.broadcastToUser(userId, {
-          type: "PROVIDER_CLEANUP_PROGRESS",
-          payload: {
-            providerId: providerIdentityId,
-            action: "delete",
-            completed: processed,
-            total: totalChunks,
-            percent,
-          },
-        });
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(
-        `[Worker: ProviderMigration] Error resolving access token: ${message}`,
-      );
+    for (const chunk of localChunks) {
+      await adapter
+        .deleteFile({
+          providerFileId: chunk.providerFileId,
+          accessToken: targetToken,
+        })
+        .catch(() => {});
     }
 
-    // Clean up broken multi-cloud files
     const affectedNodeIds = Array.from(
-      new Set(chunks.map((c) => c.vfsNodeId)),
+      new Set(localChunks.map((c) => c.vfsNodeId)),
     );
-    if (affectedNodeIds.length > 0) {
-      console.log(
-        `[Worker: ProviderMigration] Purging ${affectedNodeIds.length} affected VFS node(s)...`,
+    for (const nodeId of affectedNodeIds) {
+      await CascadePurgeService.purgeUnsalvageableFile(
+        userId,
+        nodeId,
+        providerIdentityId,
       );
-      await db.delete(vfsNodes).where(inArray(vfsNodes.id, affectedNodeIds));
     }
-
-    // Explicitly purge all file_chunks linked to this provider
-    await db
-      .delete(fileChunks)
-      .where(eq(fileChunks.providerIdentityId, providerIdentityId));
   }
 
   // -------------------------------------------------------------
-  // FINALIZE: Remove provider row from database
+  // FINALIZE: Unlink provider row and broadcast
   // -------------------------------------------------------------
-  console.log(
-    `[Worker: ProviderMigration] Purging database record for ${providerName}...`,
-  );
+  await db
+    .delete(fileChunks)
+    .where(eq(fileChunks.providerIdentityId, providerIdentityId));
   await db
     .delete(uploadChunks)
     .where(eq(uploadChunks.providerIdentityId, providerIdentityId));
-
-  // Verify no orphaned chunks reference this provider identity before deletion
-  const remainingChunks = await db
-    .select({ id: fileChunks.id })
-    .from(fileChunks)
-    .where(eq(fileChunks.providerIdentityId, providerIdentityId));
-
-  if (remainingChunks.length > 0) {
-    throw new Error(
-      `Cannot disconnect ${providerName}: ${remainingChunks.length} file chunk(s) are still linked to this provider identity.`,
-    );
-  }
-
   await db
     .delete(providerIdentities)
     .where(eq(providerIdentities.id, providerIdentityId));
@@ -407,15 +524,11 @@ export async function executeProviderMigration(
     payload: { providerId: providerIdentityId },
   });
 
-  const duration = Date.now() - startedAt;
   console.log(
-    `[Worker: ProviderMigration] ✅ Successfully disconnected ${providerName} in ${duration}ms.`,
+    `[Worker: ProviderMigration] ✅ Disconnected ${providerName} in ${Date.now() - startedAt}ms.`,
   );
 }
 
-/**
- * Queues migration to run asynchronously in-process without polling Redis.
- */
 export function queueProviderMigration(data: ProviderMigrationJobData): {
   id: string;
 } {
@@ -433,7 +546,6 @@ export function queueProviderMigration(data: ProviderMigrationJobData): {
   return { id: jobId };
 }
 
-// Backward compatibility stubs for BullMQ interfaces
 export const providerMigrationQueue = {
   add: async (name: string, data: ProviderMigrationJobData) => {
     const res = queueProviderMigration(data);

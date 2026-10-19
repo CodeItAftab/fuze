@@ -19,11 +19,15 @@ import { DriveBreadcrumbs } from "@/components/drive/DriveBreadcrumbs";
 import { DriveSelectionBar } from "@/components/drive/DriveSelectionBar";
 import { DriveToolbar, SortOption } from "@/components/drive/DriveToolbar";
 import { DriveFolderGrid } from "@/components/drive/DriveFolderGrid";
-import { DriveFileGrid, DriveFileList } from "@/components/drive/DriveFileViews";
+import {
+  DriveFileGrid,
+  DriveFileList,
+} from "@/components/drive/DriveFileViews";
 import { NewFolderModal } from "@/components/drive/NewFolderModal";
 import { MobileActionSheet } from "@/components/drive/MobileActionSheet";
 import { downloadFile } from "@/lib/download-engine";
 import { CloudUpload, HardDrive, Plus } from "lucide-react";
+import { FloatingTransferHub } from "@/components/transfers/FloatingTransferHub";
 
 interface DriveViewProps {
   folderId?: string | null;
@@ -85,7 +89,12 @@ export function DriveView({
       { id: "date-asc", label: "Oldest First", field: "date", order: "asc" },
       { id: "name-asc", label: "Name (A to Z)", field: "name", order: "asc" },
       { id: "name-desc", label: "Name (Z to A)", field: "name", order: "desc" },
-      { id: "size-desc", label: "Size (Largest)", field: "size", order: "desc" },
+      {
+        id: "size-desc",
+        label: "Size (Largest)",
+        field: "size",
+        order: "desc",
+      },
     ],
     [],
   );
@@ -228,7 +237,10 @@ export function DriveView({
     setIsDragging(false);
     if (user?.emailVerified !== true) return;
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      uploadQueueManager.addFiles(Array.from(e.dataTransfer.files), folderId || null);
+      uploadQueueManager.addFiles(
+        Array.from(e.dataTransfer.files),
+        folderId || null,
+      );
     }
   };
 
@@ -268,7 +280,10 @@ export function DriveView({
     try {
       await downloadFile({ fileId: item.id, fileName: item.name });
     } catch (err) {
-      console.warn("Client-side download failed, falling back to server stream:", err);
+      console.warn(
+        "Client-side download failed, falling back to server stream:",
+        err,
+      );
       const link = document.createElement("a");
       link.href = `${apiUrl}/files/${item.id}/download`;
       link.download = item.name;
@@ -432,7 +447,9 @@ export function DriveView({
   const handleBatchDelete = useCallback(async () => {
     if (selectedIds.size === 0) return;
     const count = selectedIds.size;
-    if (!window.confirm(`Move ${count} item${count > 1 ? "s" : ""} to trash?`)) {
+    if (
+      !window.confirm(`Move ${count} item${count > 1 ? "s" : ""} to trash?`)
+    ) {
       return;
     }
     const nodeIds = Array.from(selectedIds);
@@ -480,7 +497,13 @@ export function DriveView({
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [clearSelection, selectedIds, showFolderModal, moveModalOpen, handleBatchDelete]);
+  }, [
+    clearSelection,
+    selectedIds,
+    showFolderModal,
+    moveModalOpen,
+    handleBatchDelete,
+  ]);
 
   return (
     <div
@@ -632,7 +655,8 @@ export function DriveView({
                       This folder is empty
                     </div>
                     <p className="text-[11px] text-slate-400 mt-1 max-w-xs mx-auto">
-                      Drag and drop files here or click + New Upload to store across your clouds.
+                      Drag and drop files here or click + New Upload to store
+                      across your clouds.
                     </p>
                   </div>
                 ) : files.length === 0 ? (
@@ -675,13 +699,7 @@ export function DriveView({
       <button
         onClick={() => setShowMobileActionSheet(true)}
         aria-label="Upload file or create folder"
-        className={`lg:hidden fixed right-5 z-40 h-12 w-12 rounded-full bg-blue-600 text-white shadow-xl flex items-center justify-center hover:bg-blue-700 active:scale-95 transition-all duration-300 cursor-pointer ${
-          hasActiveUploads
-            ? isUploadWidgetOpen
-              ? "opacity-0 pointer-events-none scale-90"
-              : "bottom-16 opacity-100"
-            : "bottom-5 opacity-100"
-        }`}
+        className="lg:hidden fixed bottom-5 right-5 z-40 h-12 w-12 rounded-full bg-blue-600 text-white shadow-xl shadow-blue-600/30 flex items-center justify-center hover:bg-blue-700 active:scale-95 transition-all duration-200 cursor-pointer"
       >
         <Plus className="h-5 w-5" />
       </button>
@@ -768,8 +786,8 @@ export function DriveView({
         onClose={() => setRenameItem(null)}
         onSuccess={handleRenameSuccess}
       />
-
-      <UploadWidget onOpenChange={setIsUploadWidgetOpen} />
+      <FloatingTransferHub />
+      {/* <UploadWidget onOpenChange={setIsUploadWidgetOpen} /> */}
     </div>
   );
 }
