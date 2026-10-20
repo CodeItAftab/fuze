@@ -1,4 +1,5 @@
 import { WebSocket } from "ws";
+import IORedis from "ioredis";
 
 export type SyncEventType =
   | "FILE_CREATED"
@@ -18,9 +19,51 @@ export interface SyncEvent {
   payload: any;
 }
 
+const REDIS_CHANNEL = "fuze:ws:events";
+
 class SocketManager {
   private userSockets = new Map<string, Set<WebSocket>>();
   private sessionSockets = new Map<string, WebSocket>();
+  private pub: IORedis | null = null;
+  private sub: IORedis | null = null;
+
+  constructor() {
+    this.initRedis();
+  }
+
+  private initRedis() {
+    const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
+    try {
+      this.pub = new IORedis(redisUrl, {
+        lazyConnect: true,
+        maxRetriesPerRequest: 1,
+        enableOfflineQueue: false,
+      });
+      this.sub = new IORedis(redisUrl, {
+        lazyConnect: true,
+        maxRetriesPerRequest: 1,
+        enableOfflineQueue: false,
+      });
+
+      this.pub.on("error", () => {});
+      this.sub.on("error", () => {});
+
+      this.sub.subscribe(REDIS_CHANNEL).catch(() => {});
+      this.sub.on("message", (channel, message) => {
+        if (channel !== REDIS_CHANNEL) return;
+        try {
+          const data = JSON.parse(message);
+          if (data.type === "BROADCAST_USER") {
+            this.localBroadcastToUser(data.userId, data.event);
+          } else if (data.type === "REVOKE_SESSION") {
+            this.localRevokeSession(data.sessionToken);
+          } else if (data.type === "REVOKE_OTHER_SESSIONS") {
+            this.localRevokeOtherSessions(data.userId, data.currentSessionToken);
+          }
+        } catch {}
+      });
+    } catch {}
+  }
 
   register(userId: string, socket: WebSocket, sessionToken?: string) {
     if (!this.userSockets.has(userId)) {
@@ -60,7 +103,7 @@ class SocketManager {
     });
   }
 
-  broadcastToUser(userId: string, event: SyncEvent) {
+  private localBroadcastToUser(userId: string, event: SyncEvent) {
     const sockets = this.userSockets.get(userId);
     if (!sockets) return;
 
@@ -72,7 +115,19 @@ class SocketManager {
     }
   }
 
-  revokeSession(sessionToken: string) {
+  broadcastToUser(userId: string, event: SyncEvent) {
+    this.localBroadcastToUser(userId, event);
+    if (this.pub) {
+      this.pub
+        .publish(
+          REDIS_CHANNEL,
+          JSON.stringify({ type: "BROADCAST_USER", userId, event }),
+        )
+        .catch(() => {});
+    }
+  }
+
+  private localRevokeSession(sessionToken: string) {
     const socket = this.sessionSockets.get(sessionToken);
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(
@@ -90,7 +145,19 @@ class SocketManager {
     }
   }
 
-  revokeOtherSessions(userId: string, currentSessionToken: string) {
+  revokeSession(sessionToken: string) {
+    this.localRevokeSession(sessionToken);
+    if (this.pub) {
+      this.pub
+        .publish(
+          REDIS_CHANNEL,
+          JSON.stringify({ type: "REVOKE_SESSION", sessionToken }),
+        )
+        .catch(() => {});
+    }
+  }
+
+  private localRevokeOtherSessions(userId: string, currentSessionToken: string) {
     const sockets = this.userSockets.get(userId);
     if (!sockets) return;
 
@@ -111,6 +178,22 @@ class SocketManager {
         }
         this.sessionSockets.delete(token);
       }
+    }
+  }
+
+  revokeOtherSessions(userId: string, currentSessionToken: string) {
+    this.localRevokeOtherSessions(userId, currentSessionToken);
+    if (this.pub) {
+      this.pub
+        .publish(
+          REDIS_CHANNEL,
+          JSON.stringify({
+            type: "REVOKE_OTHER_SESSIONS",
+            userId,
+            currentSessionToken,
+          }),
+        )
+        .catch(() => {});
     }
   }
 }

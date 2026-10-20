@@ -1,3 +1,5 @@
+import { Queue, Worker as BullWorker, Job } from "bullmq";
+import IORedis from "ioredis";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -575,30 +577,83 @@ export async function executeProviderMigration(
   );
 }
 
-export function queueProviderMigration(data: ProviderMigrationJobData): {
-  id: string;
-} {
-  const jobId = `mig_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-  setImmediate(async () => {
-    try {
-      await executeProviderMigration(data, jobId);
-    } catch (err: any) {
-      console.error(
-        `[Worker: ProviderMigration] Job #${jobId} failed:`,
-        err?.message,
-      );
-    }
-  });
-  return { id: jobId };
+const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
+
+const queueRedisConnection = new IORedis(redisUrl, {
+  maxRetriesPerRequest: null,
+  lazyConnect: true,
+  enableOfflineQueue: false,
+});
+queueRedisConnection.on("error", () => {});
+
+export const providerMigrationQueue = new Queue<ProviderMigrationJobData>(
+  "provider-migration",
+  {
+    connection: queueRedisConnection,
+    defaultJobOptions: {
+      attempts: 2,
+      backoff: { type: "exponential", delay: 2000 },
+      removeOnComplete: 100,
+      removeOnFail: 50,
+    },
+  },
+);
+
+export async function queueProviderMigration(
+  data: ProviderMigrationJobData,
+): Promise<{ id: string }> {
+  try {
+    const job = await providerMigrationQueue.add("disconnect-provider", data);
+    return { id: String(job.id) };
+  } catch (err: any) {
+    const jobId = `mig_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    setImmediate(async () => {
+      try {
+        await executeProviderMigration(data, jobId);
+      } catch (e: any) {
+        console.error(`[Worker: ProviderMigration] Job #${jobId} failed:`, e?.message);
+      }
+    });
+    return { id: jobId };
+  }
 }
 
-export const providerMigrationQueue = {
-  add: async (name: string, data: ProviderMigrationJobData) => {
-    const res = queueProviderMigration(data);
-    return { id: res.id };
-  },
-};
+let migrationWorkerInstance: BullWorker<ProviderMigrationJobData> | null = null;
+
+export function initProviderMigrationWorker() {
+  if (migrationWorkerInstance) return migrationWorkerInstance;
+
+  try {
+    migrationWorkerInstance = new BullWorker<ProviderMigrationJobData>(
+      "provider-migration",
+      async (job: Job<ProviderMigrationJobData>) => {
+        console.log(`[Worker: ProviderMigration] ⚙️ Processing BullMQ job #${job.id}...`);
+        await executeProviderMigration(job.data, String(job.id) || `mig_${Date.now()}`);
+      },
+      {
+        connection: new IORedis(redisUrl, {
+          maxRetriesPerRequest: null,
+          lazyConnect: true,
+        }),
+        concurrency: 2,
+      },
+    );
+
+    migrationWorkerInstance.on("failed", (job, err) => {
+      console.error(`[Worker: ProviderMigration] ❌ Job #${job?.id} failed:`, err?.message);
+    });
+  } catch (err: any) {
+    console.warn(`[Worker: ProviderMigration] Could not initialize BullMQ worker: ${err.message}`);
+  }
+
+  return migrationWorkerInstance;
+}
 
 export const providerMigrationWorker = {
-  close: async () => {},
+  close: async () => {
+    if (migrationWorkerInstance) {
+      await migrationWorkerInstance.close();
+      migrationWorkerInstance = null;
+    }
+  },
 };

@@ -7,21 +7,27 @@ import {
   quotaWorker,
   scheduleQuotaSyncJobs,
 } from "./workers/quota-sync.worker.js";
-import { providerMigrationWorker } from "./workers/provider-migration.worker.js";
+import {
+  providerMigrationWorker,
+  initProviderMigrationWorker,
+} from "./workers/provider-migration.worker.js";
 
 dotenv.config();
 
-console.log("⚡ Starting Fuze Background Task Runner (Zero-Redis-Polling)...");
+console.log("⚡ Starting Fuze Background Task Runner...");
 
 async function startWorkers() {
-  // 1. Initialize schedulers (in-memory timers; 0 Redis polling commands)
+  // 1. Initialize schedulers
   await scheduleCleanupJobs();
   await scheduleQuotaSyncJobs();
 
-  console.log("✅ Background Schedulers Active:");
+  // 2. Initialize BullMQ provider migration worker
+  initProviderMigrationWorker();
+
+  console.log("✅ Background Schedulers & Queue Workers Active:");
   console.log("   - Session Cleanup Worker: Running (every 60 mins)");
   console.log("   - Quota Sync Worker: Running (every 60 mins)");
-  console.log("   - Provider Migration Worker: Ready (on-demand async)");
+  console.log("   - Provider Migration Queue: Listening via BullMQ & Redis");
 
   // Graceful shutdown
   const shutdown = async () => {
