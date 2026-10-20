@@ -768,13 +768,18 @@ export async function providerRoutes(fastify: FastifyInstance) {
           const prevCount = Number(fileStats?.count || 0);
 
           if (prevCount > 0) {
+            await db
+              .update(providerIdentities)
+              .set({ isDisconnected: false, pendingRestore: true })
+              .where(eq(providerIdentities.id, existing.id));
+
             return reply.redirect(
               `${clientOrigin}/dashboard?pendingRestoreId=${existing.id}&pendingCount=${prevCount}&pendingProvider=${canonicalProvider}&pendingEmail=${encodeURIComponent(accountEmail || "")}`,
             );
           } else {
             await db
               .update(providerIdentities)
-              .set({ isDisconnected: false })
+              .set({ isDisconnected: false, pendingRestore: false })
               .where(eq(providerIdentities.id, existing.id));
           }
         }
@@ -892,7 +897,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
           // Soft-disconnect: Preserve all file records, set isDisconnected = true
           await db
             .update(providerIdentities)
-            .set({ isDisconnected: true, isRevoked: false })
+            .set({ isDisconnected: true, pendingRestore: false, isRevoked: false })
             .where(
               and(
                 eq(providerIdentities.id, id),
@@ -978,7 +983,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
         .where(
           and(
             eq(providerIdentities.userId, user.userId),
-            eq(providerIdentities.isDisconnected, true),
+            eq(providerIdentities.pendingRestore, true),
           ),
         );
 
@@ -1036,7 +1041,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
 
       await db
         .update(providerIdentities)
-        .set({ isDisconnected: false, isRevoked: false })
+        .set({ isDisconnected: false, pendingRestore: false, isRevoked: false })
         .where(eq(providerIdentities.id, id));
 
       socketManager.broadcastToUser(user.userId, {
@@ -1108,8 +1113,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
 
       await db
         .update(providerIdentities)
-        .set({ isDisconnected: false })
-        .where(eq(providerIdentities.id, id));
+        .set({ isDisconnected: false, pendingRestore: false }).where(eq(providerIdentities.id, id));
 
       socketManager.broadcastToUser(user.userId, {
         type: "PROVIDER_CONNECTED",

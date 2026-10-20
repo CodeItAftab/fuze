@@ -41,6 +41,7 @@ export class VfsService {
           vfsNodeId: fileChunks.vfsNodeId,
           provider: providerIdentities.provider,
           isDisconnected: providerIdentities.isDisconnected,
+          pendingRestore: providerIdentities.pendingRestore,
         })
         .from(fileChunks)
         .innerJoin(
@@ -51,7 +52,7 @@ export class VfsService {
 
       for (const c of chunks) {
         trackedFileIds.add(c.vfsNodeId);
-        if (!c.isDisconnected) {
+        if (!c.isDisconnected && !c.pendingRestore) {
           activeFileIds.add(c.vfsNodeId);
         }
         if (!chunksByFile.has(c.vfsNodeId)) {

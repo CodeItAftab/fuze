@@ -31,9 +31,15 @@ export function usePendingRestore(apiUrl: string) {
     fetch(`${apiUrl}/providers/pending-restore`, { credentials: "include" })
       .then((res) => (res.ok ? res.json() : { pending: [] }))
       .then((data) => {
-        if (data.pending?.[0]) setPending(data.pending[0]);
+        if (data.pending?.[0]) {
+          setPending(data.pending[0]);
+        } else {
+          setPending(null);
+        }
       })
-      .catch(() => {});
+      .catch(() => {
+        setPending(null);
+      });
   }, [searchParams, apiUrl]);
 
   return { pending, setPending };
