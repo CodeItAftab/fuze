@@ -20,6 +20,10 @@ interface DriveState {
   searchQuery: string;
   isLoading: boolean;
   migrationProgress: MigrationProgress | null;
+  lastCompletedMigration: (MigrationProgress & {
+    completedAt: string;
+    status: "success" | "failed";
+  }) | null;
   isMobileSidebarOpen: boolean;
 
   setCurrentFolder: (id: string | null, name?: string) => void;
@@ -32,6 +36,12 @@ interface DriveState {
   setSearchQuery: (query: string) => void;
   setIsLoading: (loading: boolean) => void;
   setMigrationProgress: (progress: MigrationProgress | null) => void;
+  setLastCompletedMigration: (
+    migration: (MigrationProgress & {
+      completedAt: string;
+      status: "success" | "failed";
+    }) | null,
+  ) => void;
   setMobileSidebarOpen: (open: boolean) => void;
   refreshProviders: () => Promise<void>;
 }
@@ -46,6 +56,9 @@ export const useDriveStore = create<DriveState>((set, get) => ({
   searchQuery: "",
   isLoading: false,
   migrationProgress: null,
+  lastCompletedMigration: null,
+  setLastCompletedMigration: (lastCompletedMigration) =>
+    set({ lastCompletedMigration }),
   isMobileSidebarOpen: false,
 
   setCurrentFolder: (folderId, folderName) => {

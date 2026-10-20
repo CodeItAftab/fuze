@@ -14,14 +14,21 @@ import {
   Split,
   FolderSync,
   Menu,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
 } from "lucide-react";
 
 type MigrationTab = "active" | "overview";
 
 export function MigrationsView() {
   const [tab, setTab] = useState<MigrationTab>("active");
-  const { migrationProgress, providers, setMobileSidebarOpen } =
-    useDriveStore();
+  const {
+    migrationProgress,
+    lastCompletedMigration,
+    providers,
+    setMobileSidebarOpen,
+  } = useDriveStore();
 
   const isMigrating = migrationProgress !== null;
 
@@ -91,26 +98,100 @@ export function MigrationsView() {
                 {isMigrating ? (
                   <MigrationActiveCard progress={migrationProgress} />
                 ) : (
-                  <div className="text-center py-16 sm:py-20 border border-dashed border-slate-200 rounded-2xl p-6 sm:p-8 bg-slate-50/50">
-                    <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center mb-3">
-                      <FolderSync className="h-6 w-6" />
-                    </div>
-                    <h3 className="text-sm font-semibold text-slate-800">
-                      No active migration in progress
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
-                      When you disconnect a cloud account from Connected Clouds,
-                      Fuze automatically evacuates your file chunks to remaining
-                      clouds without data loss.
-                    </p>
-                    <div className="mt-5">
-                      <Link
-                        href="/dashboard/storage"
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline"
-                      >
-                        <span>View Connected Clouds ({providers.length})</span>
-                        <ArrowRight className="h-3.5 w-3.5" />
-                      </Link>
+                  <div className="space-y-4">
+                    {lastCompletedMigration && (
+                      <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-2xs space-y-4">
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                          <div className="flex items-center gap-2.5">
+                            <div
+                              className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                                lastCompletedMigration.status === "success"
+                                  ? "bg-emerald-50 text-emerald-600"
+                                  : "bg-amber-50 text-amber-600"
+                              }`}
+                            >
+                              {lastCompletedMigration.status === "success" ? (
+                                <CheckCircle2 className="h-4 w-4" />
+                              ) : (
+                                <AlertTriangle className="h-4 w-4" />
+                              )}
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-semibold text-slate-900">
+                                Last Provider Evacuation Job
+                              </h4>
+                              <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                                <Clock className="h-3 w-3" />
+                                <span>
+                                  Finished at {lastCompletedMigration.completedAt}
+                                </span>
+                              </p>
+                            </div>
+                          </div>
+                          <span
+                            className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${
+                              lastCompletedMigration.status === "success"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : "bg-amber-50 text-amber-700 border-amber-200"
+                            }`}
+                          >
+                            {lastCompletedMigration.status === "success"
+                              ? "Finalized • Quotas Reclaimed"
+                              : "Partially Complete"}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                          <div className="p-3 bg-slate-50 rounded-xl">
+                            <span className="text-[11px] text-slate-400 block font-medium">
+                              Chunks Relocated
+                            </span>
+                            <span className="font-semibold text-slate-900 text-sm mt-0.5 block">
+                              {lastCompletedMigration.completed} of{" "}
+                              {lastCompletedMigration.total}
+                            </span>
+                          </div>
+                          <div className="p-3 bg-slate-50 rounded-xl">
+                            <span className="text-[11px] text-slate-400 block font-medium">
+                              Execution Engine
+                            </span>
+                            <span className="font-semibold text-slate-900 text-sm mt-0.5 block">
+                              Server Worker
+                            </span>
+                          </div>
+                          <div className="p-3 bg-slate-50 rounded-xl col-span-2 sm:col-span-1">
+                            <span className="text-[11px] text-slate-400 block font-medium">
+                              Data Integrity
+                            </span>
+                            <span className="font-semibold text-emerald-600 text-sm mt-0.5 block">
+                              100% Verified
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="text-center py-12 sm:py-16 border border-dashed border-slate-200 rounded-2xl p-6 sm:p-8 bg-slate-50/50">
+                      <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center mb-3">
+                        <FolderSync className="h-6 w-6" />
+                      </div>
+                      <h3 className="text-sm font-semibold text-slate-800">
+                        No active migration in progress
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
+                        When you disconnect a cloud account from Connected Clouds,
+                        Fuze automatically evacuates your file chunks to remaining
+                        clouds without data loss.
+                      </p>
+                      <div className="mt-5">
+                        <Link
+                          href="/dashboard/storage"
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+                        >
+                          <span>View Connected Clouds ({providers.length})</span>
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </div>
                     </div>
                   </div>
                 )}

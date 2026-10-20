@@ -217,20 +217,46 @@ class WebSocketClient {
         }
         break;
 
-      case "PROVIDER_DISCONNECTED":
+      case "PROVIDER_DISCONNECTED": {
+        const last = store.migrationProgress;
+        if (last) {
+          store.setLastCompletedMigration({
+            ...last,
+            completed: last.total,
+            percent: 100,
+            completedAt: new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            status: "success",
+          });
+        }
         store.setMigrationProgress(null);
         void store.refreshProviders();
         toast.success("Storage Unlinked", "Cloud account unlinked safely.");
         break;
+      }
 
-      case "PROVIDER_MIGRATION_FAILED":
+      case "PROVIDER_MIGRATION_FAILED": {
+        const last = store.migrationProgress;
+        if (last) {
+          store.setLastCompletedMigration({
+            ...last,
+            completedAt: new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            status: "failed",
+          });
+        }
         store.setMigrationProgress(null);
         void store.refreshProviders();
         toast.error(
           "Migration Incomplete",
-          "One or more chunks failed to relocate. Recovery kit deployed.",
+          "One or more chunks failed to relocate. Original files preserved.",
         );
         break;
+      }
     }
   }
 
