@@ -67,18 +67,9 @@ export function AvailableCloudCard({
           <span>Reconnect {cloud.name.split(" ")[0]}</span>
         </a>
       ) : isConnected ? (
-        <div className="flex items-center gap-2">
-          <div className="flex-1 py-2 px-3 rounded-xl bg-slate-100 text-slate-500 font-medium text-xs flex items-center justify-center gap-1.5 cursor-default select-none border border-slate-200/60">
-            <Check className="h-3.5 w-3.5 text-blue-600" />
-            <span className="font-semibold text-slate-700">Connected</span>
-          </div>
-          <a
-            href={`${apiUrl}/providers/${cloud.id}/reconnect`}
-            className="py-2 px-3 rounded-xl bg-slate-50 hover:bg-blue-50 hover:text-blue-600 border border-slate-200 text-slate-700 font-semibold text-xs transition cursor-pointer text-center"
-            title="Re-authenticate or update expired tokens"
-          >
-            Reconnect
-          </a>
+        <div className="w-full py-2 px-3 rounded-xl bg-slate-100 text-slate-500 font-medium text-xs flex items-center justify-center gap-1.5 cursor-default select-none border border-slate-200/60">
+          <Check className="h-3.5 w-3.5 text-blue-600" />
+          <span className="font-semibold text-slate-700">Connected</span>
         </div>
       ) : isVerified ? (
         <a

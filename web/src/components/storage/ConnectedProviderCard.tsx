@@ -65,18 +65,16 @@ export function ConnectedProviderCard({
           </div>
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
-          <a
-            href={`${apiUrl}/providers/${providerToSlug(provider.provider)}/reconnect`}
-            className={`p-1.5 rounded-lg transition cursor-pointer flex items-center gap-1 ${
-              isRevoked
-                ? "text-amber-700 hover:text-amber-900 hover:bg-amber-100"
-                : "text-slate-400 hover:text-blue-600 hover:bg-blue-50"
-            }`}
-            title="Reconnect Account (refresh tokens)"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </a>
+                <div className="flex items-center gap-1 shrink-0">
+          {isRevoked && (
+            <a
+              href={`${apiUrl}/providers/${providerToSlug(provider.provider)}/reconnect`}
+              className="p-1.5 rounded-lg transition cursor-pointer flex items-center gap-1 text-amber-700 hover:text-amber-900 hover:bg-amber-100"
+              title="Reconnect Revoked Account"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </a>
+          )}
           <button
             onClick={() => onDisconnect(provider)}
             className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer shrink-0"
