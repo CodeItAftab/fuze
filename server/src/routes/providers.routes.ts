@@ -13,7 +13,6 @@ import { encrypt, decrypt } from "../utils/crypto.js";
 import { getStorageAdapter, SupportedProvider } from "../adapters/factory.js";
 import { socketManager } from "../websocket/socket-manager.js";
 import { ProviderCleanupService } from "../services/provider-cleanup.service.js";
-import { ProviderSyncService } from "../services/provider-sync.service.js";
 import { providerMigrationQueue } from "../workers/provider-migration.worker.js";
 import IORedis from "ioredis";
 import {
@@ -740,17 +739,6 @@ export async function providerRoutes(fastify: FastifyInstance) {
           linkedProviderId = newIdentity?.id;
         }
 
-        if (linkedProviderId) {
-          const syncId = linkedProviderId;
-          setImmediate(async () => {
-            try {
-              await ProviderSyncService.syncFiles(userId, syncId);
-            } catch (syncErr: any) {
-              fastify.log.warn({ syncErr }, "Background provider file sync non-fatal error");
-            }
-          });
-        }
-
         socketManager.broadcastToUser(userId, {
           type: "PROVIDER_CONNECTED",
           payload: { provider: canonicalProvider, quota, isRevoked: false },
@@ -980,16 +968,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
           },
         });
 
-        const syncResult = await ProviderSyncService.syncFiles(
-          user.userId,
-          id,
-        ).catch(() => ({ discovered: 0, restored: 0 }));
-
-        return reply.send({
-          quota,
-          isRevoked: false,
-          restoredCount: syncResult.restored,
-        });
+        return reply.send({ quota, isRevoked: false });
       } catch (err: any) {
         request.log.warn(
           `Failed sync for provider ${identity.provider} [${id}]: ${err.message}`,
