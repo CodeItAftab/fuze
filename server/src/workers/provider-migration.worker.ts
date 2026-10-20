@@ -51,7 +51,11 @@ async function transferChunk(
       providerFileId: chunk.providerFileId,
       accessToken: sourceToken,
     });
-    const fileStream = await fetch(downloadUrl);
+    const downloadHeaders: Record<string, string> = {};
+    if (sourceProvider.provider === "google_drive") {
+      downloadHeaders["Authorization"] = `Bearer ${sourceToken}`;
+    }
+    const fileStream = await fetch(downloadUrl, { headers: downloadHeaders });
     if (!fileStream.ok || !fileStream.body) {
       throw new Error(`Download failed with status HTTP ${fileStream.status}`);
     }
@@ -447,7 +451,13 @@ export async function executeProviderMigration(
         try {
           const destToken = await TokenService.getValidAccessToken(dest.id);
           const node = nodeMap.get(chunk.vfsNodeId);
-          const targetFileName = `${node?.name || "chunk"}.part${chunk.chunkIndex}`;
+          const totalPartsForFile = localChunks.filter(
+            (c) => c.vfsNodeId === chunk.vfsNodeId,
+          ).length;
+          const targetFileName =
+            totalPartsForFile > 1
+              ? `${node?.name || "chunk"}.part${chunk.chunkIndex}`
+              : (node?.name || `fuze_file_${chunk.id}`);
           const targetMime = node?.mimeType || "application/octet-stream";
 
           const newFileId = await transferChunk(

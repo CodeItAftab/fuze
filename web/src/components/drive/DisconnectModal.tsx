@@ -80,7 +80,7 @@ export function DisconnectModal({
         completed: 0,
         total: sharedChunksCount || 1,
         percent: 0,
-        mode: selectedAction === "migrate" ? "client" : "server",
+        mode: "server",
         statusText: "Preparing migration & allocating cloud storage...",
       });
       toast.info(
@@ -171,7 +171,7 @@ export function DisconnectModal({
                 title="1. Move All Files"
                 badge={
                   <span className="px-1.5 py-0.2 bg-blue-100 text-blue-700 font-bold text-[9px] rounded-full uppercase">
-                    Client-First
+                    Full Evacuation
                   </span>
                 }
                 icon={ArrowRightLeft}
