@@ -11,7 +11,7 @@ export class UploadQueueManager {
   private queue: QueueItem[] = [];
   private activeUploads = 0;
   private maxConcurrent = 2; // Up to 2 concurrent uploads to maximize bandwidth and prevent uplink starvation
-  private listeners: Set<QueueListener> = new Set();
+  private listeners: Set<QueueListener> = new Set(); // Listeners for real-time queue updates
   private isDismissed = false;
 
   subscribe(listener: QueueListener) {
@@ -405,7 +405,17 @@ export class UploadQueueManager {
             xhr.open(instruction.httpMethod || "PUT", instruction.uploadUrl);
 
             if (instruction.headers) {
+              const isPCloud = instruction.uploadUrl.includes("pcloud.com");
+              const isDropbox = instruction.uploadUrl.includes("dropboxapi.com");
+
               for (const [key, val] of Object.entries(instruction.headers)) {
+                // pCloud and Dropbox do not allow Content-Range in CORS preflights
+                if (
+                  (isPCloud || isDropbox) &&
+                  key.toLowerCase() === "content-range"
+                ) {
+                  continue;
+                }
                 try {
                   xhr.setRequestHeader(key, val);
                 } catch {}

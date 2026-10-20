@@ -95,7 +95,10 @@ async function transferChunk(
         "Content-Type": mimeType,
         ...(destSession.headers || {}),
       };
-      if (destProvider.provider !== "dropbox") {
+      if (
+        destProvider.provider === "google_drive" ||
+        destProvider.provider === "one_drive"
+      ) {
         uploadHeaders["Content-Range"] =
           `bytes 0-${actualSize - 1}/${actualSize}`;
         uploadHeaders["Content-Length"] = String(actualSize);

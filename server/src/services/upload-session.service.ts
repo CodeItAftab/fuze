@@ -172,7 +172,12 @@ export class UploadSessionService {
       ...(sessionRes.headers || {}),
     };
 
-    if (identity.provider !== "dropbox" && sessionRes.uploadType !== "multipart") {
+    // Only Google Drive and OneDrive require Content-Range for resumable session chunking.
+    // pCloud, Dropbox, and Box reject Content-Range in browser CORS preflight headers.
+    if (
+      (identity.provider === "google_drive" || identity.provider === "one_drive") &&
+      sessionRes.uploadType !== "multipart"
+    ) {
       // Chunk byte range relative to this provider's session file
       const chunkRange = `bytes 0-${chunkSize - 1}/${chunkSize}`;
       headers["Content-Range"] = chunkRange;
