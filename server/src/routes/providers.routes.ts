@@ -13,6 +13,7 @@ import { encrypt, decrypt } from "../utils/crypto.js";
 import { getStorageAdapter, SupportedProvider } from "../adapters/factory.js";
 import { socketManager } from "../websocket/socket-manager.js";
 import { ProviderCleanupService } from "../services/provider-cleanup.service.js";
+import { ProviderSyncService } from "../services/provider-sync.service.js";
 import { providerMigrationQueue } from "../workers/provider-migration.worker.js";
 import IORedis from "ioredis";
 import {
@@ -685,6 +686,8 @@ export async function providerRoutes(fastify: FastifyInstance) {
             ),
           );
 
+        let linkedProviderId: string | undefined;
+
         if (existing) {
           const expectedEmail = existing.accountEmail || stateObj.existingEmail;
           if (
@@ -718,17 +721,33 @@ export async function providerRoutes(fastify: FastifyInstance) {
               lastSyncedAt: new Date(),
             })
             .where(eq(providerIdentities.id, existing.id));
+          linkedProviderId = existing.id;
         } else {
-          await db.insert(providerIdentities).values({
-            userId,
-            provider: canonicalProvider,
-            accountEmail,
-            encryptedAccessToken: encrypt(accessToken),
-            encryptedRefreshToken: encrypt(refreshToken),
-            tokenExpiresAt,
-            quotaTotal: quota.totalBytes,
-            quotaUsed: quota.usedBytes,
-            isRevoked: false,
+          const [newIdentity] = await db
+            .insert(providerIdentities)
+            .values({
+              userId,
+              provider: canonicalProvider,
+              accountEmail,
+              encryptedAccessToken: encrypt(accessToken),
+              encryptedRefreshToken: encrypt(refreshToken),
+              tokenExpiresAt,
+              quotaTotal: quota.totalBytes,
+              quotaUsed: quota.usedBytes,
+              isRevoked: false,
+            })
+            .returning();
+          linkedProviderId = newIdentity?.id;
+        }
+
+        if (linkedProviderId) {
+          const syncId = linkedProviderId;
+          setImmediate(async () => {
+            try {
+              await ProviderSyncService.syncFiles(userId, syncId);
+            } catch (syncErr: any) {
+              fastify.log.warn({ syncErr }, "Background provider file sync non-fatal error");
+            }
           });
         }
 
@@ -815,6 +834,20 @@ export async function providerRoutes(fastify: FastifyInstance) {
         .select({ id: fileChunks.id, vfsNodeId: fileChunks.vfsNodeId })
         .from(fileChunks)
         .where(eq(fileChunks.providerIdentityId, id));
+
+      // 1.1 Strict Pre-flight Check for Full Evacuation ("migrate")
+      if (action === "migrate" && chunks.length > 0) {
+        const preview = await ProviderCleanupService.getDisconnectPreview(
+          user.userId,
+          id,
+        );
+        if (!preview.canMigrate) {
+          return reply.status(400).send({
+            error:
+              "Cannot evacuate files: Remaining connected storage does not have enough capacity to hold all files. Please connect another cloud or free up space.",
+          });
+        }
+      }
 
       // 2. FAST-PATH: If 0 chunks exist, or if Smart Evacuate has no multi-cloud split chunks
       let needsWorker = chunks.length > 0;
@@ -947,7 +980,16 @@ export async function providerRoutes(fastify: FastifyInstance) {
           },
         });
 
-        return reply.send({ quota, isRevoked: false });
+        const syncResult = await ProviderSyncService.syncFiles(
+          user.userId,
+          id,
+        ).catch(() => ({ discovered: 0, restored: 0 }));
+
+        return reply.send({
+          quota,
+          isRevoked: false,
+          restoredCount: syncResult.restored,
+        });
       } catch (err: any) {
         request.log.warn(
           `Failed sync for provider ${identity.provider} [${id}]: ${err.message}`,

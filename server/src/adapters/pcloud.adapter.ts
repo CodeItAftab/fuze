@@ -134,4 +134,26 @@ export class PCloudAdapter implements StorageAdapter {
       expiresInSeconds: 315360000, // 10 years
     };
   }
+
+  async listFiles(
+    accessToken: string,
+  ): Promise<Array<{ providerFileId: string; fileName: string; size: number }>> {
+    try {
+      const res = await fetch(
+        `https://api.pcloud.com/listfolder?access_token=${accessToken}&path=/Fuze`,
+      );
+      if (!res.ok) return [];
+      const data = (await res.json()) as any;
+      if (data.result !== 0 || !data.metadata?.contents) return [];
+      return data.metadata.contents
+        .filter((e: any) => !e.isfolder)
+        .map((e: any) => ({
+          providerFileId: String(e.fileid),
+          fileName: e.name,
+          size: Number(e.size || 0),
+        }));
+    } catch {
+      return [];
+    }
+  }
 }

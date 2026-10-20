@@ -226,4 +226,30 @@ export class DropboxAdapter implements StorageAdapter {
       expiresInSeconds: data.expires_in || 14400, // 4 hours
     };
   }
+
+  async listFiles(
+    accessToken: string,
+  ): Promise<Array<{ providerFileId: string; fileName: string; size: number }>> {
+    try {
+      const res = await fetch("https://api.dropboxapi.com/2/files/list_folder", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ path: "/Fuze", recursive: false }),
+      });
+      if (!res.ok) return [];
+      const data = (await res.json()) as any;
+      return (data.entries || [])
+        .filter((e: any) => e[".tag"] === "file")
+        .map((e: any) => ({
+          providerFileId: e.path_lower || `/Fuze/${e.name}`,
+          fileName: e.name,
+          size: Number(e.size || 0),
+        }));
+    } catch {
+      return [];
+    }
+  }
 }

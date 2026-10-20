@@ -48,6 +48,10 @@ export interface StorageAdapter {
 
   fetchQuota(accessToken: string): Promise<QuotaResult>;
 
+  listFiles?(accessToken: string): Promise<
+    Array<{ providerFileId: string; fileName: string; size: number }>
+  >;
+
   refreshAccessToken(refreshToken: string): Promise<{
     accessToken: string;
     refreshToken?: string;

@@ -119,12 +119,28 @@ async function transferChunk(
 
     // 3. Extract real destination providerFileId
     const resData: any = await uploadRes.json().catch(() => ({}));
-    const newFileId: string =
+    if (
+      destProvider.provider === "pcloud" &&
+      typeof resData.result === "number" &&
+      resData.result !== 0
+    ) {
+      throw new Error(
+        `pCloud upload failed: ${resData.error || `Error code ${resData.result}`}`,
+      );
+    }
+
+    const newFileId: string | null =
       resData.entries?.[0]?.id || // Box returns { entries: [{ id: "12345" }] }
       resData.id ||               // Google Drive & OneDrive return { id: "..." }
       (resData.fileids?.[0] ? String(resData.fileids[0]) : null) || // pCloud
       resData.path_lower ||       // Dropbox
-      `migrated_${chunk.id}`;
+      null;
+
+    if (!newFileId) {
+      throw new Error(
+        `Upload to ${destProvider.provider} succeeded but no valid providerFileId was returned.`,
+      );
+    }
 
     // 4. Delete old chunk from source provider only after confirmed upload
     await sourceAdapter
@@ -412,6 +428,8 @@ export async function executeProviderMigration(
         ),
       );
 
+    const failedChunks: typeof localChunks = [];
+
     for (const chunk of localChunks) {
       const chunkSize = chunk.byteEnd - chunk.byteStart;
       const eligible = otherProviders
@@ -453,19 +471,18 @@ export async function executeProviderMigration(
             .update(providerIdentities)
             .set({ quotaUsed: dest.quotaUsed })
             .where(eq(providerIdentities.id, dest.id));
-        } catch {
-          await CascadePurgeService.purgeUnsalvageableFile(
-            userId,
-            chunk.vfsNodeId,
-            providerIdentityId,
+        } catch (err: any) {
+          console.error(
+            `[Worker: ProviderMigration] Transfer failed for chunk ${chunk.id}:`,
+            err?.message || err,
           );
+          failedChunks.push(chunk);
         }
       } else {
-        await CascadePurgeService.purgeUnsalvageableFile(
-          userId,
-          chunk.vfsNodeId,
-          providerIdentityId,
+        console.warn(
+          `[Worker: ProviderMigration] No eligible provider with capacity for chunk ${chunk.id} (${chunkSize} bytes)`,
         );
+        failedChunks.push(chunk);
       }
 
       processed++;
@@ -479,6 +496,22 @@ export async function executeProviderMigration(
           percent: Math.round((processed / totalChunks) * 100),
         },
       });
+    }
+
+    if (failedChunks.length > 0) {
+      console.warn(
+        `[Worker: ProviderMigration] ⚠️ ${failedChunks.length} chunk(s) could not be relocated. Preserving original records and halting disconnection.`,
+      );
+      socketManager.broadcastToUser(userId, {
+        type: "PROVIDER_MIGRATION_FAILED",
+        payload: {
+          providerId: providerIdentityId,
+          failedCount: failedChunks.length,
+          total: totalChunks,
+          message: `${failedChunks.length} file part(s) could not be moved because destination storage was full or unavailable. Files remain safe in ${providerName}.`,
+        },
+      });
+      return;
     }
   }
 
