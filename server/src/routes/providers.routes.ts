@@ -8,7 +8,7 @@ import {
   uploadChunks,
   vfsNodes,
 } from "../db/index.js";
-import { eq, and, ne, sql, inArray } from "drizzle-orm";
+import { eq, and, ne, sql, inArray, isNull } from "drizzle-orm";
 import { encrypt, decrypt } from "../utils/crypto.js";
 import { getStorageAdapter, SupportedProvider } from "../adapters/factory.js";
 import { socketManager } from "../websocket/socket-manager.js";
@@ -101,21 +101,49 @@ export async function providerRoutes(fastify: FastifyInstance) {
         and(
           eq(providerIdentities.userId, user.userId),
           eq(providerIdentities.isDisconnected, false),
+          eq(providerIdentities.pendingRestore, false),
         ),
       );
 
-    // Also calculate actual active storage used by files in Fuze VFS
-    const [vfsStats] = await db
-      .select({
-        totalSize: sql<string>`COALESCE(SUM(CASE WHEN ${vfsNodes.type} = 'file' AND ${vfsNodes.trashedAt} IS NULL THEN ${vfsNodes.size} ELSE 0 END), 0)`,
-      })
-      .from(vfsNodes)
-      .where(eq(vfsNodes.userId, user.userId));
+    if (items.length === 0) {
+      return reply.send({
+        providers: [],
+        summary: {
+          totalPoolBytes: 0,
+          usedPoolBytes: 0,
+          freePoolBytes: 0,
+        },
+      });
+    }
 
-    const vfsUsedBytes = Number(vfsStats?.totalSize || 0);
+    const activeProviderIds = items.map((p) => p.id);
+
+    // Only calculate storage used by files on active, connected providers
+    const activeFiles = await db
+      .select({ size: vfsNodes.size })
+      .from(vfsNodes)
+      .where(
+        and(
+          eq(vfsNodes.userId, user.userId),
+          eq(vfsNodes.type, "file"),
+          isNull(vfsNodes.trashedAt),
+          inArray(
+            vfsNodes.id,
+            db
+              .select({ vfsNodeId: fileChunks.vfsNodeId })
+              .from(fileChunks)
+              .where(inArray(fileChunks.providerIdentityId, activeProviderIds)),
+          ),
+        ),
+      );
+
+    const vfsUsedBytes = activeFiles.reduce(
+      (sum, f) => sum + Number(f.size || 0),
+      0,
+    );
     const totalPool = items.reduce((sum, p) => sum + p.quotaTotal, 0);
     const rawUsedPool = items.reduce((sum, p) => sum + p.quotaUsed, 0);
-    const usedPool = Math.max(rawUsedPool, vfsUsedBytes);
+    const usedPool = Math.min(totalPool, Math.max(rawUsedPool, vfsUsedBytes));
 
     return reply.send({
       providers: items,
