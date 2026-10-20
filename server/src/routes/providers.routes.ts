@@ -227,10 +227,11 @@ export async function providerRoutes(fastify: FastifyInstance) {
     else if (provider === "pcloud") canonicalProvider = "pcloud";
 
     // Enforce single-account per provider: Check if user already linked this provider
-    const [existingProvider] = await db
+        const [existingProvider] = await db
       .select({
         id: providerIdentities.id,
         accountEmail: providerIdentities.accountEmail,
+        isDisconnected: providerIdentities.isDisconnected,
       })
       .from(providerIdentities)
       .where(
@@ -243,9 +244,10 @@ export async function providerRoutes(fastify: FastifyInstance) {
     const isReconnect =
       request.url.includes("reconnect") ||
       (request.query as any)?.reconnect === "true" ||
-      (request.query as any)?.reconnect === "1";
+      (request.query as any)?.reconnect === "1" ||
+      Boolean(existingProvider?.isDisconnected);
 
-    if (existingProvider && !isReconnect) {
+    if (existingProvider && !existingProvider.isDisconnected && !isReconnect) {
       const displayName = canonicalProvider
         .replace("_", " ")
         .replace(/\b\w/g, (c) => c.toUpperCase());
