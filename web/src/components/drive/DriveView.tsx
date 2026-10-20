@@ -8,6 +8,7 @@ import { uploadQueueManager } from "@/lib/upload-queue";
 import { socketClient } from "@/lib/socket";
 import { Sidebar } from "@/components/drive/Sidebar";
 import { VerificationBanner } from "@/components/drive/VerificationBanner";
+import { PendingRestoreBanner } from "@/components/drive/PendingRestoreBanner";
 import { UploadWidget } from "@/components/upload/UploadWidget";
 import { ContextMenu } from "@/components/drive/ContextMenu";
 import { FileDetailsModal } from "@/components/drive/FileDetailsModal";
@@ -516,6 +517,7 @@ export function DriveView({
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white">
         <VerificationBanner />
+        <PendingRestoreBanner />
         {isDragging && (
           <div className="absolute inset-0 bg-blue-600/10 border-2 border-dashed border-blue-600 z-50 flex items-center justify-center backdrop-blur-xs pointer-events-none p-4">
             <div className="bg-white p-6 rounded-2xl shadow-xl flex items-center gap-3 text-blue-600 font-medium text-sm">

@@ -99,6 +99,7 @@ export const providerIdentities = pgTable("provider_identities", {
   quotaTotal: bigint("quota_total", { mode: "number" }).default(0).notNull(),
   quotaUsed: bigint("quota_used", { mode: "number" }).default(0).notNull(),
   isRevoked: boolean("is_revoked").default(false).notNull(),
+  isDisconnected: boolean("is_disconnected").default(false).notNull(),
   lastSyncedAt: timestamp("last_synced_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

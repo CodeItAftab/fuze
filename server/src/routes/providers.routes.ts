@@ -97,7 +97,12 @@ export async function providerRoutes(fastify: FastifyInstance) {
         lastSyncedAt: providerIdentities.lastSyncedAt,
       })
       .from(providerIdentities)
-      .where(eq(providerIdentities.userId, user.userId));
+      .where(
+        and(
+          eq(providerIdentities.userId, user.userId),
+          eq(providerIdentities.isDisconnected, false),
+        ),
+      );
 
     // Also calculate actual active storage used by files in Fuze VFS
     const [vfsStats] = await db
@@ -676,6 +681,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
           .select({
             id: providerIdentities.id,
             accountEmail: providerIdentities.accountEmail,
+            isDisconnected: providerIdentities.isDisconnected,
           })
           .from(providerIdentities)
           .where(
@@ -753,6 +759,25 @@ export async function providerRoutes(fastify: FastifyInstance) {
           type: "QUOTA_UPDATED",
           payload: { provider: canonicalProvider, quota },
         });
+
+        if (existing?.isDisconnected) {
+          const [fileStats] = await db
+            .select({ count: sql<number>`count(distinct ${fileChunks.vfsNodeId})` })
+            .from(fileChunks)
+            .where(eq(fileChunks.providerIdentityId, existing.id));
+          const prevCount = Number(fileStats?.count || 0);
+
+          if (prevCount > 0) {
+            return reply.redirect(
+              `${clientOrigin}/dashboard?pendingRestoreId=${existing.id}&pendingCount=${prevCount}&pendingProvider=${canonicalProvider}&pendingEmail=${encodeURIComponent(accountEmail || "")}`,
+            );
+          } else {
+            await db
+              .update(providerIdentities)
+              .set({ isDisconnected: false })
+              .where(eq(providerIdentities.id, existing.id));
+          }
+        }
 
         const targetPath = stateObj.returnUrl || "/dashboard/storage";
         return reply.redirect(
@@ -864,13 +889,29 @@ export async function providerRoutes(fastify: FastifyInstance) {
           .where(eq(uploadChunks.providerIdentityId, id));
 
         if (action === "smart_unlink") {
-          const nodeIds = Array.from(new Set(chunks.map((c) => c.vfsNodeId)));
-          if (nodeIds.length > 0) {
-            await db.delete(fileChunks).where(inArray(fileChunks.vfsNodeId, nodeIds));
-            await db.delete(vfsNodes).where(inArray(vfsNodes.id, nodeIds));
-          }
+          // Soft-disconnect: Preserve all file records, set isDisconnected = true
+          await db
+            .update(providerIdentities)
+            .set({ isDisconnected: true, isRevoked: false })
+            .where(
+              and(
+                eq(providerIdentities.id, id),
+                eq(providerIdentities.userId, user.userId),
+              ),
+            );
+
+          socketManager.broadcastToUser(user.userId, {
+            type: "PROVIDER_DISCONNECTED",
+            payload: { providerId: id },
+          });
+
+          return reply.send({
+            success: true,
+            message: "Provider unlinked safely (files preserved in cloud).",
+          });
         }
 
+        // Action === "delete": permanently wipe chunks and provider row
         await db
           .delete(fileChunks)
           .where(eq(fileChunks.providerIdentityId, id));
@@ -914,6 +955,175 @@ export async function providerRoutes(fastify: FastifyInstance) {
   );
 
   // -------------------------------------------------------------
+  // 6. PENDING RESTORE APIS (Banner & Re-Link Management)
+  // -------------------------------------------------------------
+  fastify.get(
+    "/pending-restore",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        return reply.status(401).send({ error: "Unauthorized" });
+      }
+
+      const user = request.user as { userId: string };
+
+      const disconnected = await db
+        .select({
+          id: providerIdentities.id,
+          provider: providerIdentities.provider,
+          accountEmail: providerIdentities.accountEmail,
+        })
+        .from(providerIdentities)
+        .where(
+          and(
+            eq(providerIdentities.userId, user.userId),
+            eq(providerIdentities.isDisconnected, true),
+          ),
+        );
+
+      const pending = [];
+      for (const p of disconnected) {
+        const [stats] = await db
+          .select({
+            count: sql<number>`count(distinct ${fileChunks.vfsNodeId})`,
+          })
+          .from(fileChunks)
+          .where(eq(fileChunks.providerIdentityId, p.id));
+        const count = Number(stats?.count || 0);
+        if (count > 0) {
+          pending.push({
+            id: p.id,
+            provider: p.provider,
+            accountEmail: p.accountEmail,
+            fileCount: count,
+          });
+        }
+      }
+
+      return reply.send({ pending });
+    },
+  );
+
+  fastify.post(
+    "/:id/restore-pending",
+    async (
+      request: FastifyRequest<{ Params: { id: string } }>,
+      reply: FastifyReply,
+    ) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        return reply.status(401).send({ error: "Unauthorized" });
+      }
+
+      const user = request.user as { userId: string };
+      const { id } = request.params;
+
+      const [identity] = await db
+        .select()
+        .from(providerIdentities)
+        .where(
+          and(
+            eq(providerIdentities.id, id),
+            eq(providerIdentities.userId, user.userId),
+          ),
+        );
+
+      if (!identity) {
+        return reply.status(404).send({ error: "Provider not found" });
+      }
+
+      await db
+        .update(providerIdentities)
+        .set({ isDisconnected: false, isRevoked: false })
+        .where(eq(providerIdentities.id, id));
+
+      socketManager.broadcastToUser(user.userId, {
+        type: "PROVIDER_CONNECTED",
+        payload: { provider: identity.provider, isRevoked: false },
+      });
+
+      socketManager.broadcastToUser(user.userId, {
+        type: "FILE_CREATED",
+        payload: { action: "restore", providerId: id },
+      });
+
+      return reply.send({
+        success: true,
+        message: "Files restored to Drive successfully.",
+      });
+    },
+  );
+
+  fastify.post(
+    "/:id/discard-pending",
+    async (
+      request: FastifyRequest<{ Params: { id: string } }>,
+      reply: FastifyReply,
+    ) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        return reply.status(401).send({ error: "Unauthorized" });
+      }
+
+      const user = request.user as { userId: string };
+      const { id } = request.params;
+
+      const [identity] = await db
+        .select()
+        .from(providerIdentities)
+        .where(
+          and(
+            eq(providerIdentities.id, id),
+            eq(providerIdentities.userId, user.userId),
+          ),
+        );
+
+      if (!identity) {
+        return reply.status(404).send({ error: "Provider not found" });
+      }
+
+      const chunks = await db
+        .select({ vfsNodeId: fileChunks.vfsNodeId })
+        .from(fileChunks)
+        .where(eq(fileChunks.providerIdentityId, id));
+
+      const nodeIds = Array.from(new Set(chunks.map((c) => c.vfsNodeId)));
+
+      await db.delete(fileChunks).where(eq(fileChunks.providerIdentityId, id));
+
+      if (nodeIds.length > 0) {
+        const remaining = await db
+          .select({ vfsNodeId: fileChunks.vfsNodeId })
+          .from(fileChunks)
+          .where(inArray(fileChunks.vfsNodeId, nodeIds));
+        const activeIds = new Set(remaining.map((c) => c.vfsNodeId));
+        const orphanIds = nodeIds.filter((nid) => !activeIds.has(nid));
+        if (orphanIds.length > 0) {
+          await db.delete(vfsNodes).where(inArray(vfsNodes.id, orphanIds));
+        }
+      }
+
+      await db
+        .update(providerIdentities)
+        .set({ isDisconnected: false })
+        .where(eq(providerIdentities.id, id));
+
+      socketManager.broadcastToUser(user.userId, {
+        type: "PROVIDER_CONNECTED",
+        payload: { provider: identity.provider, isRevoked: false },
+      });
+
+      return reply.send({
+        success: true,
+        message: "Cleared disconnected file records. Provider is fresh.",
+      });
+    },
+  );
+
+    // -------------------------------------------------------------
   // 6. MANUAL QUOTA SYNC & STATUS CHECK (/providers/:id/sync)
   // -------------------------------------------------------------
   fastify.post(
