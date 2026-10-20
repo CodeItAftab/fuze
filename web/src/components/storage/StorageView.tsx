@@ -135,8 +135,8 @@ export function StorageView() {
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white">
         <VerificationBanner />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-24 sm:pb-8 w-full">
-          <div className="flex items-center justify-between gap-3 pb-3 sm:pb-4 border-b border-slate-100 mb-5 sm:mb-6">
+        <header className="shrink-0 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 md:px-8 py-3 z-20">
+          <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 shrink-0">
               <button
                 onClick={() => setMobileSidebarOpen(true)}
@@ -162,6 +162,9 @@ export function StorageView() {
               <span>{isSyncing ? "Checking Health..." : "Check Status & Sync"}</span>
             </button>
           </div>
+        </header>
+
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-24 sm:pb-8 w-full">
 
           <RevocationWarningBanner
             revokedProviders={revokedProviders}

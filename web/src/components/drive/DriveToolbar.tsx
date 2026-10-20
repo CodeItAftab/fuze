@@ -85,7 +85,7 @@ export function DriveToolbar({
   }, [setShowSortDropdown]);
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 sm:pb-4 border-b border-slate-100 mb-5 sm:mb-6">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
       <div className="flex items-center flex-1 min-w-0">
         <button
           onClick={onOpenMobileSidebar}
