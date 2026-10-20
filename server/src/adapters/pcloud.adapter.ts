@@ -42,7 +42,7 @@ export class PCloudAdapter implements StorageAdapter {
 
     // pCloud direct file upload endpoint with path=/Fuze
     const encodedName = encodeURIComponent(params.fileName);
-    const sessionUrl = `https://api.pcloud.com/uploadfile?access_token=${params.accessToken}&path=/Fuze&filename=${encodedName}&nopartial=0`;
+    const sessionUrl = `https://api.pcloud.com/uploadfile?access_token=${params.accessToken}&path=/Fuze&filename=${encodedName}&nopartial=0&renameifexists=1`;
 
     return {
       sessionUrl,

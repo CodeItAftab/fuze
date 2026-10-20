@@ -26,6 +26,17 @@ interface DropboxTokenResponse {
 }
 
 export class DropboxAdapter implements StorageAdapter {
+  private resolveDropboxPath(providerFileId: string): string {
+    if (
+      providerFileId.startsWith("/") ||
+      providerFileId.startsWith("id:") ||
+      providerFileId.startsWith("rev:")
+    ) {
+      return providerFileId;
+    }
+    return `/Fuze/${providerFileId}`;
+  }
+
   async createResumableUploadSession(params: {
     fileName: string;
     mimeType: string;
@@ -58,9 +69,7 @@ export class DropboxAdapter implements StorageAdapter {
     providerFileId: string;
     accessToken: string;
   }): Promise<string> {
-    const cleanPath = params.providerFileId.startsWith("/")
-      ? params.providerFileId
-      : `/Fuze/${params.providerFileId}`;
+    const cleanPath = this.resolveDropboxPath(params.providerFileId);
 
     const res = await fetch(
       "https://api.dropboxapi.com/2/files/get_temporary_link",
@@ -123,9 +132,7 @@ export class DropboxAdapter implements StorageAdapter {
     providerFileId: string;
     accessToken: string;
   }): Promise<void> {
-    const cleanPath = params.providerFileId.startsWith("/")
-      ? params.providerFileId
-      : `/Fuze/${params.providerFileId}`;
+    const cleanPath = this.resolveDropboxPath(params.providerFileId);
 
     await fetch("https://api.dropboxapi.com/2/files/delete_v2", {
       method: "POST",
@@ -142,9 +149,7 @@ export class DropboxAdapter implements StorageAdapter {
     newName: string;
     accessToken: string;
   }): Promise<string | void> {
-    const fromPath = params.providerFileId.startsWith("/")
-      ? params.providerFileId
-      : `/Fuze/${params.providerFileId}`;
+    const fromPath = this.resolveDropboxPath(params.providerFileId);
 
     const lastSlashIdx = fromPath.lastIndexOf("/");
     const dir = lastSlashIdx !== -1 ? fromPath.substring(0, lastSlashIdx) : "/Fuze";
