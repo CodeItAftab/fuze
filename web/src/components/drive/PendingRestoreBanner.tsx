@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { useDriveStore } from "@/stores/drive.store";
 import { toast } from "@/stores/toast.store";
@@ -8,7 +8,7 @@ import { FolderArchive } from "lucide-react";
 import { PendingRestoreActions } from "./PendingRestoreActions";
 import { usePendingRestore } from "@/hooks/usePendingRestore";
 
-export function PendingRestoreBanner() {
+function PendingRestoreBannerContent() {
   const router = useRouter();
   const { refreshProviders } = useDriveStore();
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -75,5 +75,13 @@ export function PendingRestoreBanner() {
         />
       </div>
     </div>
+  );
+}
+
+export function PendingRestoreBanner() {
+  return (
+    <Suspense fallback={null}>
+      <PendingRestoreBannerContent />
+    </Suspense>
   );
 }

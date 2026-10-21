@@ -1,5 +1,10 @@
+import { Suspense } from "react";
 import { DriveView } from "@/components/drive/DriveView";
 
 export default function DashboardPage() {
-  return <DriveView folderId={null} />;
+  return (
+    <Suspense fallback={null}>
+      <DriveView folderId={null} />
+    </Suspense>
+  );
 }
