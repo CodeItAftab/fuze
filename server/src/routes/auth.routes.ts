@@ -83,7 +83,7 @@ export async function authRoutes(fastify: FastifyInstance) {
       const parse = registerSchema.safeParse(request.body);
       if (!parse.success) {
         return reply.status(400).send({
-          error: parse.error.errors[0]?.message || "Validation error",
+          error: parse.error.issues[0]?.message || "Validation error",
         });
       }
 
@@ -442,7 +442,7 @@ export async function authRoutes(fastify: FastifyInstance) {
       const parse = resetPasswordSchema.safeParse(request.body);
       if (!parse.success) {
         return reply.status(400).send({
-          error: parse.error.errors[0]?.message || "Invalid reset details",
+          error: parse.error.issues[0]?.message || "Invalid reset details",
         });
       }
 

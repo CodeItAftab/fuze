@@ -42,7 +42,7 @@ export async function uploadRoutes(fastify: FastifyInstance) {
     const user = request.user as { userId: string };
     const parse = createSessionSchema.safeParse(request.body);
     if (!parse.success)
-      return reply.status(400).send({ error: parse.error.errors[0]?.message });
+      return reply.status(400).send({ error: parse.error.issues[0]?.message });
 
     try {
       const session = await UploadSessionService.createSession({
