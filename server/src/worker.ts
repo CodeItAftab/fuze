@@ -1,4 +1,4 @@
-import dotenv from "dotenv";
+import "dotenv/config";
 import {
   cleanupWorker,
   scheduleCleanupJobs,
@@ -12,7 +12,7 @@ import {
   initProviderMigrationWorker,
 } from "./workers/provider-migration.worker.js";
 
-dotenv.config();
+
 
 console.log("⚡ Starting Fuze Background Task Runner...");
 

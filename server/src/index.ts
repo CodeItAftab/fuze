@@ -1,10 +1,11 @@
+import "dotenv/config";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
 import jwt from "@fastify/jwt";
 import websocket from "@fastify/websocket";
-import dotenv from "dotenv";
+
 
 import { db, userSessions } from "./db/index.js";
 import { eq, and, gt } from "drizzle-orm";
@@ -16,7 +17,7 @@ import { fileRoutes } from "./routes/files.routes.js";
 import { providerRoutes } from "./routes/providers.routes.js";
 import { websocketRoutes } from "./websocket/sync.js";
 
-dotenv.config();
+
 
 const app = Fastify({
   logger: {
