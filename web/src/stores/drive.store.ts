@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { apiFetch } from "@/lib/api";
 
 import {
   VfsItem,
@@ -44,6 +45,7 @@ interface DriveState {
   ) => void;
   setMobileSidebarOpen: (open: boolean) => void;
   refreshProviders: () => Promise<void>;
+  syncActiveMigration: () => Promise<void>;
 }
 
 export const useDriveStore = create<DriveState>((set, get) => ({
@@ -109,15 +111,23 @@ export const useDriveStore = create<DriveState>((set, get) => ({
   setMobileSidebarOpen: (isMobileSidebarOpen) => set({ isMobileSidebarOpen }),
 
   refreshProviders: async () => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
     try {
-      const res = await fetch(`${apiUrl}/providers`, {
-        credentials: "include",
-      });
-      if (res.ok) {
-        const data = await res.json();
+      const data = await apiFetch<{
+        providers: ProviderSummary[];
+        summary: StorageSummary;
+      }>("/providers");
+      if (data && data.providers) {
         set({ providers: data.providers, storageSummary: data.summary });
       }
+    } catch {}
+  },
+
+  syncActiveMigration: async () => {
+    try {
+      const data = await apiFetch<{ job: MigrationProgress | null }>(
+        "/providers/migrations/active",
+      );
+      set({ migrationProgress: data.job ?? null });
     } catch {}
   },
 }));

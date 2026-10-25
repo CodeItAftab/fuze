@@ -96,6 +96,7 @@ class WebSocketClient {
         if (data.type === "CONNECTED") {
           this.reconnectAttempts = 0;
           console.log("⚡ Connected to Fuze Real-Time WebSocket");
+          void useDriveStore.getState().syncActiveMigration();
         }
         this.handleEvent(data);
       } catch (err) {
@@ -208,12 +209,15 @@ class WebSocketClient {
 
       case "PROVIDER_STATUS_CHANGED":
       case "QUOTA_UPDATED":
+      case "FILES_UPDATED":
         void store.refreshProviders();
         break;
 
       case "PROVIDER_CLEANUP_PROGRESS":
         if (data.payload && typeof data.payload === "object") {
           store.setMigrationProgress(data.payload as MigrationProgress);
+        } else if (data.payload === null) {
+          store.setMigrationProgress(null);
         }
         break;
 

@@ -7,6 +7,7 @@ import { useDriveStore } from "@/stores/drive.store";
 import { SegmentedTabs, TabItem } from "@/components/ui/SegmentedTabs";
 import { MigrationActiveCard } from "./MigrationActiveCard";
 import { MigrationProgress } from "@/types";
+import { apiFetch } from "@/lib/api";
 import { Menu } from "lucide-react";
 import {
   Cloud,
@@ -36,20 +37,14 @@ export function MigrationsView() {
 
   // Single initial load on mount: restore active state & history if user reloaded the page
   useEffect(() => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-
-    fetch(`${apiUrl}/providers/migrations/active`, { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : { job: null }))
+    apiFetch<{ job: MigrationProgress | null }>("/providers/migrations/active")
       .then((data) => {
-        if (data.job) {
-          setMigrationProgress(data.job);
-        }
+        setMigrationProgress(data.job ?? null);
       })
       .catch(() => {});
 
     setIsLoadingHistory(true);
-    fetch(`${apiUrl}/providers/migrations/history`, { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : { history: [] }))
+    apiFetch<{ history: MigrationProgress[] }>("/providers/migrations/history")
       .then((data) => {
         if (data.history) {
           setHistoryJobs(data.history);
@@ -58,27 +53,26 @@ export function MigrationsView() {
             setLastCompletedMigration({
               ...latest,
               completedAt: new Date(
-                latest.completedAt || latest.startedAt,
+                latest.completedAt || latest.startedAt || Date.now(),
               ).toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit",
               }),
+              status: latest.status || "completed",
             });
           }
         }
       })
       .catch(() => {})
       .finally(() => setIsLoadingHistory(false));
-  }, [setMigrationProgress, setLastCompletedMigration]);
+  }, [setMigrationProgress, setLastCompletedMigration, lastCompletedMigration]);
 
   // When migration finishes or cancels via WebSocket, refresh history list once
   useEffect(() => {
     if (!isMigrating) {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      fetch(`${apiUrl}/providers/migrations/history`, {
-        credentials: "include",
-      })
-        .then((res) => (res.ok ? res.json() : { history: [] }))
+      apiFetch<{ history: MigrationProgress[] }>(
+        "/providers/migrations/history",
+      )
         .then((data) => {
           if (data.history) setHistoryJobs(data.history);
         })

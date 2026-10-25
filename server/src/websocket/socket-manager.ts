@@ -37,20 +37,24 @@ class SocketManager {
     const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
     try {
       this.pub = new IORedis(redisUrl, {
-        lazyConnect: true,
         maxRetriesPerRequest: 1,
         enableOfflineQueue: false,
       });
       this.sub = new IORedis(redisUrl, {
-        lazyConnect: true,
         maxRetriesPerRequest: 1,
         enableOfflineQueue: false,
       });
 
-      this.pub.on("error", () => {});
-      this.sub.on("error", () => {});
+      this.pub.on("error", (err) => {
+        console.warn(`[Redis:SocketPub] Warning: ${err?.message || err}`);
+      });
+      this.sub.on("error", (err) => {
+        console.warn(`[Redis:SocketSub] Warning: ${err?.message || err}`);
+      });
 
-      this.sub.subscribe(REDIS_CHANNEL).catch(() => {});
+      this.sub.subscribe(REDIS_CHANNEL).catch((err) => {
+        console.warn(`[Redis:SocketSub] Could not subscribe to ${REDIS_CHANNEL}: ${err?.message || err}`);
+      });
       this.sub.on("message", (channel, message) => {
         if (channel !== REDIS_CHANNEL) return;
         try {
@@ -67,7 +71,9 @@ class SocketManager {
           }
         } catch {}
       });
-    } catch {}
+    } catch (err: any) {
+      console.warn(`[Redis:SocketManager] Init warning: ${err?.message || err}`);
+    }
   }
 
   register(userId: string, socket: WebSocket, sessionToken?: string) {
