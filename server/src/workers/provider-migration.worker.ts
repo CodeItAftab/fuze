@@ -219,7 +219,8 @@ function parseUploadedFileId(
 
 /**
  * Transfers a single chunk directly from source provider to destination provider
- * via direct HTTP memory streaming (ZERO DISK WRITES).
+ * via direct memory buffer transfer (ZERO DISK WRITES).
+ * Eliminates undici stream duplex deadlocks and Dropbox chunked-encoding hangs.
  */
 async function transferChunk(
   sourceProvider: any,
@@ -233,39 +234,61 @@ async function transferChunk(
 ): Promise<string> {
   const sourceAdapter = getStorageAdapter(sourceProvider.provider);
   const destAdapter = getStorageAdapter(destProvider.provider);
+
   // 1. Get source download stream URL
   const downloadUrl = await sourceAdapter.getDownloadUrl({
     providerFileId: chunk.providerFileId,
     accessToken: sourceToken,
+    fileName: targetFileName,
   });
-  const dlRes = await fetch(downloadUrl);
+
+  const downloadHeaders: Record<string, string> = {};
+  if (sourceProvider.provider === "google_drive") {
+    downloadHeaders["Authorization"] = `Bearer ${sourceToken}`;
+  }
+
+  // 2-minute connection timeout on download
+  const dlRes = await fetch(downloadUrl, {
+    headers: downloadHeaders,
+    signal: AbortSignal.timeout(120_000),
+  });
+
   if (!dlRes.ok || !dlRes.body) {
     const errText = await dlRes.text().catch(() => "");
     throw new Error(
       `Failed to download from ${sourceProvider.provider} (HTTP ${dlRes.status}): ${errText}`,
     );
   }
-  // 2. Prepare destination upload session
+
+  // 2. Buffer the chunk stream into memory (25-50 MB max)
+  // This guarantees exact byte length and eliminates undici streaming deadlocks
+  const chunks: Buffer[] = [];
+  const nodeReadableStream = Readable.fromWeb(dlRes.body as any);
+  for await (const chunkData of nodeReadableStream) {
+    chunks.push(Buffer.from(chunkData));
+  }
+  const fileBuffer = Buffer.concat(chunks);
+  const actualSize = fileBuffer.length;
+
+  if (actualSize === 0) {
+    throw new Error(`Downloaded 0 bytes from ${sourceProvider.provider} for chunk ${chunk.id}`);
+  }
+
+  // 3. Prepare destination upload session with ground-truth byte size
   const uploadSession = await destAdapter.createResumableUploadSession({
     fileName: targetFileName,
     mimeType: targetMimeType || "application/octet-stream",
-    size: chunkSize,
+    size: actualSize,
     accessToken: destToken,
   });
+
   let newFileId: string;
-  // Convert Web stream to Node readable stream
-  const nodeReadableStream = Readable.fromWeb(dlRes.body as any);
-  // 3. Direct Streaming upload
+
   if (
     uploadSession.uploadType === "multipart" ||
     destProvider.provider === "pcloud"
   ) {
-    // Collect stream in memory buffer only for multipart boundaries
-    const chunks: Buffer[] = [];
-    for await (const chunkData of nodeReadableStream) {
-      chunks.push(Buffer.from(chunkData));
-    }
-    const fileBuffer = Buffer.concat(chunks);
+    // Multipart form-data upload (Box, pCloud)
     const formData = new FormData();
     if (uploadSession.formDataFields) {
       for (const [k, v] of Object.entries(uploadSession.formDataFields)) {
@@ -285,6 +308,7 @@ async function transferChunk(
         Authorization: `Bearer ${destToken}`,
       },
       body: formData,
+      signal: AbortSignal.timeout(180_000),
     });
     if (!upRes.ok && upRes.status !== 200 && upRes.status !== 201) {
       const errText = await upRes.text().catch(() => "");
@@ -295,16 +319,18 @@ async function transferChunk(
     const data = (await upRes.json().catch(() => ({}))) as any;
     newFileId = parseUploadedFileId(destProvider.provider, data, targetFileName);
   } else {
-    // Pure zero-copy pass-through stream (Box, Google Drive, OneDrive)
+    // Raw binary octet-stream upload (Dropbox, Google Drive, OneDrive)
+    // Sending a raw Buffer body guarantees exact Content-Length without chunked transfer issues
+    const upHeaders: Record<string, string> = {
+      ...(uploadSession.headers || {}),
+      "Content-Length": String(actualSize),
+    };
     const upRes = await fetch(uploadSession.sessionUrl, {
       method: uploadSession.httpMethod || "POST",
-      headers: {
-        ...(uploadSession.headers || {}),
-        "Content-Length": String(chunkSize),
-      },
-      body: nodeReadableStream as any,
-      duplex: "half",
-    } as any);
+      headers: upHeaders,
+      body: fileBuffer,
+      signal: AbortSignal.timeout(180_000),
+    });
     if (!upRes.ok && upRes.status !== 200 && upRes.status !== 201) {
       const errText = await upRes.text().catch(() => "");
       throw new Error(
@@ -314,11 +340,13 @@ async function transferChunk(
     const data = (await upRes.json().catch(() => ({}))) as any;
     newFileId = parseUploadedFileId(destProvider.provider, data, targetFileName);
   }
+
   if (!newFileId) {
     throw new Error(
       `Upload succeeded but could not parse file ID from ${destProvider.provider} response.`,
     );
   }
+
   // 4. Delete source chunk only after destination upload is verified
   await sourceAdapter
     .deleteFile({
@@ -326,6 +354,7 @@ async function transferChunk(
       accessToken: sourceToken,
     })
     .catch(() => {});
+
   return newFileId;
 }
 
