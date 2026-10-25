@@ -212,10 +212,25 @@ class WebSocketClient {
         void store.refreshProviders(true);
         break;
 
-      case "FILES_UPDATED":
+      case "FILES_UPDATED": {
+        const payload = data.payload as
+          | { fileId?: string; providerBadge?: string }
+          | undefined;
+        if (payload?.fileId && payload?.providerBadge) {
+          const currentItems = store.items.map((i) =>
+            i.id === payload.fileId
+              ? { ...i, providerBadge: payload.providerBadge }
+              : i,
+          );
+          store.setItems(currentItems);
+        }
         store.invalidateFolderCache();
         void store.refreshProviders(true);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("fuze:refresh-files"));
+        }
         break;
+      }
 
       case "PROVIDER_CLEANUP_PROGRESS":
         if (data.payload && typeof data.payload === "object") {

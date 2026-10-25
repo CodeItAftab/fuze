@@ -244,7 +244,15 @@ export function DriveView({
 
   useEffect(() => {
     socketClient.connect();
-  }, []);
+
+    const handleLiveRefresh = () => {
+      void fetchData(true);
+    };
+    window.addEventListener("fuze:refresh-files", handleLiveRefresh);
+    return () => {
+      window.removeEventListener("fuze:refresh-files", handleLiveRefresh);
+    };
+  }, [fetchData]);
 
   useEffect(() => {
     const unsub = uploadQueueManager.subscribe((queue) => {

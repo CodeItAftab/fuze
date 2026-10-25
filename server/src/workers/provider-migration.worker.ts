@@ -571,6 +571,21 @@ export async function executeProviderMigration(
           transferredBytes += chunkSize;
           evacuatedChunks++;
           chunkMoved = true;
+
+          await CacheService.invalidateUserVfs(userId);
+          await CacheService.invalidateUserProviders(userId);
+
+          socketManager.broadcastToUser(userId, {
+            type: "FILES_UPDATED",
+            payload: {
+              fileId: chunkOnThisCloud.vfsNodeId,
+            },
+          });
+          socketManager.broadcastToUser(userId, {
+            type: "QUOTA_UPDATED",
+            payload: {},
+          });
+
           await logger.log(
             "success",
             `✓ Successfully relocated split piece to ${dest.provider.toUpperCase()}`,
@@ -712,6 +727,35 @@ export async function executeProviderMigration(
 
           transferredBytes += chunkSize;
           chunkMoved = true;
+
+          // Invalidate cache immediately per relocated file chunk
+          await CacheService.invalidateUserVfs(userId);
+          await CacheService.invalidateUserProviders(userId);
+
+          const providerNames: Record<string, string> = {
+            google_drive: "Google Drive (Whole)",
+            one_drive: "OneDrive (Whole)",
+            dropbox: "Dropbox (Whole)",
+            pcloud: "pCloud (Whole)",
+            box: "Box (Whole)",
+          };
+          const newBadge =
+            providerNames[dest.provider] || `${dest.provider} (Whole)`;
+
+          // Broadcast real-time live update for instant UI card badge flip
+          socketManager.broadcastToUser(userId, {
+            type: "FILES_UPDATED",
+            payload: {
+              fileId: chunk.vfsNodeId,
+              providerBadge: newBadge,
+              newProvider: dest.provider,
+            },
+          });
+          socketManager.broadcastToUser(userId, {
+            type: "QUOTA_UPDATED",
+            payload: {},
+          });
+
           await logger.log(
             "success",
             `✓ Relocated "${targetFileName}" to ${dest.provider.toUpperCase()}`,
