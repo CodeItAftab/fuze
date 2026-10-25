@@ -43,38 +43,54 @@ export function MigrationsView() {
   useEffect(() => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
-    // 1. Fetch active migration from DB
-    fetch(`${apiUrl}/providers/migrations/active`, { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : { job: null }))
-      .then((data) => {
-        if (data.job) {
-          setMigrationProgress(data.job);
-        }
-      })
-      .catch(() => {});
-
-    // 2. Fetch migration history from DB
-    setIsLoadingHistory(true);
-    fetch(`${apiUrl}/providers/migrations/history`, { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : { history: [] }))
-      .then((data) => {
-        if (data.history) {
-          setHistoryJobs(data.history);
-          if (data.history.length > 0 && !lastCompletedMigration) {
-            const latest = data.history[0];
-            setLastCompletedMigration({
-              ...latest,
-              completedAt: new Date(latest.completedAt || latest.startedAt).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
-            });
+    const fetchActive = () => {
+      fetch(`${apiUrl}/providers/migrations/active`, { credentials: "include" })
+        .then((res) => (res.ok ? res.json() : { job: null }))
+        .then((data) => {
+          if (data.job) {
+            setMigrationProgress(data.job);
+          } else if (migrationProgress) {
+            setMigrationProgress(null);
+            fetchHistory();
           }
-        }
-      })
-      .catch(() => {})
-      .finally(() => setIsLoadingHistory(false));
-  }, [setMigrationProgress, setLastCompletedMigration, lastCompletedMigration]);
+        })
+        .catch(() => {});
+    };
+
+    const fetchHistory = () => {
+      fetch(`${apiUrl}/providers/migrations/history`, { credentials: "include" })
+        .then((res) => (res.ok ? res.json() : { history: [] }))
+        .then((data) => {
+          if (data.history) {
+            setHistoryJobs(data.history);
+            if (data.history.length > 0) {
+              const latest = data.history[0];
+              setLastCompletedMigration({
+                ...latest,
+                completedAt: new Date(
+                  latest.completedAt || latest.startedAt,
+                ).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+              });
+            }
+          }
+        })
+        .catch(() => {})
+        .finally(() => setIsLoadingHistory(false));
+    };
+
+    fetchActive();
+    fetchHistory();
+
+    // ⚡ 1-second real-time polling to ensure live progress, byte counters, and log streaming
+    const pollInterval = setInterval(() => {
+      fetchActive();
+    }, 1000);
+
+    return () => clearInterval(pollInterval);
+  }, [setMigrationProgress, setLastCompletedMigration, migrationProgress]);
 
   const tabs: TabItem<MigrationTab>[] = [
     { id: "active", label: "Active Job", count: isMigrating ? 1 : 0 },

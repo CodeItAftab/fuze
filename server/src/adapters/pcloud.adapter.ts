@@ -19,12 +19,34 @@ interface PCloudFileResponse {
 
 export class PCloudAdapter implements StorageAdapter {
   private static folderCache = new Map<string, boolean>();
+  private static apiHostCache = new Map<string, string>();
+
+  public static async getBaseApi(accessToken: string): Promise<string> {
+    if (PCloudAdapter.apiHostCache.has(accessToken)) {
+      return PCloudAdapter.apiHostCache.get(accessToken)!;
+    }
+    try {
+      const res = await fetch(
+        `https://api.pcloud.com/userinfo?access_token=${accessToken}`,
+      );
+      if (res.ok) {
+        const data = (await res.json()) as any;
+        if (data.locationid === 2) {
+          PCloudAdapter.apiHostCache.set(accessToken, "https://eapi.pcloud.com");
+          return "https://eapi.pcloud.com";
+        }
+      }
+    } catch {}
+    PCloudAdapter.apiHostCache.set(accessToken, "https://api.pcloud.com");
+    return "https://api.pcloud.com";
+  }
 
   async ensureFuzeFolder(accessToken: string): Promise<void> {
     if (PCloudAdapter.folderCache.get(accessToken)) return;
     try {
+      const baseApi = await PCloudAdapter.getBaseApi(accessToken);
       await fetch(
-        `https://api.pcloud.com/createfolderifnotexists?access_token=${accessToken}&path=/Fuze`,
+        `${baseApi}/createfolderifnotexists?access_token=${accessToken}&path=/Fuze`,
       );
       PCloudAdapter.folderCache.set(accessToken, true);
     } catch (err) {
@@ -39,14 +61,16 @@ export class PCloudAdapter implements StorageAdapter {
     accessToken: string;
   }): Promise<UploadSessionResult> {
     await this.ensureFuzeFolder(params.accessToken);
+    const baseApi = await PCloudAdapter.getBaseApi(params.accessToken);
 
     // pCloud direct file upload endpoint with path=/Fuze
     const encodedName = encodeURIComponent(params.fileName);
-    const sessionUrl = `https://api.pcloud.com/uploadfile?access_token=${params.accessToken}&path=/Fuze&filename=${encodedName}&nopartial=0&renameifexists=1`;
+    const sessionUrl = `${baseApi}/uploadfile?access_token=${params.accessToken}&path=/Fuze&filename=${encodedName}&nopartial=0&renameifexists=1`;
 
     return {
       sessionUrl,
       expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
+      uploadType: "multipart",
     };
   }
 
@@ -54,8 +78,9 @@ export class PCloudAdapter implements StorageAdapter {
     providerFileId: string;
     accessToken: string;
   }): Promise<string> {
+    const baseApi = await PCloudAdapter.getBaseApi(params.accessToken);
     const res = await fetch(
-      `https://api.pcloud.com/getfilelink?fileid=${params.providerFileId}&access_token=${params.accessToken}`,
+      `${baseApi}/getfilelink?fileid=${params.providerFileId}&access_token=${params.accessToken}`,
     );
     const data = (await res.json()) as PCloudFileResponse;
     if (data.result !== 0 || !data.hosts || !data.path) {
@@ -69,8 +94,9 @@ export class PCloudAdapter implements StorageAdapter {
     accessToken: string;
   }): Promise<ThumbnailResult | null> {
     try {
+      const baseApi = await PCloudAdapter.getBaseApi(params.accessToken);
       const res = await fetch(
-        `https://api.pcloud.com/getthumb?fileid=${params.providerFileId}&size=256x256&crop=0&access_token=${params.accessToken}`,
+        `${baseApi}/getthumb?fileid=${params.providerFileId}&size=256x256&crop=0&access_token=${params.accessToken}`,
       );
       if (res.ok) {
         const contentType = res.headers.get("content-type") || "";
@@ -92,8 +118,9 @@ export class PCloudAdapter implements StorageAdapter {
     providerFileId: string;
     accessToken: string;
   }): Promise<void> {
+    const baseApi = await PCloudAdapter.getBaseApi(params.accessToken);
     await fetch(
-      `https://api.pcloud.com/deletefile?fileid=${params.providerFileId}&access_token=${params.accessToken}`,
+      `${baseApi}/deletefile?fileid=${params.providerFileId}&access_token=${params.accessToken}`,
     );
   }
 
@@ -101,20 +128,25 @@ export class PCloudAdapter implements StorageAdapter {
     providerFileId: string;
     newName: string;
     accessToken: string;
-  }): Promise<void> {
+  }): Promise<string | void> {
+    const baseApi = await PCloudAdapter.getBaseApi(params.accessToken);
     const res = await fetch(
-      `https://api.pcloud.com/renamefile?fileid=${params.providerFileId}&toname=${encodeURIComponent(params.newName)}&access_token=${params.accessToken}`,
+      `${baseApi}/renamefile?fileid=${params.providerFileId}&toname=${encodeURIComponent(params.newName)}&access_token=${params.accessToken}`,
     );
-    if (!res.ok) {
-      const errText = await res.text();
-      console.warn(`[pCloud] Rename warning (${res.status}): ${errText}`);
+    if (res.ok) {
+      return params.providerFileId;
     }
   }
 
   async fetchQuota(accessToken: string): Promise<QuotaResult> {
+    const baseApi = await PCloudAdapter.getBaseApi(accessToken);
     const res = await fetch(
-      `https://api.pcloud.com/userinfo?access_token=${accessToken}`,
+      `${baseApi}/userinfo?getauth=1&access_token=${accessToken}`,
     );
+    if (!res.ok) {
+      throw new Error("Failed to fetch pCloud quota");
+    }
+
     const data = (await res.json()) as PCloudSpaceResponse;
     if (data.result !== 0) {
       throw new Error("Failed to fetch pCloud quota");
@@ -139,8 +171,9 @@ export class PCloudAdapter implements StorageAdapter {
     accessToken: string,
   ): Promise<Array<{ providerFileId: string; fileName: string; size: number }>> {
     try {
+      const baseApi = await PCloudAdapter.getBaseApi(accessToken);
       const res = await fetch(
-        `https://api.pcloud.com/listfolder?access_token=${accessToken}&path=/Fuze`,
+        `${baseApi}/listfolder?access_token=${accessToken}&path=/Fuze`,
       );
       if (!res.ok) return [];
       const data = (await res.json()) as any;

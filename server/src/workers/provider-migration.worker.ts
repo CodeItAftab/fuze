@@ -163,15 +163,26 @@ async function transferChunk(
   );
 
   try {
+    // 1. Stream from source provider
     const sourceAdapter = getStorageAdapter(sourceProvider.provider);
     const downloadUrl = await sourceAdapter.getDownloadUrl({
       providerFileId: chunk.providerFileId,
       accessToken: sourceToken,
     });
 
-    const dlRes = await fetch(downloadUrl);
+    let dlRes: Response;
+    try {
+      dlRes = await fetch(downloadUrl);
+    } catch (e: any) {
+      throw new Error(
+        `Failed to download from ${sourceProvider.provider}: ${e?.cause?.message || e?.message || e}`,
+      );
+    }
     if (!dlRes.ok || !dlRes.body) {
-      throw new Error(`Failed to stream source data (HTTP ${dlRes.status})`);
+      const errBody = await dlRes.text().catch(() => "");
+      throw new Error(
+        `Failed to download from ${sourceProvider.provider} (HTTP ${dlRes.status}): ${errBody}`,
+      );
     }
 
     const fileStream = fs.createWriteStream(tempFilePath);
@@ -182,6 +193,7 @@ async function transferChunk(
       throw new Error("Downloaded empty chunk from source provider.");
     }
 
+    // 2. Upload to destination provider
     const destAdapter = getStorageAdapter(destProvider.provider);
     const uploadSession = await destAdapter.createResumableUploadSession({
       fileName: targetFileName,
@@ -192,20 +204,75 @@ async function transferChunk(
 
     let newFileId: string;
 
-    const upRes = await fetch(uploadSession.sessionUrl, {
-      method: uploadSession.httpMethod || "POST",
-      headers: uploadSession.headers || {},
-      body: fs.createReadStream(tempFilePath) as any,
-      duplex: "half",
-    } as any);
+    try {
+      // Handle pCloud / Multipart form-data uploads
+      if (
+        uploadSession.uploadType === "multipart" ||
+        destProvider.provider === "pcloud"
+      ) {
+        const fileBuffer = await fs.promises.readFile(tempFilePath);
+        const formData = new FormData();
 
-    if (!upRes.ok && upRes.status !== 200 && upRes.status !== 201) {
-      throw new Error(`Chunk upload failed (HTTP ${upRes.status})`);
+        if (uploadSession.formDataFields) {
+          for (const [k, v] of Object.entries(uploadSession.formDataFields)) {
+            formData.append(k, v);
+          }
+        }
+
+        formData.append(
+          "file",
+          new Blob([fileBuffer], {
+            type: targetMimeType || "application/octet-stream",
+          }),
+          targetFileName,
+        );
+
+        const upRes = await fetch(uploadSession.sessionUrl, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${destToken}`,
+          },
+          body: formData,
+        });
+
+        if (!upRes.ok && upRes.status !== 200 && upRes.status !== 201) {
+          const errText = await upRes.text().catch(() => "");
+          throw new Error(
+            `Upload to ${destProvider.provider} failed (${upRes.status}): ${errText}`,
+          );
+        }
+        const data = (await upRes.json().catch(() => ({}))) as any;
+        newFileId = String(
+          data.fileids?.[0] || data.id || data.name || targetFileName,
+        );
+      } else {
+        // Standard binary stream upload (Box, Google Drive, OneDrive)
+        const upRes = await fetch(uploadSession.sessionUrl, {
+          method: uploadSession.httpMethod || "POST",
+          headers: {
+            ...(uploadSession.headers || {}),
+            "Content-Length": String(stat.size),
+          },
+          body: fs.createReadStream(tempFilePath) as any,
+          duplex: "half",
+        } as any);
+
+        if (!upRes.ok && upRes.status !== 200 && upRes.status !== 201) {
+          const errText = await upRes.text().catch(() => "");
+          throw new Error(
+            `Upload to ${destProvider.provider} failed (${upRes.status}): ${errText}`,
+          );
+        }
+        const data = (await upRes.json().catch(() => ({}))) as any;
+        newFileId = data.id || data.name || targetFileName;
+      }
+    } catch (e: any) {
+      throw new Error(
+        `Upload to ${destProvider.provider} failed: ${e?.cause?.message || e?.message || e}`,
+      );
     }
-    const data = (await upRes.json().catch(() => ({}))) as any;
-    newFileId = data.id || data.name || targetFileName;
 
-    // Delete source chunk ONLY after upload is completely confirmed
+    // 3. Delete source chunk ONLY after upload is completely verified
     await sourceAdapter
       .deleteFile({
         providerFileId: chunk.providerFileId,
@@ -218,7 +285,6 @@ async function transferChunk(
     await fs.promises.unlink(tempFilePath).catch(() => {});
   }
 }
-
 /**
  * Main Migration Execution Engine
  */
@@ -489,6 +555,7 @@ export async function executeProviderMigration(
       );
 
     const failedChunks: typeof localChunks = [];
+    let successfulChunks = 0;
 
     for (const chunk of localChunks) {
       // Check cancellation request before processing next chunk
@@ -581,12 +648,14 @@ export async function executeProviderMigration(
           `✗ Failed to relocate "${targetFileName}" to any connected cloud (insufficient capacity or authorization).`,
         );
         failedChunks.push(chunk);
+      } else {
+        successfulChunks++;
       }
 
       processed++;
-      const currentPercent = Math.round((processed / totalChunks) * 100);
+      const currentPercent = Math.round((successfulChunks / totalChunks) * 100);
       await logger.updateProgress({
-        completed: processed,
+        completed: successfulChunks,
         total: totalChunks,
         percent: currentPercent,
         transferredBytes,
@@ -600,11 +669,11 @@ export async function executeProviderMigration(
     if (failedChunks.length > 0) {
       await logger.log(
         "error",
-        `⚠️ ${failedChunks.length} file part(s) could not be relocated. Preserving original records on ${providerName} to guarantee zero data loss.`,
+        `⚠️ ${failedChunks.length} of ${totalChunks} file part(s) could not be relocated. Preserving original records on ${providerName} to guarantee zero data loss.`,
       );
       await logger.finish(
         "failed",
-        `${failedChunks.length} file part(s) could not be moved because destination storage was full or unavailable.`,
+        `${failedChunks.length} of ${totalChunks} file part(s) could not be moved because destination storage was full or unavailable.`,
       );
       socketManager.broadcastToUser(userId, {
         type: "PROVIDER_MIGRATION_FAILED",
