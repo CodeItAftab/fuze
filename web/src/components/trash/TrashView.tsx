@@ -12,24 +12,36 @@ import { Trash2, Menu } from "lucide-react";
 import { formatBytes } from "@/lib/format";
 
 export function TrashView() {
-  const [trashedItems, setTrashedItems] = useState<VfsItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const {
+    setMobileSidebarOpen,
+    trashCache,
+    setTrashCache,
+    invalidateFolderCache,
+  } = useDriveStore();
+
+  const [trashedItems, setTrashedItems] = useState<VfsItem[]>(
+    () => trashCache?.items || [],
+  );
+  const [isLoading, setIsLoading] = useState(!trashCache);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isProcessing, setIsProcessing] = useState(false);
   const [showEmptyConfirm, setShowEmptyConfirm] = useState(false);
   const [showBatchPermanentConfirm, setShowBatchPermanentConfirm] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<VfsItem | null>(null);
 
-  const { setMobileSidebarOpen } = useDriveStore();
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
-  const loadTrash = useCallback(async () => {
+  const loadTrash = useCallback(async (isBackground = false) => {
+    if (!isBackground) {
+      setIsLoading(true);
+    }
     try {
       const res = await fetch(`${apiUrl}/files/trash`, { credentials: "include" });
       if (res.ok) {
         const data = await res.json();
         const items: VfsItem[] = data.items || [];
         setTrashedItems(items);
+        setTrashCache(items);
         setSelectedIds((prev) => {
           const next = new Set<string>();
           for (const item of items) {
@@ -39,28 +51,23 @@ export function TrashView() {
         });
       }
     } finally {
-      setIsLoading(false);
+      if (!isBackground) {
+        setIsLoading(false);
+      }
     }
-  }, [apiUrl]);
+  }, [apiUrl, setTrashCache]);
 
   useEffect(() => {
-    let active = true;
-    const fetchInitial = async () => {
-      try {
-        const res = await fetch(`${apiUrl}/files/trash`, { credentials: "include" });
-        if (res.ok && active) {
-          const data = await res.json();
-          setTrashedItems(data.items || []);
-        }
-      } finally {
-        if (active) setIsLoading(false);
+    if (trashCache) {
+      // ⚡ INSTANT RENDER: items already visible
+      const isStale = Date.now() - trashCache.cachedAt > 20_000;
+      if (isStale) {
+        void loadTrash(true);
       }
-    };
-    void fetchInitial();
-    return () => {
-      active = false;
-    };
-  }, [apiUrl]);
+    } else {
+      void loadTrash(false);
+    }
+  }, [trashCache, loadTrash]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -116,6 +123,7 @@ export function TrashView() {
         next.delete(id);
         return next;
       });
+      invalidateFolderCache();
       await loadTrash();
     } finally {
       setIsProcessing(false);
@@ -134,6 +142,7 @@ export function TrashView() {
       });
       if (res.ok) {
         setSelectedIds(new Set());
+        invalidateFolderCache();
         await loadTrash();
       }
     } finally {

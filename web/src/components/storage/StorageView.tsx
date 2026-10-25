@@ -30,7 +30,7 @@ export function StorageView() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
   useEffect(() => {
-    void refreshProviders();
+    void refreshProviders(true);
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const err = params.get("error");
@@ -56,7 +56,7 @@ export function StorageView() {
         credentials: "include",
       });
       const data = await res.json();
-      await refreshProviders();
+      await refreshProviders(true);
       const newlyRevoked = data.results?.filter(
         (r: { isRevoked: boolean; provider: string }) => r.isRevoked,
       );

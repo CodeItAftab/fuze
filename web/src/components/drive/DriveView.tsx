@@ -55,6 +55,13 @@ export function DriveView({
     setMobileSidebarOpen,
     viewMode,
     setViewMode,
+    folderCache,
+    setFolderCache,
+    invalidateFolderCache,
+    refreshProviders,
+    addItem,
+    removeItem,
+    invalidateTrashCache,
   } = useDriveStore();
 
   const { user } = useAuthStore();
@@ -137,53 +144,83 @@ export function DriveView({
     [router],
   );
 
-  const fetchData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const endpoint = isStarredView
-        ? `${apiUrl}/files/starred`
-        : `${apiUrl}/files${folderId ? `?parentId=${folderId}` : ""}`;
+  const cacheKey = isStarredView ? "starred" : folderId || "root";
 
-      const [filesRes, provRes] = await Promise.all([
-        fetch(endpoint, { credentials: "include" }),
-        fetch(`${apiUrl}/providers`, { credentials: "include" }),
-      ]);
+  const fetchData = useCallback(
+    async (isBackground = false) => {
+      if (!isBackground) {
+        setIsLoading(true);
+      }
+      try {
+        const endpoint = isStarredView
+          ? `${apiUrl}/files/starred`
+          : `${apiUrl}/files${folderId ? `?parentId=${folderId}` : ""}`;
 
-      if (filesRes.ok) {
-        const data = await filesRes.json();
-        setItems(data.items || []);
-        if (isStarredView) {
-          setBreadcrumbs([{ id: null, name: "Starred" }]);
-        } else if (data.breadcrumbs && Array.isArray(data.breadcrumbs)) {
-          setBreadcrumbs(data.breadcrumbs);
-        } else if (!folderId) {
-          setBreadcrumbs([{ id: null, name: "My Drive" }]);
+        const filesRes = await fetch(endpoint, { credentials: "include" });
+
+        if (filesRes.ok) {
+          const data = await filesRes.json();
+          const newItems = data.items || [];
+          setItems(newItems);
+
+          let newCrumbs = breadcrumbs;
+          if (isStarredView) {
+            newCrumbs = [{ id: null, name: "Starred" }];
+          } else if (data.breadcrumbs && Array.isArray(data.breadcrumbs)) {
+            newCrumbs = data.breadcrumbs;
+          } else if (!folderId) {
+            newCrumbs = [{ id: null, name: "My Drive" }];
+          }
+          setBreadcrumbs(newCrumbs);
+
+          // Update SWR cache
+          setFolderCache(cacheKey, newItems, newCrumbs);
+        }
+
+        // Throttled 60s provider fetch (skips network if fresh)
+        void refreshProviders();
+      } catch (err) {
+        console.error("Failed to fetch drive data:", err);
+      } finally {
+        if (!isBackground) {
+          setIsLoading(false);
         }
       }
-
-      if (provRes.ok) {
-        const pData = await provRes.json();
-        setProviders(pData.providers || [], pData.summary);
-      }
-    } catch (err) {
-      console.error("Failed to fetch drive data:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [
-    apiUrl,
-    folderId,
-    isStarredView,
-    setItems,
-    setBreadcrumbs,
-    setProviders,
-    setIsLoading,
-  ]);
+    },
+    [
+      apiUrl,
+      folderId,
+      isStarredView,
+      cacheKey,
+      breadcrumbs,
+      setItems,
+      setBreadcrumbs,
+      setFolderCache,
+      refreshProviders,
+      setIsLoading,
+    ],
+  );
 
   useEffect(() => {
     setCurrentFolder(folderId || null);
-    void fetchData();
-  }, [folderId, setCurrentFolder, fetchData]);
+
+    const cached = folderCache[cacheKey];
+    if (cached) {
+      // ⚡ INSTANT RENDER (0ms latency, zero skeleton flash)
+      setItems(cached.items);
+      setBreadcrumbs(cached.breadcrumbs);
+      setIsLoading(false);
+
+      // SWR: Revalidate in background if older than 20 seconds
+      const isStale = Date.now() - cached.cachedAt > 20_000;
+      if (isStale) {
+        void fetchData(true);
+      }
+    } else {
+      // First visit: show skeleton and fetch
+      void fetchData(false);
+    }
+  }, [folderId, cacheKey, setCurrentFolder]);
 
   // Synchronize browser tab title with opened folder, view, or root
   useEffect(() => {
@@ -270,7 +307,12 @@ export function DriveView({
       });
 
       if (res.ok) {
-        void fetchData();
+        const data = await res.json().catch(() => ({}));
+        if (data.folder) {
+          addItem(data.folder);
+        } else {
+          void fetchData(true);
+        }
       }
     } catch (err) {
       console.error("Failed to create folder:", err);
@@ -295,9 +337,7 @@ export function DriveView({
   };
 
   const handleRenameSuccess = (item: VfsItem, newName: string) => {
-    setItems(
-      items.map((i) => (i.id === item.id ? { ...i, name: newName } : i)),
-    );
+    addItem({ ...item, name: newName });
   };
 
   const handleDelete = async (item: VfsItem) => {
@@ -307,7 +347,8 @@ export function DriveView({
         credentials: "include",
       });
       if (res.ok) {
-        setItems(items.filter((i) => i.id !== item.id));
+        removeItem(item.id);
+        invalidateTrashCache();
       }
     } catch (err) {
       console.error("Delete failed:", err);
@@ -321,11 +362,8 @@ export function DriveView({
         credentials: "include",
       });
       if (res.ok) {
-        setItems(
-          items.map((i) =>
-            i.id === item.id ? { ...i, starred: !i.starred } : i,
-          ),
-        );
+        addItem({ ...item, starred: !item.starred });
+        invalidateFolderCache("starred");
       }
     } catch (err) {
       console.error("Star toggle failed:", err);
@@ -439,6 +477,7 @@ export function DriveView({
             selectedIds.has(i.id) ? { ...i, starred: star } : i,
           ),
         );
+        invalidateFolderCache("starred");
       }
     } catch (err) {
       console.error("Batch star failed:", err);
@@ -462,7 +501,8 @@ export function DriveView({
         body: JSON.stringify({ nodeIds }),
       });
       if (res.ok) {
-        setItems(items.filter((i) => !selectedIds.has(i.id)));
+        nodeIds.forEach((id) => removeItem(id));
+        invalidateTrashCache();
         clearSelection();
       }
     } catch (err) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { VfsItem } from "@/stores/drive.store";
+import { VfsItem, useDriveStore } from "@/stores/drive.store";
 import {
   Folder,
   FolderPlus,
@@ -174,6 +174,7 @@ export function MoveModal({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to move items");
 
+      useDriveStore.getState().invalidateFolderCache();
       onMoved();
       onClose();
     } catch (err: unknown) {

@@ -200,7 +200,7 @@ class WebSocketClient {
       }
 
       case "PROVIDER_CONNECTED":
-        void store.refreshProviders();
+        void store.refreshProviders(true);
         toast.success(
           "Storage Connected",
           "New cloud provider linked successfully!",
@@ -209,8 +209,12 @@ class WebSocketClient {
 
       case "PROVIDER_STATUS_CHANGED":
       case "QUOTA_UPDATED":
+        void store.refreshProviders(true);
+        break;
+
       case "FILES_UPDATED":
-        void store.refreshProviders();
+        store.invalidateFolderCache();
+        void store.refreshProviders(true);
         break;
 
       case "PROVIDER_CLEANUP_PROGRESS":
