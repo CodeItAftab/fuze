@@ -19,29 +19,37 @@ export const queryClient = postgres(connectionString, {
 
 export const db = drizzle(queryClient, { schema });
 
-// Ensure persistent migration_jobs table exists
-queryClient`
-  CREATE TABLE IF NOT EXISTS migration_jobs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    provider_identity_id UUID NOT NULL,
-    provider TEXT NOT NULL,
-    action TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    total_chunks INTEGER NOT NULL DEFAULT 0,
-    completed_chunks INTEGER NOT NULL DEFAULT 0,
-    total_bytes BIGINT NOT NULL DEFAULT 0,
-    transferred_bytes BIGINT NOT NULL DEFAULT 0,
-    percent INTEGER NOT NULL DEFAULT 0,
-    current_file_name TEXT,
-    status_text TEXT,
-    logs TEXT,
-    error_message TEXT,
-    started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    completed_at TIMESTAMP WITH TIME ZONE
-  );
-  CREATE INDEX IF NOT EXISTS migration_user_idx ON migration_jobs(user_id);
-  CREATE INDEX IF NOT EXISTS migration_status_idx ON migration_jobs(status);
-`.catch((err) => console.error("Failed to ensure migration_jobs table:", err));
+// Ensure persistent migration_jobs table exists using individual statements
+async function ensureTables() {
+  try {
+    await queryClient`
+      CREATE TABLE IF NOT EXISTS migration_jobs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        provider_identity_id UUID NOT NULL,
+        provider TEXT NOT NULL,
+        action TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        total_chunks INTEGER NOT NULL DEFAULT 0,
+        completed_chunks INTEGER NOT NULL DEFAULT 0,
+        total_bytes BIGINT NOT NULL DEFAULT 0,
+        transferred_bytes BIGINT NOT NULL DEFAULT 0,
+        percent INTEGER NOT NULL DEFAULT 0,
+        current_file_name TEXT,
+        status_text TEXT,
+        logs TEXT,
+        error_message TEXT,
+        started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        completed_at TIMESTAMP WITH TIME ZONE
+      )
+    `;
+    await queryClient`CREATE INDEX IF NOT EXISTS migration_user_idx ON migration_jobs(user_id)`;
+    await queryClient`CREATE INDEX IF NOT EXISTS migration_status_idx ON migration_jobs(status)`;
+  } catch (err: any) {
+    console.error("Failed to ensure migration_jobs table:", err?.message || err);
+  }
+}
+
+ensureTables();
 
 export * from "./schema.js";
