@@ -1,232 +1,218 @@
 "use client";
 
-import { MigrationProgress } from "@/types";
-import { PROVIDERS_CONFIG } from "@/config/providers.config";
+import React, { useState } from "react";
 import {
-  ArrowRight,
-  RefreshCw,
-  ShieldCheck,
-  CheckCircle2,
+  Loader2,
   HardDrive,
-  Laptop,
-  Server,
-  Terminal,
   FileText,
-  Activity,
+  Terminal,
+  XCircle,
+  AlertTriangle,
 } from "lucide-react";
+import { MigrationProgress } from "@/types/transfer.types";
+import { apiFetch } from "@/lib/api";
 
 interface MigrationActiveCardProps {
-  progress: MigrationProgress;
+  progress?: MigrationProgress | null;
+  migration?: MigrationProgress | null;
+  onCancelled?: () => void;
 }
 
-export function MigrationActiveCard({ progress }: MigrationActiveCardProps) {
-  const percent = Math.min(100, Math.max(0, Math.round(progress.percent)));
-  const isComplete = percent >= 100;
-  const isClientMode = progress.mode === "client";
+export function MigrationActiveCard({
+  progress,
+  migration: migrationProp,
+  onCancelled,
+}: MigrationActiveCardProps) {
+  const migration = progress || migrationProp;
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
-  const sourceMeta = PROVIDERS_CONFIG[progress.providerId] || {
-    label: (progress.provider || progress.providerId || "CLOUD").toUpperCase(),
-    dotClass: "bg-slate-700",
+  if (!migration) return null;
+
+  const formatBytes = (bytes: number) => {
+    if (!bytes || bytes === 0) return "0 MB";
+    const mb = bytes / (1024 * 1024);
+    if (mb < 1024) return `${mb.toFixed(1)} MB`;
+    return `${(mb / 1024).toFixed(2)} GB`;
   };
 
-  const formatBytes = (bytes?: number) => {
-    if (!bytes || bytes <= 0) return "0 MB";
-    if (bytes >= 1024 * 1024 * 1024) {
-      return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  const handleCancelMigration = async () => {
+    setCancelling(true);
+    try {
+      await apiFetch("/providers/migrations/cancel", {
+        method: "POST",
+        body: JSON.stringify({
+          jobId: migration.jobId || migration.providerId,
+        }),
+      });
+      setShowCancelModal(false);
+      if (onCancelled) onCancelled();
+    } catch (err: any) {
+      alert(`Could not cancel migration: ${err?.message || "Server error"}`);
+    } finally {
+      setCancelling(false);
     }
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   return (
-    <div className="bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-xs space-y-5">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-            <RefreshCw className={`h-4.5 w-4.5 ${isComplete ? "" : "animate-spin"}`} />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">
-              Provider Evacuation & Relocation
+    <div className="relative overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-b from-blue-50/50 to-white p-6 shadow-sm dark:border-blue-900/50 dark:from-slate-900 dark:to-slate-900/80">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="h-2.5 w-2.5 rounded-full bg-blue-600 animate-pulse" />
+            <h3 className="font-semibold text-slate-900 dark:text-white">
+              Active Relocation: {migration.provider?.toUpperCase()}
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {progress.statusText ||
-                "Safely relocating chunks to connected clouds"}
-            </p>
+            <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+              {migration.action?.toUpperCase() || "SMART UNLINK"}
+            </span>
           </div>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            {migration.statusText ||
+              "Processing file relocation safely across clouds..."}
+          </p>
         </div>
 
-        {/* Mode Badge & Status Pill */}
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          {/* Client vs Server Badge */}
-          <span
-            className={`inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full border ${
-              isClientMode
-                ? "bg-blue-50 text-blue-700 border-blue-200"
-                : "bg-indigo-50 text-indigo-700 border-indigo-200"
-            }`}
-          >
-            {isClientMode ? (
-              <>
-                <Laptop className="h-3 w-3" />
-                <span>Client Direct Stream</span>
-              </>
-            ) : (
-              <>
-                <Server className="h-3 w-3" />
-                <span>Server Background Worker</span>
-              </>
-            )}
-          </span>
-
-          {/* Completion Pill */}
-          <span className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
-            {isComplete ? (
-              <>
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                <span>Finalized</span>
-              </>
-            ) : (
-              <>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                <span>Migrating</span>
-              </>
-            )}
-          </span>
-        </div>
+        <button
+          onClick={() => setShowCancelModal(true)}
+          className="self-start sm:self-auto flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-red-950/20 dark:hover:text-red-400 transition-colors"
+        >
+          <XCircle className="h-4 w-4" />
+          Cancel Migration
+        </button>
       </div>
 
-      {/* Cloud Flow Visualization */}
-      <div className="flex items-center justify-between p-4 bg-slate-50/80 rounded-xl border border-slate-200/70">
-        <div className="flex items-center gap-2.5">
-          <span className={`w-3 h-3 rounded-full ${sourceMeta.dotClass}`} />
-          <div>
-            <span className="text-[10px] text-slate-400 font-medium block uppercase tracking-wider">
-              Source Provider
-            </span>
-            <span className="text-xs font-semibold text-slate-900">
-              {sourceMeta.label}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex flex-col items-center px-4">
-          <ArrowRight className="h-4 w-4 text-slate-400" />
-          <span className="text-[10px] font-mono text-emerald-600 font-semibold mt-0.5">
-            {percent}%
+      {/* Progress Bar */}
+      <div className="space-y-2 mb-6">
+        <div className="flex justify-between text-xs font-medium text-slate-600 dark:text-slate-400">
+          <span>Overall Progress</span>
+          <span className="font-bold text-blue-600 dark:text-blue-400">
+            {migration.percent}%
           </span>
         </div>
-
-        <div className="flex items-center gap-2.5 text-right">
-          <div>
-            <span className="text-[10px] text-slate-400 font-medium block uppercase tracking-wider">
-              Destination
-            </span>
-            <span className="text-xs font-semibold text-slate-900">
-              Connected Clouds
-            </span>
-          </div>
-          <div className="w-7 h-7 rounded-lg bg-white border border-slate-200/90 flex items-center justify-center text-slate-500 shadow-2xs">
-            <HardDrive className="h-3.5 w-3.5" />
-          </div>
-        </div>
-      </div>
-
-      {/* Real-Time Stats Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-          <span className="text-[11px] text-slate-400 font-medium block">
-            Chunks Processed
-          </span>
-          <span className="font-semibold text-slate-900 text-sm mt-0.5 block">
-            {progress.completed} of {progress.total}
-          </span>
-        </div>
-
-        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-          <span className="text-[11px] text-slate-400 font-medium block">
-            Data Transferred
-          </span>
-          <span className="font-semibold text-slate-900 text-sm mt-0.5 block">
-            {formatBytes(progress.transferredBytes)}
-            {progress.totalBytes ? ` / ${formatBytes(progress.totalBytes)}` : ""}
-          </span>
-        </div>
-
-        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 col-span-2 sm:col-span-1">
-          <span className="text-[11px] text-slate-400 font-medium block">
-            Current Target
-          </span>
-          <span className="font-semibold text-slate-900 text-xs mt-0.5 block truncate" title={progress.currentFileName || "Initializing..."}>
-            {progress.currentFileName || "Waiting for chunks..."}
-          </span>
-        </div>
-      </div>
-
-      {/* Progress Bar & Counters */}
-      <div className="space-y-2">
-        <div className="flex justify-between items-center text-xs">
-          <span className="text-slate-600 font-medium flex items-center gap-1.5 truncate">
-            <Activity className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-            <span className="truncate">{progress.statusText || "Transfer in progress..."}</span>
-          </span>
-          <span className="font-semibold text-slate-900 shrink-0">
-            {percent}%
-          </span>
-        </div>
-        <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+        <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
           <div
-            className="bg-emerald-600 h-full transition-all duration-300 rounded-full"
-            style={{ width: `${percent}%` }}
+            className="h-full bg-blue-600 transition-all duration-300"
+            style={{
+              width: `${Math.min(100, Math.max(0, migration.percent))}%`,
+            }}
           />
         </div>
       </div>
 
-      {/* Live Terminal Log Console */}
-      {progress.logs && progress.logs.length > 0 && (
-        <div className="space-y-2 pt-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-slate-700 flex items-center gap-1.5">
-              <Terminal className="h-3.5 w-3.5 text-slate-600" />
-              <span>Live Migration Logs</span>
-            </span>
-            <span className="text-[10px] text-slate-400 font-mono">
-              {progress.logs.length} entries
-            </span>
-          </div>
-          <div className="bg-slate-950 text-slate-200 font-mono text-[11px] p-3.5 rounded-xl max-h-52 overflow-y-auto space-y-1.5 shadow-inner border border-slate-800">
-            {progress.logs.map((log, idx) => (
-              <div key={idx} className="flex items-start gap-2 leading-relaxed">
-                <span className="text-slate-500 text-[10px] shrink-0 select-none">
-                  {new Date(log.timestamp).toLocaleTimeString([], { hour12: false })}
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+        <div className="rounded-xl border border-slate-100 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+          <span className="text-[11px] font-medium text-slate-500">
+            File Chunks
+          </span>
+          <p className="mt-0.5 text-sm font-semibold text-slate-800 dark:text-white">
+            {migration.completed} / {migration.total}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-slate-100 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+          <span className="text-[11px] font-medium text-slate-500">
+            Transferred Volume
+          </span>
+          <p className="mt-0.5 text-sm font-semibold text-slate-800 dark:text-white">
+            {formatBytes(migration.transferredBytes || 0)} /{" "}
+            {formatBytes(migration.totalBytes || 0)}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-slate-100 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+          <span className="text-[11px] font-medium text-slate-500">
+            Active File
+          </span>
+          <p className="mt-0.5 text-xs font-semibold text-slate-800 dark:text-white truncate">
+            {migration.currentFileName || "Scanning storage..."}
+          </p>
+        </div>
+      </div>
+
+      {/* Terminal Log Console */}
+      <div className="rounded-xl border border-slate-800 bg-slate-950 p-3.5 text-xs font-mono text-slate-300">
+        <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-800 text-slate-400">
+          <Terminal className="h-3.5 w-3.5" />
+          <span className="font-medium text-[11px]">
+            Real-Time Relocation Console
+          </span>
+        </div>
+        <div className="max-h-48 overflow-y-auto space-y-1.5 scrollbar-thin scrollbar-thumb-slate-800">
+          {!migration.logs || migration.logs.length === 0 ? (
+            <p className="text-slate-500 italic">
+              Waiting for relocation events...
+            </p>
+          ) : (
+            migration.logs.map((log, idx) => (
+              <div key={idx} className="flex items-start gap-2">
+                <span className="text-[10px] text-slate-500 shrink-0">
+                  {log.timestamp
+                    ? new Date(log.timestamp).toLocaleTimeString()
+                    : "--:--:--"}
                 </span>
                 <span
                   className={
                     log.level === "error"
-                      ? "text-rose-400 font-semibold"
+                      ? "text-red-400 font-semibold"
                       : log.level === "warn"
-                        ? "text-amber-300"
+                        ? "text-amber-400"
                         : log.level === "success"
-                          ? "text-emerald-400 font-medium"
+                          ? "text-emerald-400"
                           : "text-slate-300"
                   }
                 >
                   {log.message}
                 </span>
               </div>
-            ))}
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Cancel Confirmation Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-3 mb-3 text-amber-600">
+              <AlertTriangle className="h-6 w-6" />
+              <h3 className="font-bold text-slate-900 dark:text-white">
+                Cancel Active Migration?
+              </h3>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-4">
+              Cancelling will safely halt all upcoming transfers. Files already
+              relocated will remain intact on their new destination clouds,
+              while unmigrated files stay on your source cloud.
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowCancelModal(false)}
+                disabled={cancelling}
+                className="rounded-xl px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Continue Migration
+              </button>
+              <button
+                onClick={handleCancelMigration}
+                disabled={cancelling}
+                className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-xs font-medium text-white hover:bg-red-700"
+              >
+                {cancelling ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Cancelling...
+                  </>
+                ) : (
+                  "Yes, Cancel Migration"
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
-
-      {/* Zero Data Loss Guarantee */}
-      <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-200/60">
-        <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
-        <span>
-          <strong>Data Protection Protocol:</strong> Source cloud will only be
-          unlinked once 100% of chunks are verified in their destination.
-        </span>
-      </div>
     </div>
   );
 }

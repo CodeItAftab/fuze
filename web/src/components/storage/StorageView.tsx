@@ -8,17 +8,17 @@ import { VerificationBanner } from "@/components/drive/VerificationBanner";
 import { DisconnectModal } from "@/components/drive/DisconnectModal";
 import { StoragePoolCard } from "@/components/storage/StoragePoolCard";
 import { ConnectedProviderCard } from "@/components/storage/ConnectedProviderCard";
-import { AvailableCloudCard, AvailableCloud } from "@/components/storage/AvailableCloudCard";
+import {
+  AvailableCloudCard,
+  AvailableCloud,
+} from "@/components/storage/AvailableCloudCard";
 import { RevocationWarningBanner } from "@/components/storage/RevocationWarningBanner";
 import { RefreshCw, Menu, Check, AlertCircle } from "lucide-react";
+import { formatBytes } from "@/utils/formatters";
 
 export function StorageView() {
-  const {
-    providers,
-    storageSummary,
-    refreshProviders,
-    setMobileSidebarOpen,
-  } = useDriveStore();
+  const { providers, storageSummary, refreshProviders, setMobileSidebarOpen } =
+    useDriveStore();
   const { user } = useAuthStore();
   const isVerified = user?.emailVerified === true;
   const [isSyncing, setIsSyncing] = useState(false);
@@ -57,30 +57,23 @@ export function StorageView() {
       });
       const data = await res.json();
       await refreshProviders();
-      const newlyRevoked = data.results?.filter((r: { isRevoked: boolean; provider: string }) => r.isRevoked);
+      const newlyRevoked = data.results?.filter(
+        (r: { isRevoked: boolean; provider: string }) => r.isRevoked,
+      );
       if (newlyRevoked && newlyRevoked.length > 0) {
         setErrorMessage(
           `Connection check detected ${newlyRevoked.length} revoked or expired account(s): ${newlyRevoked.map((r: { provider: string }) => r.provider.toUpperCase()).join(", ")}. Please reconnect them.`,
         );
       } else {
-        setSuccessMessage("All connected cloud storage accounts are healthy and quotas synchronized.");
+        setSuccessMessage(
+          "All connected cloud storage accounts are healthy and quotas synchronized.",
+        );
       }
     } catch {
       setErrorMessage("Failed to check provider health and quotas.");
     } finally {
       setIsSyncing(false);
     }
-  };
-
-  const formatBytes = (bytes: number) => {
-    if (!bytes || bytes <= 0) return "0 B";
-    const gb = bytes / (1024 * 1024 * 1024);
-    if (gb >= 1) return `${gb.toFixed(2)} GB`;
-    const mb = bytes / (1024 * 1024);
-    if (mb >= 1) return `${mb.toFixed(1)} MB`;
-    const kb = bytes / 1024;
-    if (kb >= 1) return `${kb.toFixed(1)} KB`;
-    return `${bytes} B`;
   };
 
   const providerToSlug = (provider: string) => {
@@ -159,13 +152,14 @@ export function StorageView() {
               <RefreshCw
                 className={`h-3 w-3 ${isSyncing ? "animate-spin text-blue-600" : "text-slate-400"}`}
               />
-              <span>{isSyncing ? "Checking Health..." : "Check Status & Sync"}</span>
+              <span>
+                {isSyncing ? "Checking Health..." : "Check Status & Sync"}
+              </span>
             </button>
           </div>
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-24 sm:pb-8 w-full">
-
           <RevocationWarningBanner
             revokedProviders={revokedProviders}
             apiUrl={apiUrl}
@@ -215,7 +209,8 @@ export function StorageView() {
 
             {providers.length === 0 ? (
               <div className="p-6 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-500 bg-white">
-                No storage providers connected yet. Connect your accounts below to aggregate your free cloud storage.
+                No storage providers connected yet. Connect your accounts below
+                to aggregate your free cloud storage.
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -226,7 +221,9 @@ export function StorageView() {
                     apiUrl={apiUrl}
                     formatBytes={formatBytes}
                     providerToSlug={providerToSlug}
-                    onDisconnect={(p: ProviderSummary) => setDisconnectingProvider(p)}
+                    onDisconnect={(p: ProviderSummary) =>
+                      setDisconnectingProvider(p)
+                    }
                   />
                 ))}
               </div>

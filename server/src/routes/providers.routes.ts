@@ -14,7 +14,11 @@ import { encrypt, decrypt } from "../utils/crypto.js";
 import { getStorageAdapter, SupportedProvider } from "../adapters/factory.js";
 import { socketManager } from "../websocket/socket-manager.js";
 import { ProviderCleanupService } from "../services/provider-cleanup.service.js";
-import { providerMigrationQueue, queueProviderMigration } from "../workers/provider-migration.worker.js";
+import {
+  providerMigrationQueue,
+  queueProviderMigration,
+  reconcileReconnectedProvider,
+} from "../workers/provider-migration.worker.js";
 import IORedis from "ioredis";
 import {
   TokenService,
@@ -228,7 +232,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
     else if (provider === "pcloud") canonicalProvider = "pcloud";
 
     // Enforce single-account per provider: Check if user already linked this provider
-        const [existingProvider] = await db
+    const [existingProvider] = await db
       .select({
         id: providerIdentities.id,
         accountEmail: providerIdentities.accountEmail,
@@ -791,27 +795,12 @@ export async function providerRoutes(fastify: FastifyInstance) {
           payload: { provider: canonicalProvider, quota },
         });
 
-        if (existing?.isDisconnected) {
-          const [fileStats] = await db
-            .select({ count: sql<number>`count(distinct ${fileChunks.vfsNodeId})` })
-            .from(fileChunks)
-            .where(eq(fileChunks.providerIdentityId, existing.id));
-          const prevCount = Number(fileStats?.count || 0);
-
-          if (prevCount > 0) {
-            await db
-              .update(providerIdentities)
-              .set({ isDisconnected: false, pendingRestore: true })
-              .where(eq(providerIdentities.id, existing.id));
-
-            return reply.redirect(
-              `${clientOrigin}/dashboard?pendingRestoreId=${existing.id}&pendingCount=${prevCount}&pendingProvider=${canonicalProvider}&pendingEmail=${encodeURIComponent(accountEmail || "")}`,
-            );
-          } else {
-            await db
-              .update(providerIdentities)
-              .set({ isDisconnected: false, pendingRestore: false })
-              .where(eq(providerIdentities.id, existing.id));
+        const targetProviderId = linkedProviderId || existing?.id;
+        if (targetProviderId) {
+          try {
+            await reconcileReconnectedProvider(userId, targetProviderId);
+          } catch (e: any) {
+            request.log.warn(`[Reconnection] Error reconciling provider: ${e?.message}`);
           }
         }
 
@@ -828,7 +817,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
     },
   );
 
-    // -------------------------------------------------------------
+  // -------------------------------------------------------------
   // MIGRATIONS: ACTIVE JOB & HISTORY MONITORING
   // -------------------------------------------------------------
   fastify.get(
@@ -1015,7 +1004,10 @@ export async function providerRoutes(fastify: FastifyInstance) {
       if (action === "smart_unlink" && chunks.length > 0) {
         const nodeIds = Array.from(new Set(chunks.map((c) => c.vfsNodeId)));
         const siblingChunks = await db
-          .select({ id: fileChunks.id, providerIdentityId: fileChunks.providerIdentityId })
+          .select({
+            id: fileChunks.id,
+            providerIdentityId: fileChunks.providerIdentityId,
+          })
           .from(fileChunks)
           .where(
             and(
@@ -1040,7 +1032,11 @@ export async function providerRoutes(fastify: FastifyInstance) {
           // Soft-disconnect: Preserve all file records, set isDisconnected = true
           await db
             .update(providerIdentities)
-            .set({ isDisconnected: true, pendingRestore: false, isRevoked: false })
+            .set({
+              isDisconnected: true,
+              pendingRestore: false,
+              isRevoked: false,
+            })
             .where(
               and(
                 eq(providerIdentities.id, id),
@@ -1083,7 +1079,8 @@ export async function providerRoutes(fastify: FastifyInstance) {
 
         return reply.send({
           success: true,
-          message: "Provider unlinked instantly (whole files preserved in cloud).",
+          message:
+            "Provider unlinked instantly (whole files preserved in cloud).",
         });
       }
 
@@ -1092,7 +1089,12 @@ export async function providerRoutes(fastify: FastifyInstance) {
       const [targetProv] = await db
         .select()
         .from(providerIdentities)
-        .where(and(eq(providerIdentities.id, id), eq(providerIdentities.userId, user.userId)));
+        .where(
+          and(
+            eq(providerIdentities.id, id),
+            eq(providerIdentities.userId, user.userId),
+          ),
+        );
 
       const totalBytes = chunks.reduce(
         (sum, c) => sum + (Number(c.byteEnd) - Number(c.byteStart)),
@@ -1216,10 +1218,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: "Provider not found" });
       }
 
-      await db
-        .update(providerIdentities)
-        .set({ isDisconnected: false, pendingRestore: false, isRevoked: false })
-        .where(eq(providerIdentities.id, id));
+      await reconcileReconnectedProvider(user.userId, id);
 
       socketManager.broadcastToUser(user.userId, {
         type: "PROVIDER_CONNECTED",
@@ -1290,7 +1289,8 @@ export async function providerRoutes(fastify: FastifyInstance) {
 
       await db
         .update(providerIdentities)
-        .set({ isDisconnected: false, pendingRestore: false }).where(eq(providerIdentities.id, id));
+        .set({ isDisconnected: false, pendingRestore: false })
+        .where(eq(providerIdentities.id, id));
 
       socketManager.broadcastToUser(user.userId, {
         type: "PROVIDER_CONNECTED",
@@ -1304,7 +1304,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
     },
   );
 
-    // -------------------------------------------------------------
+  // -------------------------------------------------------------
   // 6. MANUAL QUOTA SYNC & STATUS CHECK (/providers/:id/sync)
   // -------------------------------------------------------------
   fastify.post(
@@ -1434,6 +1434,70 @@ export async function providerRoutes(fastify: FastifyInstance) {
       results,
     });
   };
+
+  // -------------------------------------------------------------------------
+  // CANCEL ACTIVE MIGRATION (/providers/migrations/cancel)
+  // -------------------------------------------------------------------------
+  fastify.post(
+    "/migrations/cancel",
+    async (
+      request: FastifyRequest<{ Body: { jobId: string } }>,
+      reply: FastifyReply,
+    ) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        return reply.status(401).send({ error: "Unauthorized" });
+      }
+      const user = request.user as { userId: string };
+      const { jobId } = request.body || {};
+
+      if (!jobId) {
+        return reply.status(400).send({ error: "Missing jobId parameter" });
+      }
+
+      const [job] = await db
+        .select()
+        .from(migrationJobs)
+        .where(
+          and(
+            eq(migrationJobs.id, jobId),
+            eq(migrationJobs.userId, user.userId),
+          ),
+        );
+
+      if (!job) {
+        return reply.status(404).send({ error: "Migration job not found" });
+      }
+
+      if (job.status !== "running" && job.status !== "pending") {
+        return reply.status(400).send({ error: "Job is already finalized" });
+      }
+
+      await db
+        .update(migrationJobs)
+        .set({
+          status: "cancelled",
+          statusText:
+            "Cancelling migration... Already moved files remain safe.",
+        })
+        .where(eq(migrationJobs.id, jobId));
+
+      socketManager.broadcastToUser(user.userId, {
+        type: "PROVIDER_MIGRATION_CANCELLED",
+        payload: {
+          jobId,
+          message:
+            "Migration cancelled. Transferred files remain safe on destination.",
+        },
+      });
+
+      return reply.send({
+        success: true,
+        message: "Migration cancellation requested successfully.",
+      });
+    },
+  );
 
   fastify.post("/sync", handleSyncAndHealthCheck);
   fastify.post("/health-check", handleSyncAndHealthCheck);
