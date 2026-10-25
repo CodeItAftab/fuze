@@ -26,6 +26,13 @@ export function MigrationActiveCard({
   const migration = progress || migrationProp;
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const logContainerRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [migration?.logs?.length]);
 
   if (!migration) return null;
 
@@ -140,7 +147,10 @@ export function MigrationActiveCard({
             Real-Time Relocation Console
           </span>
         </div>
-        <div className="max-h-48 overflow-y-auto space-y-1.5 scrollbar-thin scrollbar-thumb-slate-800">
+        <div
+          ref={logContainerRef}
+          className="max-h-48 overflow-y-auto space-y-1.5 scrollbar-thin scrollbar-thumb-slate-800"
+        >
           {!migration.logs || migration.logs.length === 0 ? (
             <p className="text-slate-500 italic">
               Waiting for relocation events...

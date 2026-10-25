@@ -36,6 +36,16 @@ export interface MigrationLogItem {
 
 export class MigrationLogger {
   private logs: MigrationLogItem[] = [];
+  private currentProgress: {
+    completed: number;
+    total: number;
+    percent: number;
+    transferredBytes: number;
+    totalBytes: number;
+    currentFileName?: string;
+    statusText: string;
+    action: string;
+  } | null = null;
 
   constructor(
     private jobId: string | undefined,
@@ -66,6 +76,27 @@ export class MigrationLogger {
         .where(eq(migrationJobs.id, this.jobId))
         .catch(() => {});
     }
+
+    // Immediately push new log entry to client via WebSockets so terminal stays live
+    if (this.currentProgress) {
+      socketManager.broadcastToUser(this.userId, {
+        type: "PROVIDER_CLEANUP_PROGRESS",
+        payload: {
+          jobId: this.jobId,
+          providerId: this.providerId,
+          provider: this.providerName,
+          action: this.currentProgress.action,
+          completed: this.currentProgress.completed,
+          total: this.currentProgress.total,
+          percent: this.currentProgress.percent,
+          transferredBytes: this.currentProgress.transferredBytes,
+          totalBytes: this.currentProgress.totalBytes,
+          currentFileName: this.currentProgress.currentFileName,
+          statusText: message,
+          logs: this.logs,
+        },
+      });
+    }
   }
 
   async updateProgress(params: {
@@ -78,6 +109,8 @@ export class MigrationLogger {
     statusText: string;
     action: string;
   }) {
+    this.currentProgress = params;
+
     if (this.jobId) {
       await db
         .update(migrationJobs)
@@ -335,6 +368,16 @@ export async function executeProviderMigration(
     0,
   );
   let transferredBytes = 0;
+
+  await logger.updateProgress({
+    completed: 0,
+    total: totalChunks,
+    percent: 0,
+    transferredBytes: 0,
+    totalBytes,
+    statusText: `Preparing ${action.toUpperCase()} process for ${providerName}...`,
+    action,
+  });
 
   await logger.log(
     "info",

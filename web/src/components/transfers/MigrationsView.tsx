@@ -67,6 +67,21 @@ export function MigrationsView() {
       .finally(() => setIsLoadingHistory(false));
   }, [setMigrationProgress, setLastCompletedMigration, lastCompletedMigration]);
 
+  // Active fallback polling while migration is running (guarantees sync even during packet drops)
+  useEffect(() => {
+    if (!isMigrating) return;
+    const interval = setInterval(() => {
+      apiFetch<{ job: MigrationProgress | null }>(
+        "/providers/migrations/active",
+      )
+        .then((data) => {
+          setMigrationProgress(data.job ?? null);
+        })
+        .catch(() => {});
+    }, 1500);
+    return () => clearInterval(interval);
+  }, [isMigrating, setMigrationProgress]);
+
   // When migration finishes or cancels via WebSocket, refresh history list once
   useEffect(() => {
     if (!isMigrating) {

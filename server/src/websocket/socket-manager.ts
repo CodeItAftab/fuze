@@ -36,14 +36,8 @@ class SocketManager {
   private initRedis() {
     const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
     try {
-      this.pub = new IORedis(redisUrl, {
-        maxRetriesPerRequest: 1,
-        enableOfflineQueue: false,
-      });
-      this.sub = new IORedis(redisUrl, {
-        maxRetriesPerRequest: 1,
-        enableOfflineQueue: false,
-      });
+      this.pub = new IORedis(redisUrl);
+      this.sub = new IORedis(redisUrl);
 
       this.pub.on("error", (err) => {
         console.warn(`[Redis:SocketPub] Warning: ${err?.message || err}`);
@@ -52,9 +46,19 @@ class SocketManager {
         console.warn(`[Redis:SocketSub] Warning: ${err?.message || err}`);
       });
 
-      this.sub.subscribe(REDIS_CHANNEL).catch((err) => {
-        console.warn(`[Redis:SocketSub] Could not subscribe to ${REDIS_CHANNEL}: ${err?.message || err}`);
+      this.sub.on("ready", () => {
+        this.sub
+          ?.subscribe(REDIS_CHANNEL)
+          .then(() => {
+            console.log(`[Redis:SocketSub] Successfully subscribed to ${REDIS_CHANNEL}`);
+          })
+          .catch((err) => {
+            console.warn(
+              `[Redis:SocketSub] Could not subscribe to ${REDIS_CHANNEL}: ${err?.message || err}`,
+            );
+          });
       });
+
       this.sub.on("message", (channel, message) => {
         if (channel !== REDIS_CHANNEL) return;
         try {
