@@ -24,6 +24,7 @@ import {
   TokenService,
   ProviderAuthExpiredError,
 } from "../services/token.service.js";
+import { CacheService } from "../services/cache.service.js";
 
 const redis = new IORedis(process.env.REDIS_URL || "redis://localhost:6379", {
   lazyConnect: true,
@@ -91,6 +92,11 @@ export async function providerRoutes(fastify: FastifyInstance) {
 
     const user = request.user as { userId: string };
 
+    const cached = await CacheService.getProvidersSummary(user.userId);
+    if (cached) {
+      return reply.send(cached);
+    }
+
     const items = await db
       .select({
         id: providerIdentities.id,
@@ -150,14 +156,17 @@ export async function providerRoutes(fastify: FastifyInstance) {
     const rawUsedPool = items.reduce((sum, p) => sum + p.quotaUsed, 0);
     const usedPool = Math.min(totalPool, Math.max(rawUsedPool, vfsUsedBytes));
 
-    return reply.send({
+    const responsePayload = {
       providers: items,
       summary: {
         totalPoolBytes: totalPool,
         usedPoolBytes: usedPool,
         freePoolBytes: Math.max(0, totalPool - usedPool),
       },
-    });
+    };
+
+    await CacheService.setProvidersSummary(user.userId, responsePayload, 120);
+    return reply.send(responsePayload);
   });
 
   // -------------------------------------------------------------
@@ -795,6 +804,9 @@ export async function providerRoutes(fastify: FastifyInstance) {
           payload: { provider: canonicalProvider, quota },
         });
 
+        await CacheService.invalidateUserProviders(userId);
+        await CacheService.invalidateUserVfs(userId);
+
         const targetProviderId = linkedProviderId || existing?.id;
         if (targetProviderId) {
           try {
@@ -1049,6 +1061,9 @@ export async function providerRoutes(fastify: FastifyInstance) {
             payload: { providerId: id },
           });
 
+          await CacheService.invalidateUserProviders(user.userId);
+          await CacheService.invalidateUserVfs(user.userId);
+
           return reply.send({
             success: true,
             message: "Provider unlinked safely (files preserved in cloud).",
@@ -1072,6 +1087,9 @@ export async function providerRoutes(fastify: FastifyInstance) {
           type: "PROVIDER_DISCONNECTED",
           payload: { providerId: id },
         });
+
+        await CacheService.invalidateUserProviders(user.userId);
+        await CacheService.invalidateUserVfs(user.userId);
 
         fastify.log.info(
           `[Providers] Provider [${id}] fast-path disconnected instantly without worker.`,
@@ -1427,6 +1445,8 @@ export async function providerRoutes(fastify: FastifyInstance) {
       type: "PROVIDER_STATUS_CHANGED",
       payload: { results },
     });
+
+    await CacheService.invalidateUserProviders(userId);
 
     return reply.send({
       success: true,

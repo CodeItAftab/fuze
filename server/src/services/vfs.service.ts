@@ -11,6 +11,7 @@ import { TokenService } from "./token.service.js";
 import { socketManager } from "../websocket/socket-manager.js";
 import { getStorageAdapter } from "../adapters/factory.js";
 import { ThumbnailCacheService } from "./thumbnail-cache.service.js";
+import { CacheService } from "./cache.service.js";
 
 export class VfsService {
   static async listChildren(userId: string, parentId: string | null = null) {
@@ -207,6 +208,7 @@ export class VfsService {
       type: "FILE_CREATED",
       payload: folder,
     });
+    await CacheService.invalidateUserVfs(userId);
     return folder;
   }
 
@@ -221,6 +223,7 @@ export class VfsService {
       type: "FILE_DELETED",
       payload: { id: nodeId },
     });
+    await CacheService.invalidateUserVfs(userId);
     return node;
   }
 
@@ -235,6 +238,7 @@ export class VfsService {
       type: "FILE_CREATED",
       payload: node,
     });
+    await CacheService.invalidateUserVfs(userId);
     return node;
   }
 
@@ -322,6 +326,8 @@ export class VfsService {
         payload: { id },
       });
     }
+    await CacheService.invalidateUserVfs(userId);
+    await CacheService.invalidateUserProviders(userId);
   }
 
   static async batchRestore(userId: string, nodeIds: string[]) {
@@ -338,6 +344,7 @@ export class VfsService {
         payload: node,
       });
     }
+    await CacheService.invalidateUserVfs(userId);
     return nodes;
   }
 
@@ -345,6 +352,8 @@ export class VfsService {
     for (const id of nodeIds) {
       await this.permanentlyDelete(userId, id);
     }
+    await CacheService.invalidateUserVfs(userId);
+    await CacheService.invalidateUserProviders(userId);
   }
 
   static async emptyTrash(userId: string) {
@@ -352,6 +361,8 @@ export class VfsService {
     for (const item of trashed) {
       await this.permanentlyDelete(userId, item.id);
     }
+    await CacheService.invalidateUserVfs(userId);
+    await CacheService.invalidateUserProviders(userId);
     return { count: trashed.length };
   }
 
@@ -468,6 +479,7 @@ export class VfsService {
       .where(and(inArray(vfsNodes.id, nodeIds), eq(vfsNodes.userId, userId)))
       .returning();
 
+    await CacheService.invalidateUserVfs(userId);
     return updated;
   }
 
@@ -585,6 +597,8 @@ export class VfsService {
       type: "FILE_RENAMED",
       payload: updated,
     });
+
+    await CacheService.invalidateUserVfs(userId);
 
     return updated;
   }

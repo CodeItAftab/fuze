@@ -1,5 +1,6 @@
 import { WebSocket } from "ws";
 import IORedis from "ioredis";
+import { CacheService } from "../services/cache.service.js";
 
 export type SyncEventType =
   | "FILE_CREATED"
@@ -131,6 +132,23 @@ class SocketManager {
   }
 
   broadcastToUser(userId: string, event: SyncEvent) {
+    // 0. Auto-invalidate relevant Redis cache partitions based on event type
+    if (
+      event.type === "FILE_CREATED" ||
+      event.type === "FILE_DELETED" ||
+      event.type === "FILE_RENAMED" ||
+      event.type === "FILES_UPDATED"
+    ) {
+      void CacheService.invalidateUserVfs(userId);
+    } else if (
+      event.type === "QUOTA_UPDATED" ||
+      event.type === "PROVIDER_CONNECTED" ||
+      event.type === "PROVIDER_DISCONNECTED" ||
+      event.type === "PROVIDER_STATUS_CHANGED"
+    ) {
+      void CacheService.invalidateUserProviders(userId);
+    }
+
     // 1. Send locally if user socket is connected to this process
     this.localBroadcastToUser(userId, event);
     // 2. Publish to Redis so all PM2 worker/api processes receive and forward it

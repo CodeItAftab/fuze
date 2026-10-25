@@ -20,6 +20,7 @@ import { socketManager } from "../websocket/socket-manager.js";
 import { PROVIDER_MAX_FILE_LIMITS } from "../services/chunk-decision.service.js";
 import { CascadePurgeService } from "../services/cascade-purge.service.js";
 import { RecoveryKitService } from "../services/recovery-kit.service.js";
+import { CacheService } from "../services/cache.service.js";
 
 export interface ProviderMigrationJobData {
   userId: string;
@@ -169,6 +170,11 @@ export class MigrationLogger {
         })
         .where(eq(migrationJobs.id, this.jobId))
         .catch(() => {});
+    }
+
+    if (this.userId) {
+      await CacheService.invalidateUserVfs(this.userId);
+      await CacheService.invalidateUserProviders(this.userId);
     }
   }
 

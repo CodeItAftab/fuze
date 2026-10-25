@@ -13,6 +13,7 @@ import { getStorageAdapter } from "../adapters/factory.js";
 import { computeMerkleRoot } from "../utils/crypto.js";
 import { socketManager } from "../websocket/socket-manager.js";
 import { VfsService } from "./vfs.service.js";
+import { CacheService } from "./cache.service.js";
 
 export class UploadSessionService {
   static async createSession(params: {
@@ -329,6 +330,9 @@ export class UploadSessionService {
       type: "QUOTA_UPDATED",
       payload: {},
     });
+
+    await CacheService.invalidateUserVfs(session.userId);
+    await CacheService.invalidateUserProviders(session.userId);
 
     return payload;
   }

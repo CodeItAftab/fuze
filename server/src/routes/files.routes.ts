@@ -14,6 +14,7 @@ import {
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { createReadStream } from "node:fs";
 import { getStorageAdapter } from "../adapters/factory.js";
+import { CacheService } from "../services/cache.service.js";
 import { TokenService } from "../services/token.service.js";
 import { ThumbnailCacheService } from "../services/thumbnail-cache.service.js";
 import { socketManager } from "../websocket/socket-manager.js";
@@ -56,18 +57,31 @@ export async function fileRoutes(fastify: FastifyInstance) {
     ) => {
       const user = request.user as { userId: string };
       const parentId = request.query.parentId || null;
+
+      const cached = await CacheService.getFolderListing(user.userId, parentId);
+      if (cached) {
+        return reply.send(cached);
+      }
+
       const [items, breadcrumbs] = await Promise.all([
         VfsService.listChildren(user.userId, parentId),
         VfsService.getBreadcrumbs(user.userId, parentId),
       ]);
-      return reply.send({ items, breadcrumbs });
+      const payload = { items, breadcrumbs };
+      await CacheService.setFolderListing(user.userId, parentId, payload);
+      return reply.send(payload);
     },
   );
 
   // 1b. List trashed items
   fastify.get("/trash", async (request, reply) => {
     const user = request.user as { userId: string };
+    const cached = await CacheService.getTrashListing(user.userId);
+    if (cached) {
+      return reply.send({ items: cached });
+    }
     const items = await VfsService.listTrash(user.userId);
+    await CacheService.setTrashListing(user.userId, items);
     return reply.send({ items });
   });
 
@@ -75,19 +89,30 @@ export async function fileRoutes(fastify: FastifyInstance) {
   fastify.delete("/trash/empty", async (request, reply) => {
     const user = request.user as { userId: string };
     const result = await VfsService.emptyTrash(user.userId);
+    await CacheService.invalidateUserVfs(user.userId);
+    await CacheService.invalidateUserProviders(user.userId);
     return reply.send({ success: true, ...result });
   });
 
   // 1c. List starred items
   fastify.get("/starred", async (request, reply) => {
     const user = request.user as { userId: string };
+    const cached = await CacheService.getStarredListing(user.userId);
+    if (cached) {
+      return reply.send({ items: cached });
+    }
     const items = await VfsService.listStarred(user.userId);
+    await CacheService.setStarredListing(user.userId, items);
     return reply.send({ items });
   });
 
   // 1d. List all folders (for move modal destination tree)
   fastify.get("/folders", async (request, reply) => {
     const user = request.user as { userId: string };
+    const cached = await CacheService.getFoldersTree(user.userId);
+    if (cached) {
+      return reply.send({ folders: cached });
+    }
     const folders = await db
       .select({
         id: vfsNodes.id,
@@ -103,6 +128,7 @@ export async function fileRoutes(fastify: FastifyInstance) {
           isNull(vfsNodes.trashedAt),
         ),
       );
+    await CacheService.setFoldersTree(user.userId, folders);
     return reply.send({ folders });
   });
 
@@ -127,6 +153,7 @@ export async function fileRoutes(fastify: FastifyInstance) {
           nodeIds,
           targetParentId || null,
         );
+        await CacheService.invalidateUserVfs(user.userId);
         return reply.send({ success: true, moved });
       } catch (err: unknown) {
         return reply.status(400).send({
@@ -165,6 +192,7 @@ export async function fileRoutes(fastify: FastifyInstance) {
         });
       }
 
+      await CacheService.invalidateUserVfs(user.userId);
       return reply.send({ success: true });
     },
   );
@@ -185,6 +213,7 @@ export async function fileRoutes(fastify: FastifyInstance) {
       }
 
       await VfsService.batchRestore(user.userId, nodeIds);
+      await CacheService.invalidateUserVfs(user.userId);
       return reply.send({ success: true });
     },
   );
@@ -205,6 +234,8 @@ export async function fileRoutes(fastify: FastifyInstance) {
       }
 
       await VfsService.batchPermanentlyDelete(user.userId, nodeIds);
+      await CacheService.invalidateUserVfs(user.userId);
+      await CacheService.invalidateUserProviders(user.userId);
       return reply.send({ success: true });
     },
   );
@@ -231,6 +262,7 @@ export async function fileRoutes(fastify: FastifyInstance) {
           and(inArray(vfsNodes.id, nodeIds), eq(vfsNodes.userId, user.userId)),
         );
 
+      await CacheService.invalidateUserVfs(user.userId);
       return reply.send({ success: true });
     },
   );
@@ -249,6 +281,7 @@ export async function fileRoutes(fastify: FastifyInstance) {
         name,
         parentId || null,
       );
+      await CacheService.invalidateUserVfs(user.userId);
       return reply.status(201).send({ folder });
     },
   );
@@ -277,6 +310,7 @@ export async function fileRoutes(fastify: FastifyInstance) {
           id,
           name.trim(),
         );
+        await CacheService.invalidateUserVfs(user.userId);
         return reply.send({ success: true, item: updated });
       } catch (err: unknown) {
         const message =
@@ -292,6 +326,7 @@ export async function fileRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
       const user = request.user as { userId: string };
       await VfsService.moveToTrash(user.userId, request.params.id);
+      await CacheService.invalidateUserVfs(user.userId);
       return reply.send({ success: true });
     },
   );
@@ -302,6 +337,7 @@ export async function fileRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
       const user = request.user as { userId: string };
       await VfsService.restoreFromTrash(user.userId, request.params.id);
+      await CacheService.invalidateUserVfs(user.userId);
       return reply.send({ success: true });
     },
   );
@@ -312,6 +348,8 @@ export async function fileRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
       const user = request.user as { userId: string };
       await VfsService.permanentlyDelete(user.userId, request.params.id);
+      await CacheService.invalidateUserVfs(user.userId);
+      await CacheService.invalidateUserProviders(user.userId);
       return reply.send({ success: true });
     },
   );
@@ -357,6 +395,7 @@ export async function fileRoutes(fastify: FastifyInstance) {
         )
         .returning();
 
+      await CacheService.invalidateUserVfs(user.userId);
       return reply.send({ file: node, starred: nextStarred });
     },
   );
@@ -401,6 +440,7 @@ export async function fileRoutes(fastify: FastifyInstance) {
         )
         .returning();
 
+      await CacheService.invalidateUserVfs(user.userId);
       return reply.send({ file: node, starred: nextStarred });
     },
   );
@@ -977,6 +1017,11 @@ export async function fileRoutes(fastify: FastifyInstance) {
       const user = request.user as { userId: string };
       const { id } = request.params;
 
+      const cached = await CacheService.getFileDetails(user.userId, id);
+      if (cached) {
+        return reply.send(cached);
+      }
+
       const [file] = await db
         .select()
         .from(vfsNodes)
@@ -1016,14 +1061,17 @@ export async function fileRoutes(fastify: FastifyInstance) {
         )
         .where(eq(fileChunks.vfsNodeId, id));
 
-      return reply.send({
+      const payload = {
         file: {
           ...file,
           parentName,
           ownerEmail: owner?.email || null,
         },
         chunks: chunks.sort((a, b) => a.chunkIndex - b.chunkIndex),
-      });
+      };
+
+      await CacheService.setFileDetails(user.userId, id, payload);
+      return reply.send(payload);
     },
   );
 
