@@ -22,7 +22,7 @@ interface DriveState {
   migrationProgress: MigrationProgress | null;
   lastCompletedMigration: (MigrationProgress & {
     completedAt: string;
-    status: "success" | "failed";
+    status: string;
   }) | null;
   isMobileSidebarOpen: boolean;
 
@@ -39,7 +39,7 @@ interface DriveState {
   setLastCompletedMigration: (
     migration: (MigrationProgress & {
       completedAt: string;
-      status: "success" | "failed";
+      status: string;
     }) | null,
   ) => void;
   setMobileSidebarOpen: (open: boolean) => void;

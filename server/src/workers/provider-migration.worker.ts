@@ -11,6 +11,7 @@ import {
   fileChunks,
   vfsNodes,
   uploadChunks,
+  migrationJobs,
 } from "../db/index.js";
 import { eq, and, ne, inArray } from "drizzle-orm";
 import { getStorageAdapter } from "../adapters/factory.js";
@@ -159,6 +160,115 @@ async function transferChunk(
     return newFileId;
   } finally {
     await fs.promises.unlink(tempFilePath).catch(() => {});
+  }
+}
+
+
+export interface MigrationLogItem {
+  timestamp: string;
+  level: "info" | "warn" | "error" | "success";
+  message: string;
+}
+
+export class MigrationLogger {
+  private logs: MigrationLogItem[] = [];
+
+  constructor(
+    private jobId: string | undefined,
+    private userId: string,
+    private providerId: string,
+    private providerName: string,
+  ) {}
+
+  async log(level: "info" | "warn" | "error" | "success", message: string) {
+    const entry: MigrationLogItem = {
+      timestamp: new Date().toISOString(),
+      level,
+      message,
+    };
+    this.logs.push(entry);
+
+    const timeStr = new Date().toLocaleTimeString([], { hour12: false });
+    const tag = `[Worker: ProviderMigration ${timeStr}]`;
+    if (level === "error") console.error(`${tag} ❌ ${message}`);
+    else if (level === "warn") console.warn(`${tag} ⚠️ ${message}`);
+    else if (level === "success") console.log(`${tag} ✅ ${message}`);
+    else console.log(`${tag} ℹ️ ${message}`);
+
+    if (this.jobId) {
+      await db
+        .update(migrationJobs)
+        .set({ logs: JSON.stringify(this.logs) })
+        .where(eq(migrationJobs.id, this.jobId))
+        .catch(() => {});
+    }
+  }
+
+  async updateProgress(params: {
+    completed: number;
+    total: number;
+    percent: number;
+    transferredBytes: number;
+    totalBytes: number;
+    currentFileName?: string;
+    statusText: string;
+    action: string;
+  }) {
+    if (this.jobId) {
+      await db
+        .update(migrationJobs)
+        .set({
+          completedChunks: params.completed,
+          totalChunks: params.total,
+          percent: params.percent,
+          transferredBytes: params.transferredBytes,
+          totalBytes: params.totalBytes,
+          currentFileName: params.currentFileName || null,
+          statusText: params.statusText,
+          logs: JSON.stringify(this.logs),
+        })
+        .where(eq(migrationJobs.id, this.jobId))
+        .catch(() => {});
+    }
+
+    socketManager.broadcastToUser(this.userId, {
+      type: "PROVIDER_CLEANUP_PROGRESS",
+      payload: {
+        jobId: this.jobId,
+        providerId: this.providerId,
+        provider: this.providerName,
+        action: params.action,
+        completed: params.completed,
+        total: params.total,
+        percent: params.percent,
+        transferredBytes: params.transferredBytes,
+        totalBytes: params.totalBytes,
+        currentFileName: params.currentFileName,
+        statusText: params.statusText,
+        logs: this.logs,
+      },
+    });
+  }
+
+  async finish(status: "completed" | "failed", errorMessage?: string) {
+    if (this.jobId) {
+      await db
+        .update(migrationJobs)
+        .set({
+          status,
+          percent: status === "completed" ? 100 : undefined,
+          completedAt: new Date(),
+          errorMessage: errorMessage || null,
+          statusText: status === "completed" ? "Migration completed successfully." : `Failed: ${errorMessage}`,
+          logs: JSON.stringify(this.logs),
+        })
+        .where(eq(migrationJobs.id, this.jobId))
+        .catch(() => {});
+    }
+  }
+
+  getLogs() {
+    return this.logs;
   }
 }
 

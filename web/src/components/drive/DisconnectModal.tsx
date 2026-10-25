@@ -51,9 +51,7 @@ export function DisconnectModal({
       .then((res) => res.json())
       .then((data: DisconnectPreviewResult) => {
         setPreview(data);
-        if (data.canMigrate && data.otherProvidersCount > 0) setSelectedAction("migrate");
-        else if (data.wholeFilesCount > 0) setSelectedAction("smart_unlink");
-        else setSelectedAction("delete");
+        setSelectedAction("smart_unlink");
         setIsLoading(false);
       })
       .catch(() => setIsLoading(false));
@@ -78,7 +76,8 @@ export function DisconnectModal({
       useDriveStore.getState().setMigrationProgress({
         providerId: provider.id,
         completed: 0,
-        total: sharedChunksCount || 1,
+        total: selectedAction === "migrate" ? (wholeFilesCount + sharedChunksCount || 1) : (sharedChunksCount || 1),
+        action: selectedAction,
         percent: 0,
         mode: "server",
         statusText: "Preparing migration & allocating cloud storage...",
@@ -166,9 +165,42 @@ export function DisconnectModal({
                 Choose disconnection strategy:
               </p>
 
-              {/* 1. Move All Files */}
+              {/* 1. Smart Evacuate */}
               <DisconnectOptionCard
-                title="1. Move All Files"
+                title="1. Smart Evacuate"
+                badge={
+                  <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-700 font-bold text-[9px] rounded-full uppercase flex items-center gap-0.5">
+                    <Sparkles className="h-2.5 w-2.5" /> Recommended
+                  </span>
+                }
+                icon={ShieldCheck}
+                theme="emerald"
+                isSelected={selectedAction === "smart_unlink"}
+                description={
+                  <div className="space-y-1.5">
+                    <p>
+                      {sharedChunksCount === 0
+                        ? `All files on this cloud are whole files. They stay 100% safe in your ${providerDisplayName} account with 0 MB transfer bandwidth.`
+                        : otherCloudsCount > 0 && canMigrateAll
+                          ? `Whole files stay safe in your ${providerDisplayName} account. Only the ${sharedChunksCount} split chunk(s) will be relocated so multi-cloud files are protected.`
+                          : `Whole files stay safe in your ${providerDisplayName} account. Any split pieces will be protected.`}
+                    </p>
+                    {sharedChunksCount > 0 && (
+                      <div className="p-2 rounded-lg bg-emerald-600/10 border border-emerald-200 text-[10.5px] text-emerald-800 flex items-start gap-1.5">
+                        <FolderArchive className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>
+                          Relocates only split chunks to save time and bandwidth.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                }
+                onSelect={() => setSelectedAction("smart_unlink")}
+              />
+
+              {/* 2. Move All Files */}
+              <DisconnectOptionCard
+                title="2. Move All Files"
                 badge={
                   <span className="px-1.5 py-0.2 bg-blue-100 text-blue-700 font-bold text-[9px] rounded-full uppercase">
                     Full Evacuation
@@ -183,42 +215,8 @@ export function DisconnectModal({
                     ? "Requires at least one other connected cloud account."
                     : "Remaining clouds do not have enough free capacity."
                 }
-                description="Transfers all files and chunks from this cloud to your other connected storage providers so your Fuze Drive remains intact."
+                description="Transfers both whole files and chunks to remaining clouds so Fuze Drive keeps active access to every file without keeping this provider connected."
                 onSelect={() => setSelectedAction("migrate")}
-              />
-
-              {/* 2. Smart Evacuate */}
-              <DisconnectOptionCard
-                title="2. Smart Evacuate"
-                badge={
-                  <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-700 font-bold text-[9px] rounded-full uppercase flex items-center gap-0.5">
-                    <Sparkles className="h-2.5 w-2.5" /> Recommended
-                  </span>
-                }
-                icon={ShieldCheck}
-                theme="emerald"
-                isSelected={selectedAction === "smart_unlink"}
-                description={
-                  <div className="space-y-1.5">
-                    <p>
-                      {sharedChunksCount === 0
-                        ? `All files stored on this cloud are whole files. They will stay 100% intact in your ${providerDisplayName} account with 0 MB transfer bandwidth.`
-                        : otherCloudsCount > 0 && canMigrateAll
-                          ? `Whole files stay safe in your ${providerDisplayName} account. Only the ${sharedChunksCount} shared chunk(s) will be moved to your other clouds.`
-                          : `Whole files stay safe in your ${providerDisplayName} account. Missing parts will be consolidated into this cloud with a 1-click restore script.`}
-                    </p>
-                    {sharedChunksCount > 0 && (
-                      <div className="p-2 rounded-lg bg-emerald-600/10 border border-emerald-200 text-[10.5px] text-emerald-800 flex items-start gap-1.5">
-                        <FolderArchive className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                        <span>
-                          Fuze will deploy a <code>_fuze_recovery/</code> folder
-                          with a 1-click restore script.
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                }
-                onSelect={() => setSelectedAction("smart_unlink")}
               />
 
               {/* 3. Delete All Files */}

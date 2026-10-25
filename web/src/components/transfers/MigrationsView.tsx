@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Sidebar } from "@/components/drive/Sidebar";
 import { useDriveStore } from "@/stores/drive.store";
 import { SegmentedTabs, TabItem } from "@/components/ui/SegmentedTabs";
 import { MigrationActiveCard } from "./MigrationActiveCard";
+import { MigrationProgress } from "@/types";
 import {
   RefreshCw,
   Cloud,
@@ -17,25 +18,77 @@ import {
   CheckCircle2,
   Clock,
   AlertTriangle,
+  History,
+  Terminal,
 } from "lucide-react";
 
-type MigrationTab = "active" | "overview";
+type MigrationTab = "active" | "history" | "overview";
 
 export function MigrationsView() {
   const [tab, setTab] = useState<MigrationTab>("active");
+  const [historyJobs, setHistoryJobs] = useState<MigrationProgress[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
   const {
     migrationProgress,
     lastCompletedMigration,
+    setMigrationProgress,
+    setLastCompletedMigration,
     providers,
     setMobileSidebarOpen,
   } = useDriveStore();
 
   const isMigrating = migrationProgress !== null;
 
+  useEffect(() => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+
+    // 1. Fetch active migration from DB
+    fetch(`${apiUrl}/providers/migrations/active`, { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : { job: null }))
+      .then((data) => {
+        if (data.job) {
+          setMigrationProgress(data.job);
+        }
+      })
+      .catch(() => {});
+
+    // 2. Fetch migration history from DB
+    setIsLoadingHistory(true);
+    fetch(`${apiUrl}/providers/migrations/history`, { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : { history: [] }))
+      .then((data) => {
+        if (data.history) {
+          setHistoryJobs(data.history);
+          if (data.history.length > 0 && !lastCompletedMigration) {
+            const latest = data.history[0];
+            setLastCompletedMigration({
+              ...latest,
+              completedAt: new Date(latest.completedAt || latest.startedAt).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+            });
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsLoadingHistory(false));
+  }, [setMigrationProgress, setLastCompletedMigration, lastCompletedMigration]);
+
   const tabs: TabItem<MigrationTab>[] = [
     { id: "active", label: "Active Job", count: isMigrating ? 1 : 0 },
+    { id: "history", label: "History & Logs", count: historyJobs.length },
     { id: "overview", label: "How It Works" },
   ];
+
+  const formatBytes = (bytes?: number) => {
+    if (!bytes || bytes <= 0) return "0 MB";
+    if (bytes >= 1024 * 1024 * 1024) {
+      return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
@@ -65,7 +118,7 @@ export function MigrationsView() {
                     Provider Migrations
                   </h1>
                   <p className="text-xs text-slate-500 mt-0.5 hidden sm:block">
-                    Zero-data-loss cloud evacuation and chunk rebalancing
+                    Zero-data-loss cloud evacuation and persistent chunk rebalancing
                   </p>
                 </div>
               </div>
@@ -83,13 +136,12 @@ export function MigrationsView() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-24 sm:pb-8 w-full">
-
           <div className="space-y-5">
             <SegmentedTabs
               tabs={tabs}
               activeTab={tab}
               onChange={setTab}
-              className="sm:max-w-xs"
+              className="sm:max-w-md"
             />
 
             {/* Tab: Active Migration */}
@@ -105,12 +157,12 @@ export function MigrationsView() {
                           <div className="flex items-center gap-2.5">
                             <div
                               className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                                lastCompletedMigration.status === "success"
+                                lastCompletedMigration.status === "success" || lastCompletedMigration.status === "completed"
                                   ? "bg-emerald-50 text-emerald-600"
                                   : "bg-amber-50 text-amber-600"
                               }`}
                             >
-                              {lastCompletedMigration.status === "success" ? (
+                              {lastCompletedMigration.status === "success" || lastCompletedMigration.status === "completed" ? (
                                 <CheckCircle2 className="h-4 w-4" />
                               ) : (
                                 <AlertTriangle className="h-4 w-4" />
@@ -123,19 +175,21 @@ export function MigrationsView() {
                               <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
                                 <Clock className="h-3 w-3" />
                                 <span>
-                                  Finished at {lastCompletedMigration.completedAt}
+                                  {lastCompletedMigration.completedAt
+                                    ? `Finished at ${lastCompletedMigration.completedAt}`
+                                    : "Recently completed"}
                                 </span>
                               </p>
                             </div>
                           </div>
                           <span
                             className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${
-                              lastCompletedMigration.status === "success"
+                              lastCompletedMigration.status === "success" || lastCompletedMigration.status === "completed"
                                 ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                 : "bg-amber-50 text-amber-700 border-amber-200"
                             }`}
                           >
-                            {lastCompletedMigration.status === "success"
+                            {lastCompletedMigration.status === "success" || lastCompletedMigration.status === "completed"
                               ? "Finalized • Quotas Reclaimed"
                               : "Partially Complete"}
                           </span>
@@ -147,16 +201,15 @@ export function MigrationsView() {
                               Chunks Relocated
                             </span>
                             <span className="font-semibold text-slate-900 text-sm mt-0.5 block">
-                              {lastCompletedMigration.completed} of{" "}
-                              {lastCompletedMigration.total}
+                              {lastCompletedMigration.completed} of {lastCompletedMigration.total}
                             </span>
                           </div>
                           <div className="p-3 bg-slate-50 rounded-xl">
                             <span className="text-[11px] text-slate-400 block font-medium">
-                              Execution Engine
+                              Action Taken
                             </span>
-                            <span className="font-semibold text-slate-900 text-sm mt-0.5 block">
-                              Server Worker
+                            <span className="font-semibold text-slate-900 text-sm mt-0.5 block capitalize">
+                              {lastCompletedMigration.action?.replace("_", " ") || "Smart Evacuate"}
                             </span>
                           </div>
                           <div className="p-3 bg-slate-50 rounded-xl col-span-2 sm:col-span-1">
@@ -168,6 +221,27 @@ export function MigrationsView() {
                             </span>
                           </div>
                         </div>
+
+                        {lastCompletedMigration.logs && lastCompletedMigration.logs.length > 0 && (
+                          <div className="pt-2">
+                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 pb-1.5">
+                              <Terminal className="h-3 w-3 text-slate-500" />
+                              <span>Execution Logs</span>
+                            </div>
+                            <div className="bg-slate-950 text-slate-300 font-mono text-[10.5px] p-3 rounded-xl max-h-40 overflow-y-auto space-y-1">
+                              {lastCompletedMigration.logs.map((log, i) => (
+                                <div key={i} className="flex items-start gap-2">
+                                  <span className="text-slate-500 select-none">
+                                    {new Date(log.timestamp).toLocaleTimeString([], { hour12: false })}
+                                  </span>
+                                  <span className={log.level === "error" ? "text-rose-400 font-semibold" : log.level === "success" ? "text-emerald-400" : "text-slate-300"}>
+                                    {log.message}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -198,34 +272,114 @@ export function MigrationsView() {
               </div>
             )}
 
+            {/* Tab: History & Detailed Logs */}
+            {tab === "history" && (
+              <div className="animate-in fade-in-50 duration-150 space-y-4">
+                {isLoadingHistory ? (
+                  <div className="py-12 text-center text-slate-400">
+                    <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2 text-blue-600" />
+                    <span className="text-xs">Loading migration history from database...</span>
+                  </div>
+                ) : historyJobs.length === 0 ? (
+                  <div className="text-center py-12 border border-dashed border-slate-200 rounded-2xl p-6 bg-slate-50/50">
+                    <History className="h-6 w-6 text-slate-400 mx-auto mb-2" />
+                    <h4 className="text-xs font-semibold text-slate-700">No migration history found</h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Completed and previous migration jobs will appear here with full logs.
+                    </p>
+                  </div>
+                ) : (
+                  historyJobs.map((job) => (
+                    <div
+                      key={job.id || job.jobId || Math.random()}
+                      className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-2xs space-y-3.5"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-900 uppercase">
+                              {job.provider || "Cloud"} ({job.action?.replace("_", " ") || "Evacuation"})
+                            </span>
+                            <span
+                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                                job.status === "completed"
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  : job.status === "running"
+                                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                                    : "bg-rose-50 text-rose-700 border-rose-200"
+                              }`}
+                            >
+                              {job.status?.toUpperCase()}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-slate-400 block mt-0.5">
+                            Started {job.startedAt ? new Date(job.startedAt).toLocaleString() : "Recently"}
+                            {job.completedAt ? ` • Finished ${new Date(job.completedAt).toLocaleTimeString()}` : ""}
+                          </span>
+                        </div>
+
+                        <div className="text-right">
+                          <span className="text-xs font-semibold text-slate-800 block">
+                            {job.completed} of {job.total} chunks ({job.percent}%)
+                          </span>
+                          <span className="text-[11px] text-slate-500 block">
+                            {formatBytes(job.transferredBytes)} transferred
+                          </span>
+                        </div>
+                      </div>
+
+                      {job.logs && job.logs.length > 0 && (
+                        <div className="space-y-1.5">
+                          <span className="text-[11px] font-semibold text-slate-600 flex items-center gap-1.5">
+                            <Terminal className="h-3 w-3 text-slate-500" />
+                            <span>Job Logs</span>
+                          </span>
+                          <div className="bg-slate-950 text-slate-200 font-mono text-[10.5px] p-3 rounded-xl max-h-44 overflow-y-auto space-y-1 border border-slate-800">
+                            {job.logs.map((log, i) => (
+                              <div key={i} className="flex items-start gap-2">
+                                <span className="text-slate-500 select-none">
+                                  {new Date(log.timestamp).toLocaleTimeString([], { hour12: false })}
+                                </span>
+                                <span className={log.level === "error" ? "text-rose-400 font-semibold" : log.level === "warn" ? "text-amber-300" : log.level === "success" ? "text-emerald-400" : "text-slate-300"}>
+                                  {log.message}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
             {/* Tab: How It Works & Architecture Overview */}
             {tab === "overview" && (
               <div className="animate-in fade-in-50 duration-150 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-2xs space-y-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
                     <ShieldCheck className="h-4 w-4" />
                   </div>
                   <h4 className="text-xs font-semibold text-slate-900">
-                    Rule 1: Whole File Priority
+                    Smart Evacuate (Instant / Recommended)
                   </h4>
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    Whenever possible, files are preserved as whole files on the
-                    fastest cloud. When disconnecting, you can choose to leave
-                    whole files intact in that cloud account.
+                    Leaves whole files 100% untouched inside your native cloud provider with 0 MB network transfer.
+                    Only multi-cloud split chunks are moved to remaining clouds to prevent split files from breaking.
                   </p>
                 </div>
 
                 <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-2xs space-y-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
                     <Split className="h-4 w-4" />
                   </div>
                   <h4 className="text-xs font-semibold text-slate-900">
-                    Rule 2: Dynamic Chunk Rebalancing
+                    Full Evacuation (Move All Files)
                   </h4>
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    Multi-cloud split files are transferred chunk by chunk. If a
-                    single remaining cloud cannot fit a chunk, Fuze
-                    automatically slices it to fit available spaces.
+                    Transfers all files and chunks from the departing cloud onto your remaining connected clouds,
+                    reclaiming all space and leaving 0 files behind in the source provider.
                   </p>
                 </div>
               </div>

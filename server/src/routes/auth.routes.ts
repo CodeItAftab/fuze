@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { db, users, userSessions } from "../db/index.js";
-import { eq, and, gt, ne } from "drizzle-orm";
+import { eq, and, gt, ne, lte } from "drizzle-orm";
 import { z } from "zod";
 import { EmailService } from "../services/email.service.js";
 import { VfsService } from "../services/vfs.service.js";
@@ -799,6 +799,17 @@ export async function authRoutes(fastify: FastifyInstance) {
       };
 
       const now = new Date();
+      // Auto-prune any expired / abandoned sessions
+      await db
+        .delete(userSessions)
+        .where(
+          and(
+            eq(userSessions.userId, userId),
+            lte(userSessions.expiresAt, now),
+          ),
+        )
+        .catch(() => {});
+
       const sessions = await db
         .select({
           id: userSessions.id,
@@ -846,7 +857,41 @@ export async function authRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // 10. Revoke Specific Session (Authenticated)
+  // 10. Revoke All Other Sessions via DELETE /sessions
+  fastify.delete(
+    "/sessions",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        return reply.status(401).send({ error: "Unauthorized" });
+      }
+      const { userId, sessionToken } = request.user as {
+        userId: string;
+        sessionToken?: string;
+      };
+
+      await db
+        .delete(userSessions)
+        .where(
+          and(
+            eq(userSessions.userId, userId),
+            sessionToken ? ne(userSessions.token, sessionToken) : undefined,
+          ),
+        );
+
+      if (sessionToken) {
+        socketManager.revokeOtherSessions(userId, sessionToken);
+      }
+
+      return reply.send({
+        success: true,
+        message: "All other sessions revoked successfully.",
+      });
+    },
+  );
+
+  // 11. Revoke Specific Session (Authenticated)
   fastify.delete(
     "/sessions/:sessionId",
     async (
@@ -864,42 +909,57 @@ export async function authRoutes(fastify: FastifyInstance) {
       };
       const { sessionId } = request.params;
 
-      const [targetSession] = await db
-        .select()
-        .from(userSessions)
-        .where(
-          and(
-            eq(userSessions.id, sessionId),
-            eq(userSessions.userId, userId),
-          ),
-        );
-
-      if (!targetSession) {
-        return reply.status(404).send({ error: "Session not found." });
+      if (sessionId === "others" || sessionId === "all") {
+        await db
+          .delete(userSessions)
+          .where(
+            and(
+              eq(userSessions.userId, userId),
+              sessionToken ? ne(userSessions.token, sessionToken) : undefined,
+            ),
+          );
+        if (sessionToken) {
+          socketManager.revokeOtherSessions(userId, sessionToken);
+        }
+        return reply.send({ success: true, message: "All other sessions revoked." });
       }
 
-      await db
-        .delete(userSessions)
-        .where(
-          and(
-            eq(userSessions.id, sessionId),
-            eq(userSessions.userId, userId),
-          ),
-        );
+      try {
+        const [targetSession] = await db
+          .select()
+          .from(userSessions)
+          .where(
+            and(
+              eq(userSessions.id, sessionId),
+              eq(userSessions.userId, userId),
+            ),
+          );
 
-      // Immediately notify and disconnect the revoked socket session
-      if (targetSession.token) {
-        socketManager.revokeSession(targetSession.token);
+        if (targetSession) {
+          await db
+            .delete(userSessions)
+            .where(
+              and(
+                eq(userSessions.id, sessionId),
+                eq(userSessions.userId, userId),
+              ),
+            );
+
+          if (targetSession.token) {
+            socketManager.revokeSession(targetSession.token);
+          }
+
+          if (targetSession.token === sessionToken) {
+            reply.clearCookie(COOKIE_NAME, {
+              path: "/",
+              domain: getCookieDomain(request),
+            });
+          }
+        }
+        return reply.send({ success: true, message: "Session revoked successfully." });
+      } catch {
+        return reply.send({ success: true, message: "Session removed." });
       }
-
-      if (targetSession.token === sessionToken) {
-        reply.clearCookie(COOKIE_NAME, {
-          path: "/",
-          domain: getCookieDomain(request),
-        });
-      }
-
-      return reply.send({ success: true, message: "Session revoked successfully." });
     },
   );
 }

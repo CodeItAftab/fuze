@@ -234,3 +234,36 @@ export const shares = pgTable("shares", {
     .defaultNow()
     .notNull(),
 });
+
+
+// 9. Provider Migration & Evacuation Jobs
+export const migrationJobs = pgTable(
+  "migration_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    providerIdentityId: uuid("provider_identity_id").notNull(),
+    provider: text("provider").notNull(),
+    action: text("action").notNull(),
+    status: text("status").default("pending").notNull(),
+    totalChunks: integer("total_chunks").default(0).notNull(),
+    completedChunks: integer("completed_chunks").default(0).notNull(),
+    totalBytes: bigint("total_bytes", { mode: "number" }).default(0).notNull(),
+    transferredBytes: bigint("transferred_bytes", { mode: "number" }).default(0).notNull(),
+    percent: integer("percent").default(0).notNull(),
+    currentFileName: text("current_file_name"),
+    statusText: text("status_text"),
+    logs: text("logs"),
+    errorMessage: text("error_message"),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("migration_user_idx").on(table.userId),
+    index("migration_status_idx").on(table.status),
+  ],
+);

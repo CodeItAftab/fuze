@@ -8,12 +8,12 @@ import {
   uploadChunks,
   vfsNodes,
 } from "../db/index.js";
-import { eq, and, ne, sql, inArray, isNull } from "drizzle-orm";
+import { eq, and, ne, sql, inArray, isNull, or, desc } from "drizzle-orm";
 import { encrypt, decrypt } from "../utils/crypto.js";
 import { getStorageAdapter, SupportedProvider } from "../adapters/factory.js";
 import { socketManager } from "../websocket/socket-manager.js";
 import { ProviderCleanupService } from "../services/provider-cleanup.service.js";
-import { providerMigrationQueue } from "../workers/provider-migration.worker.js";
+import { providerMigrationQueue, queueProviderMigration } from "../workers/provider-migration.worker.js";
 import IORedis from "ioredis";
 import {
   TokenService,
