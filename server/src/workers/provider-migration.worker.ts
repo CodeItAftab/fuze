@@ -217,6 +217,16 @@ function parseUploadedFileId(
   return fileId || targetFileName;
 }
 
+function getIncrementalFileName(fileName: string, attempt: number): string {
+  const lastDot = fileName.lastIndexOf(".");
+  if (lastDot === -1 || lastDot === 0) {
+    return `${fileName} (${attempt})`;
+  }
+  const base = fileName.slice(0, lastDot);
+  const ext = fileName.slice(lastDot);
+  return `${base} (${attempt})${ext}`;
+}
+
 /**
  * Transfers a single chunk directly from source provider to destination provider
  * via direct memory buffer transfer (ZERO DISK WRITES).
@@ -311,26 +321,35 @@ async function transferChunk(
       signal: AbortSignal.timeout(180_000),
     });
     let finalRes = upRes;
+    let effectiveFileName = targetFileName;
+
     if (!finalRes.ok && finalRes.status !== 200 && finalRes.status !== 201) {
-      if (destProvider.provider === "box" && finalRes.status === 409) {
-        const errText = await finalRes.text().catch(() => "");
-        let conflictId = "";
+      if (finalRes.status === 409) {
+        // Name collision on destination: Use standard incremental naming ("file (1).ext") without deleting anything
+        let folderId = "0";
         try {
-          const parsed = JSON.parse(errText);
-          conflictId = parsed?.context_info?.conflicts?.id || "";
+          const origAttr = JSON.parse(
+            uploadSession.formDataFields?.attributes || "{}",
+          );
+          folderId = origAttr?.parent?.id || "0";
         } catch {}
 
-        if (conflictId) {
-          // Delete stale duplicate on Box and retry upload
-          await fetch(`https://api.box.com/2.0/files/${conflictId}`, {
-            method: "DELETE",
-            headers: { Authorization: `Bearer ${destToken}` },
-          }).catch(() => {});
-
+        for (let attempt = 1; attempt <= 5; attempt++) {
+          effectiveFileName = getIncrementalFileName(targetFileName, attempt);
           const retryFormData = new FormData();
           if (uploadSession.formDataFields) {
             for (const [k, v] of Object.entries(uploadSession.formDataFields)) {
-              retryFormData.append(k, v);
+              if (k === "attributes") {
+                retryFormData.append(
+                  "attributes",
+                  JSON.stringify({
+                    name: effectiveFileName,
+                    parent: { id: folderId },
+                  }),
+                );
+              } else {
+                retryFormData.append(k, v);
+              }
             }
           }
           retryFormData.append(
@@ -338,7 +357,7 @@ async function transferChunk(
             new Blob([fileBuffer], {
               type: targetMimeType || "application/octet-stream",
             }),
-            targetFileName,
+            effectiveFileName,
           );
 
           finalRes = await fetch(uploadSession.sessionUrl, {
@@ -349,15 +368,18 @@ async function transferChunk(
             body: retryFormData,
             signal: AbortSignal.timeout(180_000),
           });
-        }
 
-        if (!finalRes.ok && finalRes.status !== 200 && finalRes.status !== 201) {
-          const retryErr = await finalRes.text().catch(() => "");
-          throw new Error(
-            `Upload to box failed (${finalRes.status}): ${retryErr || errText}`,
-          );
+          if (
+            finalRes.ok ||
+            finalRes.status === 200 ||
+            finalRes.status === 201
+          ) {
+            break;
+          }
         }
-      } else {
+      }
+
+      if (!finalRes.ok && finalRes.status !== 200 && finalRes.status !== 201) {
         const errText = await finalRes.text().catch(() => "");
         throw new Error(
           `Upload to ${destProvider.provider} failed (${finalRes.status}): ${errText}`,
@@ -365,7 +387,11 @@ async function transferChunk(
       }
     }
     const data = (await finalRes.json().catch(() => ({}))) as any;
-    newFileId = parseUploadedFileId(destProvider.provider, data, targetFileName);
+    newFileId = parseUploadedFileId(
+      destProvider.provider,
+      data,
+      effectiveFileName,
+    );
   } else {
     // Raw binary octet-stream upload (Dropbox, Google Drive, OneDrive)
     // Sending a raw Buffer body guarantees exact Content-Length without chunked transfer issues
