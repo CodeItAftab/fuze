@@ -1,5 +1,6 @@
 import { ProviderSummary } from "@/stores/drive.store";
-import { Cloud, Trash2, RefreshCw, AlertTriangle } from "lucide-react";
+import { Trash2, RefreshCw, AlertTriangle } from "lucide-react";
+import { ProviderIcon, parseProvider } from "@/components/drive/ProviderBadge";
 
 interface ConnectedProviderCardProps {
   provider: ProviderSummary;
@@ -17,6 +18,7 @@ export function ConnectedProviderCard({
   onDisconnect,
 }: ConnectedProviderCardProps) {
   const isRevoked = provider.isRevoked === true;
+  const parsed = parseProvider(provider.provider);
   const usedPct =
     provider.quotaTotal > 0
       ? Math.min(
@@ -30,28 +32,28 @@ export function ConnectedProviderCard({
       className={`bg-white rounded-2xl border p-4 sm:p-5 shadow-2xs transition flex flex-col justify-between ${
         isRevoked
           ? "border-amber-300 bg-amber-50/20 ring-1 ring-amber-300/40"
-          : "border-slate-200/90 hover:border-slate-300"
+          : "border-slate-200/90 hover:border-slate-300 hover:shadow-xs"
       }`}
     >
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-3 min-w-0">
           <div
-            className={`h-10 w-10 rounded-xl border flex items-center justify-center shrink-0 ${
+            className={`h-11 w-11 rounded-xl border flex items-center justify-center shrink-0 p-2 ${
               isRevoked
-                ? "bg-amber-100 border-amber-200 text-amber-700"
-                : "bg-slate-50 border-slate-100 text-blue-600"
+                ? "bg-amber-100 border-amber-200"
+                : "bg-slate-50 border-slate-100 shadow-2xs"
             }`}
           >
             {isRevoked ? (
-              <AlertTriangle className="h-5 w-5" />
+              <AlertTriangle className="h-5 w-5 text-amber-700" />
             ) : (
-              <Cloud className="h-5 w-5" />
+              <ProviderIcon type={parsed.type} className="h-6 w-6 object-contain" />
             )}
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-bold text-xs text-slate-900 capitalize">
-                {provider.provider.replace("_", " ")}
+              <span className="font-bold text-xs text-slate-900">
+                {parsed.name}
               </span>
               {isRevoked && (
                 <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
@@ -65,7 +67,7 @@ export function ConnectedProviderCard({
           </div>
         </div>
 
-                <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           {isRevoked && (
             <a
               href={`${apiUrl}/providers/${providerToSlug(provider.provider)}/reconnect`}

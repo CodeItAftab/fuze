@@ -80,16 +80,16 @@ export class VfsService {
       if (chunks.length === 1) {
         const prov = chunks[0].provider;
         const nameMap: Record<string, string> = {
-          google_drive: "Google Drive (Whole)",
-          one_drive: "OneDrive (Whole)",
-          dropbox: "Dropbox (Whole)",
-          pcloud: "pCloud (Whole)",
-          box: "Box (Whole)",
+          google_drive: "Google Drive",
+          one_drive: "OneDrive",
+          dropbox: "Dropbox",
+          pcloud: "pCloud",
+          box: "Box",
         };
-        providerBadge = nameMap[prov] || `${prov} (Whole)`;
+        providerBadge = nameMap[prov] || prov;
       } else if (chunks.length > 1) {
         const unique = new Set(chunks.map((c) => c.provider));
-        providerBadge = `Multi-Cloud (${unique.size} Providers)`;
+        providerBadge = `Multi-Cloud (${unique.size})`;
       }
       return {
         ...node,
@@ -411,16 +411,16 @@ export class VfsService {
       if (chunks.length === 1) {
         const prov = chunks[0].provider;
         const nameMap: Record<string, string> = {
-          google_drive: "Google Drive (Whole)",
-          one_drive: "OneDrive (Whole)",
-          dropbox: "Dropbox (Whole)",
-          pcloud: "pCloud (Whole)",
-          box: "Box (Whole)",
+          google_drive: "Google Drive",
+          one_drive: "OneDrive",
+          dropbox: "Dropbox",
+          pcloud: "pCloud",
+          box: "Box",
         };
-        providerBadge = nameMap[prov] || `${prov} (Whole)`;
+        providerBadge = nameMap[prov] || prov;
       } else if (chunks.length > 1) {
         const unique = new Set(chunks.map((c) => c.provider));
-        providerBadge = `Multi-Cloud (${unique.size} Providers)`;
+        providerBadge = `Multi-Cloud (${unique.size})`;
       }
       return {
         ...node,

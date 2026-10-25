@@ -1,7 +1,8 @@
 "use client";
 
+import React from "react";
 import { VfsItem } from "@/stores/drive.store";
-import { Folder, Star, MoreVertical, CheckSquare, Square } from "lucide-react";
+import { Folder, MoreVertical, Check } from "lucide-react";
 import { getFolderPalette } from "@/components/drive/FileThumbnail";
 
 interface DriveFolderGridProps {
@@ -26,11 +27,11 @@ export function DriveFolderGrid({
   if (folders.length === 0) return null;
 
   return (
-    <div className="mb-6">
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
+    <div className="mb-5 sm:mb-6">
+      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
         Folders
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-3.5">
         {folders.map((folder) => {
           const palette = getFolderPalette(folder.id || folder.name);
           const isSelected = selectedIds.has(folder.id);
@@ -43,76 +44,61 @@ export function DriveFolderGrid({
                 e.preventDefault();
                 onOpenContextMenu(folder, e);
               }}
-              className={`border rounded-xl px-3.5 py-3 flex items-center justify-between transition cursor-pointer group gap-2.5 ${
+              className={`bg-white border rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2.5 transition-all duration-150 cursor-pointer group shadow-2xs hover:border-slate-300 hover:shadow-xs select-none h-12 ${
                 isSelected
-                  ? "bg-blue-50/60 border-blue-400 ring-2 ring-blue-500/20 shadow-xs"
-                  : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-2xs"
+                  ? "bg-blue-50/40 border-blue-400 ring-2 ring-blue-500/20"
+                  : "border-black/[0.06]"
               }`}
             >
+              {/* Left: Folder Icon Tile or Selection Checkmark */}
               <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                <button
-                  type="button"
-                  onClick={(e) => onToggleSelectCheckbox(folder.id, e)}
-                  className={`p-1 rounded-md transition cursor-pointer shrink-0 ${
-                    isSelected
-                      ? "text-blue-600 bg-blue-50 opacity-100"
-                      : "text-slate-400 hover:text-slate-700 hover:bg-slate-100 opacity-60 group-hover:opacity-100"
-                  }`}
-                  title={isSelected ? "Deselect" : "Select"}
-                >
-                  {isSelected ? (
-                    <CheckSquare className="h-4 w-4 fill-blue-50 text-blue-600" />
-                  ) : (
-                    <Square className="h-4 w-4 text-slate-400 hover:text-slate-600" />
-                  )}
-                </button>
-
-                <Folder className={`h-5 w-5 shrink-0 ${palette.icon}`} />
-                <div className="min-w-0 flex-1">
+                {isSelected ? (
                   <div
-                    className="font-semibold text-slate-800 text-xs truncate leading-snug"
-                    title={folder.name}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleSelectCheckbox(folder.id, e);
+                    }}
+                    className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-xs shrink-0 cursor-pointer"
+                    title="Selected (tap to deselect)"
                   >
-                    {folder.name}
+                    <Check className="h-4 w-4 stroke-[2.5]" />
                   </div>
-                  <div className="text-[10px] text-slate-400 font-normal leading-tight">
-                    Folder
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-0.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleStar(folder);
-                  }}
-                  className={`p-1.5 rounded-md hover:bg-slate-100 transition cursor-pointer ${
-                    folder.starred
-                      ? "text-amber-500 opacity-100"
-                      : "text-slate-300 hover:text-amber-500 opacity-0 group-hover:opacity-100"
-                  }`}
-                  title={folder.starred ? "Unstar" : "Star"}
-                >
-                  <Star
-                    className={`h-3.5 w-3.5 ${
-                      folder.starred ? "fill-amber-400 text-amber-500" : ""
+                ) : (
+                  <div
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${
+                      palette.icon.includes("amber")
+                        ? "bg-amber-50 text-amber-500"
+                        : palette.icon.includes("blue")
+                        ? "bg-blue-50 text-blue-500"
+                        : "bg-emerald-50 text-emerald-500"
                     }`}
-                  />
-                </button>
+                  >
+                    <Folder className={`h-4 w-4 ${palette.icon}`} />
+                  </div>
+                )}
 
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenContextMenu(folder, e);
-                  }}
-                  className="p-1.5 hover:bg-slate-100 rounded-md text-slate-400 hover:text-slate-600 transition shrink-0 cursor-pointer opacity-0 group-hover:opacity-100"
-                  aria-label="More actions"
+                {/* Center: Folder Name (No star mark!) */}
+                <span
+                  className="font-medium text-slate-850 text-xs sm:text-[13px] truncate leading-tight group-hover:text-blue-600 transition-colors flex-1"
+                  title={folder.name}
                 >
-                  <MoreVertical className="h-3.5 w-3.5" />
-                </button>
+                  {folder.name}
+                </span>
               </div>
+
+              {/* Right: Always-Visible 3-Dots Action Menu */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenContextMenu(folder, e);
+                }}
+                className="p-1 -mr-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition shrink-0 cursor-pointer"
+                aria-label="Folder actions"
+                title="Actions"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </button>
             </div>
           );
         })}

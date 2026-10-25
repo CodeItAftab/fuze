@@ -304,15 +304,15 @@ export class UploadSessionService {
     if (unique.size === 1) {
       const prov = Array.from(unique)[0];
       const nameMap: Record<string, string> = {
-        google_drive: "Google Drive (Whole)",
-        one_drive: "OneDrive (Whole)",
-        dropbox: "Dropbox (Whole)",
-        pcloud: "pCloud (Whole)",
-        box: "Box (Whole)",
+        google_drive: "Google Drive",
+        one_drive: "OneDrive",
+        dropbox: "Dropbox",
+        pcloud: "pCloud",
+        box: "Box",
       };
-      providerBadge = nameMap[prov] || `${prov} (Whole)`;
+      providerBadge = nameMap[prov] || prov;
     } else if (unique.size > 1) {
-      providerBadge = `Multi-Cloud (${unique.size} Providers)`;
+      providerBadge = `Multi-Cloud (${unique.size})`;
     }
 
     const payload = {

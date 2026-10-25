@@ -22,6 +22,7 @@ import {
 } from "./thumbnails";
 
 export * from "./thumbnails";
+export * from "./ProviderBadge";
 
 export const FOLDER_COLOR_PALETTES = [
   { icon: "text-amber-500 fill-amber-100" },

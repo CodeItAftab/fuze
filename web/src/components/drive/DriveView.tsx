@@ -109,20 +109,22 @@ export function DriveView({
 
   const getDisplayBadge = useCallback(
     (file: VfsItem) => {
-      if (file.providerBadge) return file.providerBadge;
+      if (file.providerBadge) {
+        return file.providerBadge.replace(/\s*\(Whole\)/gi, "").trim();
+      }
       if (providers.length === 1) {
         const prov = providers[0].provider;
         const nameMap: Record<string, string> = {
-          google_drive: "Google Drive (Whole)",
-          one_drive: "OneDrive (Whole)",
-          dropbox: "Dropbox (Whole)",
-          pcloud: "pCloud (Whole)",
-          box: "Box (Whole)",
+          google_drive: "Google Drive",
+          one_drive: "OneDrive",
+          dropbox: "Dropbox",
+          pcloud: "pCloud",
+          box: "Box",
         };
-        return nameMap[prov] || `${prov} (Whole)`;
+        return nameMap[prov] || prov;
       }
       if (providers.length > 1) {
-        return `Multi-Cloud (${providers.length} Providers)`;
+        return `Multi-Cloud (${providers.length})`;
       }
       return "Direct Cloud";
     },
@@ -601,7 +603,7 @@ export function DriveView({
               clearSelection();
             }
           }}
-          className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-28 sm:pb-28 lg:pb-8 w-full"
+          className="flex-1 overflow-y-auto scroll-smooth overscroll-contain p-4 sm:p-6 md:p-8 pb-28 sm:pb-28 lg:pb-8 w-full"
         >
 
           <DriveSelectionBar

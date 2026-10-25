@@ -60,10 +60,10 @@ export function ThumbnailCard({
 
   return (
     <div
-      className={`w-full h-full ${defaultContainerBg} rounded-lg flex items-center justify-center relative overflow-hidden p-3 ${defaultContainerHover} transition`}
+      className={`w-full h-full ${defaultContainerBg} rounded-lg flex items-center justify-center relative overflow-hidden p-2 ${defaultContainerHover} transition`}
     >
       <div
-        className={`w-24 h-28 ${defaultCardBg} rounded-lg shadow-2xs border ${defaultCardBorder} flex flex-col items-center justify-between p-2.5 transition-transform duration-300 group-hover:scale-105 group-hover:shadow-xs`}
+        className={`w-24 h-28 sm:w-26 sm:h-30 ${defaultCardBg} rounded-lg shadow-2xs border ${defaultCardBorder} flex flex-col items-center justify-between p-2 transition-transform duration-300 group-hover:scale-105 group-hover:shadow-xs`}
       >
         {/* Header */}
         <div className="w-full flex items-center justify-between">

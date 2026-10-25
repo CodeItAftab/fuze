@@ -77,7 +77,7 @@ export function FileDetailsDrawer({
                   <span>
                     {plan.strategy === "chunked"
                       ? "Multi-Cloud Pooled"
-                      : "Single Cloud (Whole)"}
+                      : "Single Cloud"}
                   </span>
                 </dd>
               </div>

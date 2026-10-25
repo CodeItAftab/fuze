@@ -16,7 +16,7 @@ export function ImageThumbnail({
 
   if (!hasError) {
     return (
-      <div className="w-full h-full bg-slate-50 rounded-lg flex items-center justify-center relative overflow-hidden group/thumb">
+      <div className="w-full h-full bg-slate-50 flex items-center justify-center relative overflow-hidden group/thumb">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={`${apiUrl}/files/${file.id}/thumbnail?size=large`}
@@ -26,7 +26,8 @@ export function ImageThumbnail({
           onError={() => setHasError(true)}
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
         />
-        <CornerBadge ext={ext} />
+        {/* Slight border so pure white images/screenshots stand out distinctly from the card */}
+        <div className="absolute inset-0 pointer-events-none rounded-lg border border-black/[0.06]" />
       </div>
     );
   }
@@ -62,7 +63,7 @@ export function VideoThumbnail({
 
   if (!hasError) {
     return (
-      <div className="w-full h-full bg-slate-900 rounded-lg flex items-center justify-center relative overflow-hidden group-hover:bg-slate-850 transition">
+      <div className="w-full h-full bg-slate-900 flex items-center justify-center relative overflow-hidden group-hover:bg-slate-850 transition">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={`${apiUrl}/files/${file.id}/thumbnail?size=large`}
@@ -72,13 +73,12 @@ export function VideoThumbnail({
           onError={() => setHasError(true)}
           className="w-full h-full object-cover opacity-85 transition-transform duration-300 group-hover:scale-105"
         />
-        <div className="absolute inset-0 flex items-center justify-center bg-black/25">
-          <div className="w-10 h-10 rounded-full bg-white/90 text-slate-900 flex items-center justify-center shadow-md transition-transform group-hover:scale-110">
-            <Play className="w-4 h-4 fill-slate-900 ml-0.5" />
+        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+          <div className="w-11 h-11 rounded-full bg-slate-900/60 backdrop-blur-md text-white flex items-center justify-center border border-white/25 shadow-lg transition-transform duration-200 group-hover:scale-110 group-hover:bg-slate-900/80">
+            <Play className="w-4 h-4 fill-white text-white ml-0.5" />
           </div>
         </div>
-        <CornerBadge ext={ext} />
-      </div>
+              </div>
     );
   }
 
@@ -97,7 +97,7 @@ export function VideoThumbnail({
       footerColor="text-indigo-400"
     >
       <div className="flex items-center justify-center my-auto">
-        <div className="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-md">
+        <div className="w-10 h-10 rounded-full bg-indigo-600/90 text-white flex items-center justify-center shadow-md">
           <Play className="w-4 h-4 fill-white ml-0.5" />
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { ProviderSummary } from "@/stores/drive.store";
-import { Plus, Check, RefreshCw, Lock, AlertTriangle } from "lucide-react";
+import { Plus, Check, RefreshCw, AlertTriangle } from "lucide-react";
+import { ProviderIcon, parseProvider } from "@/components/drive/ProviderBadge";
 
 export interface AvailableCloud {
   id: string;
@@ -22,6 +23,7 @@ export function AvailableCloudCard({
 }: AvailableCloudCardProps) {
   const isConnected = !!cloud.connectedProvider;
   const isRevoked = cloud.connectedProvider?.isRevoked === true;
+  const parsed = parseProvider(cloud.name);
 
   return (
     <div
@@ -31,20 +33,23 @@ export function AvailableCloudCard({
     >
       <div>
         <div className="flex items-center justify-between mb-2.5">
-          <span className="text-xs font-bold text-slate-900">
-            {cloud.name}
-          </span>
+          <div className="flex items-center gap-2 min-w-0">
+            <ProviderIcon type={parsed.type} className="h-5 w-5 object-contain shrink-0" />
+            <span className="text-xs font-bold text-slate-900 truncate">
+              {cloud.name}
+            </span>
+          </div>
           {isRevoked ? (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1 animate-pulse">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1 animate-pulse shrink-0">
               <AlertTriangle className="h-3 w-3" />
               Revoked
             </span>
           ) : isConnected ? (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/80">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/80 shrink-0">
               Connected
             </span>
           ) : (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
               {cloud.freeTier}
             </span>
           )}
@@ -69,20 +74,23 @@ export function AvailableCloudCard({
       ) : isConnected ? (
         <div className="w-full py-2 px-3 rounded-xl bg-slate-100 text-slate-500 font-medium text-xs flex items-center justify-center gap-1.5 cursor-default select-none border border-slate-200/60">
           <Check className="h-3.5 w-3.5 text-blue-600" />
-          <span className="font-semibold text-slate-700">Connected</span>
+          <span>Connected</span>
         </div>
       ) : isVerified ? (
         <a
           href={`${apiUrl}/providers/${cloud.id}/connect`}
-          className="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition text-center cursor-pointer"
+          className="w-full py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition text-center cursor-pointer shadow-xs"
         >
           <Plus className="h-3.5 w-3.5" />
           <span>Connect {cloud.name.split(" ")[0]}</span>
         </a>
       ) : (
-        <div className="w-full py-2 px-3 rounded-xl bg-slate-100 text-slate-400 font-semibold text-xs flex items-center justify-center gap-1.5 text-center cursor-not-allowed select-none">
-          <Lock className="h-3.5 w-3.5" />
-          <span>Verify Email to Connect</span>
+        <div
+          title="Verify your email address before connecting cloud providers"
+          className="w-full py-2 px-3 rounded-xl bg-slate-100 text-slate-400 font-medium text-xs flex items-center justify-center gap-1.5 cursor-not-allowed select-none border border-slate-200/60"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          <span>Connect (Verify Email)</span>
         </div>
       )}
     </div>

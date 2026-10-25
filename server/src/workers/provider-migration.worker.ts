@@ -807,14 +807,13 @@ export async function executeProviderMigration(
           await CacheService.invalidateUserProviders(userId);
 
           const providerNames: Record<string, string> = {
-            google_drive: "Google Drive (Whole)",
-            one_drive: "OneDrive (Whole)",
-            dropbox: "Dropbox (Whole)",
-            pcloud: "pCloud (Whole)",
-            box: "Box (Whole)",
+            google_drive: "Google Drive",
+            one_drive: "OneDrive",
+            dropbox: "Dropbox",
+            pcloud: "pCloud",
+            box: "Box",
           };
-          const newBadge =
-            providerNames[dest.provider] || `${dest.provider} (Whole)`;
+          const newBadge = providerNames[dest.provider] || dest.provider;
 
           // Broadcast real-time live update for instant UI card badge flip
           socketManager.broadcastToUser(userId, {

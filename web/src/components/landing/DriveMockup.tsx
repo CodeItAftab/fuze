@@ -148,7 +148,7 @@ export function DriveMockup() {
                   </div>
                   <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                     <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
-                      Google Drive <span className="hidden sm:inline">(Whole)</span>
+                      Google Drive
                     </span>
                     <span className="text-slate-500 text-[10px] sm:text-xs text-right font-medium shrink-0">
                       84.2 MB
@@ -173,7 +173,7 @@ export function DriveMockup() {
                   </div>
                   <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                     <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">
-                      Box <span className="hidden sm:inline">(Whole)</span>
+                      Box
                     </span>
                     <span className="text-slate-500 text-[10px] sm:text-xs text-right font-medium shrink-0">
                       12.6 MB
@@ -223,7 +223,7 @@ export function DriveMockup() {
                   </div>
                   <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                     <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-sky-50 text-sky-700 border border-sky-200 whitespace-nowrap">
-                      pCloud <span className="hidden sm:inline">(Whole)</span>
+                      pCloud
                     </span>
                     <span className="text-slate-500 text-[10px] sm:text-xs text-right font-medium shrink-0">
                       4.8 MB
