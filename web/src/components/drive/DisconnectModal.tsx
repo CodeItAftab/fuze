@@ -51,8 +51,8 @@ export function DisconnectModal({
       .then((res) => res.json())
       .then((data: DisconnectPreviewResult) => {
         setPreview(data);
-        if (data.wholeFilesCount > 0) setSelectedAction("smart_unlink");
-        else if (data.canMigrate) setSelectedAction("migrate");
+        if (data.canMigrate && data.otherProvidersCount > 0) setSelectedAction("migrate");
+        else if (data.wholeFilesCount > 0) setSelectedAction("smart_unlink");
         else setSelectedAction("delete");
         setIsLoading(false);
       })

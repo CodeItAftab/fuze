@@ -26,6 +26,7 @@ export interface StorageAdapter {
   }): Promise<UploadSessionResult>;
 
   getDownloadUrl(params: {
+    fileName?: string;
     providerFileId: string;
     accessToken: string;
   }): Promise<string>;

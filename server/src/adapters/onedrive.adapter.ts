@@ -34,7 +34,7 @@ export class OneDriveAdapter implements StorageAdapter {
     accessToken: string;
   }): Promise<UploadSessionResult> {
     const encodedFileName = encodeURIComponent(params.fileName);
-    const res = await fetch(
+    let res = await fetch(
       `https://graph.microsoft.com/v1.0/me/drive/root:/Fuze/${encodedFileName}:/createUploadSession`,
       {
         method: "POST",
@@ -67,10 +67,11 @@ export class OneDriveAdapter implements StorageAdapter {
   }
 
   async getDownloadUrl(params: {
+    fileName?: string;
     providerFileId: string;
     accessToken: string;
   }): Promise<string> {
-    const res = await fetch(
+    let res = await fetch(
       `https://graph.microsoft.com/v1.0/me/drive/items/${params.providerFileId}`,
       {
         headers: { Authorization: `Bearer ${params.accessToken}` },
@@ -78,7 +79,31 @@ export class OneDriveAdapter implements StorageAdapter {
     );
 
     if (!res.ok) {
-      throw new Error(`OneDrive get download link failed: ${res.status}`);
+      // Fallback: If 404, try lookup by path in /Fuze/ folder
+      const candidates = [params.fileName, params.providerFileId].filter(
+        Boolean,
+      ) as string[];
+      let resolved = false;
+
+      for (const name of candidates) {
+        const cleanName = name.replace(/^\/+Fuze\/+/i, "");
+        const encoded = encodeURIComponent(cleanName);
+        const pathRes = await fetch(
+          `https://graph.microsoft.com/v1.0/me/drive/root:/Fuze/${encoded}:`,
+          {
+            headers: { Authorization: `Bearer ${params.accessToken}` },
+          },
+        );
+        if (pathRes.ok) {
+          res = pathRes;
+          resolved = true;
+          break;
+        }
+      }
+
+      if (!resolved) {
+        throw new Error(`OneDrive get download link failed: ${res.status}`);
+      }
     }
 
     const data = (await res.json()) as OneDriveItemResponse;
@@ -90,7 +115,7 @@ export class OneDriveAdapter implements StorageAdapter {
     accessToken: string;
   }): Promise<ThumbnailResult | null> {
     try {
-      const res = await fetch(
+      let res = await fetch(
         `https://graph.microsoft.com/v1.0/me/drive/items/${params.providerFileId}/thumbnails/0/medium/content`,
         {
           headers: { Authorization: `Bearer ${params.accessToken}` },
@@ -129,7 +154,7 @@ export class OneDriveAdapter implements StorageAdapter {
     newName: string;
     accessToken: string;
   }): Promise<void> {
-    const res = await fetch(
+    let res = await fetch(
       `https://graph.microsoft.com/v1.0/me/drive/items/${params.providerFileId}`,
       {
         method: "PATCH",
@@ -147,7 +172,7 @@ export class OneDriveAdapter implements StorageAdapter {
   }
 
   async fetchQuota(accessToken: string): Promise<QuotaResult> {
-    const res = await fetch("https://graph.microsoft.com/v1.0/me/drive", {
+    let res = await fetch("https://graph.microsoft.com/v1.0/me/drive", {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 

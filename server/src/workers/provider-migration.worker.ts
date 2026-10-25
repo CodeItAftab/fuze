@@ -244,8 +244,8 @@ export async function executeProviderMigration(
 
       // 1. Whole File (totalChunks === 1) -> 0 MB transfer! Left intact in cloud
       if (allChunksForNode.length === 1) {
-        await db.delete(fileChunks).where(eq(fileChunks.vfsNodeId, nodeId));
-        await db.delete(vfsNodes).where(eq(vfsNodes.id, nodeId));
+        // Preserved intact in cloud for re-linking
+        // Preserved VFS node intact
         console.log(
           `[SmartEvacuate] ✓ Preserved whole file intact in ${providerName}: ${node?.name || nodeId}`,
         );
@@ -259,8 +259,8 @@ export async function executeProviderMigration(
 
       if (chunksOnOthers.length === 0) {
         // Prevent ghost files: delete chunks and parent VFS node
-        await db.delete(fileChunks).where(eq(fileChunks.vfsNodeId, nodeId));
-        await db.delete(vfsNodes).where(eq(vfsNodes.id, nodeId));
+        // Preserved intact in cloud for re-linking
+        // Preserved VFS node intact
         console.log(
           `[SmartEvacuate] ✓ All ${allChunksForNode.length} parts already in ${providerName}: ${node?.name || nodeId}`,
         );
@@ -308,13 +308,15 @@ export async function executeProviderMigration(
               targetMime,
             );
 
-            await db
+          
+              await db
               .update(fileChunks)
               .set({ providerIdentityId: dest.id, providerFileId: newFileId })
               .where(eq(fileChunks.id, chunkOnThisCloud.id));
 
             dest.quotaUsed += chunkSize;
-            await db
+          
+              await db
               .update(providerIdentities)
               .set({ quotaUsed: dest.quotaUsed })
               .where(eq(providerIdentities.id, dest.id));
@@ -377,7 +379,8 @@ export async function executeProviderMigration(
             );
 
             // Update chunk location to target provider
-            await db
+          
+              await db
               .update(fileChunks)
               .set({
                 providerIdentityId: providerIdentityId,
@@ -386,7 +389,8 @@ export async function executeProviderMigration(
               .where(eq(fileChunks.id, remoteChunk.id));
 
             // Refund quota on remote cloud!
-            await db
+          
+              await db
               .update(providerIdentities)
               .set({
                 quotaUsed: remoteProvider.quotaUsed - chunkSize,
@@ -473,13 +477,15 @@ export async function executeProviderMigration(
             targetMime,
           );
 
-          await db
+        
+            await db
             .update(fileChunks)
             .set({ providerIdentityId: dest.id, providerFileId: newFileId })
             .where(eq(fileChunks.id, chunk.id));
 
           dest.quotaUsed += chunkSize;
-          await db
+        
+            await db
             .update(providerIdentities)
             .set({ quotaUsed: dest.quotaUsed })
             .where(eq(providerIdentities.id, dest.id));
@@ -557,12 +563,27 @@ export async function executeProviderMigration(
   // -------------------------------------------------------------
   // FINALIZE: Unlink provider row and broadcast
   // -------------------------------------------------------------
+
+  if (action === "smart_unlink") {
+    await db
+      .update(providerIdentities)
+      .set({ isDisconnected: true, pendingRestore: true, isRevoked: false })
+      .where(eq(providerIdentities.id, providerIdentityId));
+    socketManager.broadcastToUser(userId, {
+      type: "PROVIDER_DISCONNECTED",
+      payload: { providerId: providerIdentityId },
+    });
+    return;
+  }
+
   await db
     .delete(fileChunks)
     .where(eq(fileChunks.providerIdentityId, providerIdentityId));
+
   await db
     .delete(uploadChunks)
     .where(eq(uploadChunks.providerIdentityId, providerIdentityId));
+
   await db
     .delete(providerIdentities)
     .where(eq(providerIdentities.id, providerIdentityId));
