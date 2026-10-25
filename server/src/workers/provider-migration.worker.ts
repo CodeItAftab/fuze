@@ -310,13 +310,61 @@ async function transferChunk(
       body: formData,
       signal: AbortSignal.timeout(180_000),
     });
-    if (!upRes.ok && upRes.status !== 200 && upRes.status !== 201) {
-      const errText = await upRes.text().catch(() => "");
-      throw new Error(
-        `Upload to ${destProvider.provider} failed (${upRes.status}): ${errText}`,
-      );
+    let finalRes = upRes;
+    if (!finalRes.ok && finalRes.status !== 200 && finalRes.status !== 201) {
+      if (destProvider.provider === "box" && finalRes.status === 409) {
+        const errText = await finalRes.text().catch(() => "");
+        let conflictId = "";
+        try {
+          const parsed = JSON.parse(errText);
+          conflictId = parsed?.context_info?.conflicts?.id || "";
+        } catch {}
+
+        if (conflictId) {
+          // Delete stale duplicate on Box and retry upload
+          await fetch(`https://api.box.com/2.0/files/${conflictId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${destToken}` },
+          }).catch(() => {});
+
+          const retryFormData = new FormData();
+          if (uploadSession.formDataFields) {
+            for (const [k, v] of Object.entries(uploadSession.formDataFields)) {
+              retryFormData.append(k, v);
+            }
+          }
+          retryFormData.append(
+            "file",
+            new Blob([fileBuffer], {
+              type: targetMimeType || "application/octet-stream",
+            }),
+            targetFileName,
+          );
+
+          finalRes = await fetch(uploadSession.sessionUrl, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${destToken}`,
+            },
+            body: retryFormData,
+            signal: AbortSignal.timeout(180_000),
+          });
+        }
+
+        if (!finalRes.ok && finalRes.status !== 200 && finalRes.status !== 201) {
+          const retryErr = await finalRes.text().catch(() => "");
+          throw new Error(
+            `Upload to box failed (${finalRes.status}): ${retryErr || errText}`,
+          );
+        }
+      } else {
+        const errText = await finalRes.text().catch(() => "");
+        throw new Error(
+          `Upload to ${destProvider.provider} failed (${finalRes.status}): ${errText}`,
+        );
+      }
     }
-    const data = (await upRes.json().catch(() => ({}))) as any;
+    const data = (await finalRes.json().catch(() => ({}))) as any;
     newFileId = parseUploadedFileId(destProvider.provider, data, targetFileName);
   } else {
     // Raw binary octet-stream upload (Dropbox, Google Drive, OneDrive)
