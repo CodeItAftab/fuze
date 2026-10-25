@@ -257,6 +257,28 @@ class WebSocketClient {
         );
         break;
       }
+
+      case "PROVIDER_MIGRATION_CANCELLED": {
+        const last = store.migrationProgress;
+        if (last) {
+          store.setLastCompletedMigration({
+            ...last,
+            completedAt: new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            status: "cancelled",
+            statusText: "Migration cancelled by user.",
+          });
+        }
+        store.setMigrationProgress(null);
+        void store.refreshProviders();
+        toast.info(
+          "Migration Cancelled",
+          "Transferred files remain safe on destination clouds.",
+        );
+        break;
+      }
     }
   }
 

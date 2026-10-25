@@ -60,7 +60,10 @@ class SocketManager {
           } else if (data.type === "REVOKE_SESSION") {
             this.localRevokeSession(data.sessionToken);
           } else if (data.type === "REVOKE_OTHER_SESSIONS") {
-            this.localRevokeOtherSessions(data.userId, data.currentSessionToken);
+            this.localRevokeOtherSessions(
+              data.userId,
+              data.currentSessionToken,
+            );
           }
         } catch {}
       });
@@ -118,12 +121,18 @@ class SocketManager {
   }
 
   broadcastToUser(userId: string, event: SyncEvent) {
+    // 1. Send locally if user socket is connected to this process
     this.localBroadcastToUser(userId, event);
+    // 2. Publish to Redis so all PM2 worker/api processes receive and forward it
     if (this.pub) {
       this.pub
         .publish(
           REDIS_CHANNEL,
-          JSON.stringify({ type: "BROADCAST_USER", userId, event }),
+          JSON.stringify({
+            type: "BROADCAST_USER",
+            userId,
+            event,
+          }),
         )
         .catch(() => {});
     }
@@ -159,7 +168,10 @@ class SocketManager {
     }
   }
 
-  private localRevokeOtherSessions(userId: string, currentSessionToken: string) {
+  private localRevokeOtherSessions(
+    userId: string,
+    currentSessionToken: string,
+  ) {
     const sockets = this.userSockets.get(userId);
     if (!sockets) return;
 

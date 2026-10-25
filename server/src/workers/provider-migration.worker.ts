@@ -3,8 +3,8 @@ import IORedis from "ioredis";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { Readable, PassThrough } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { Readable } from "node:stream";
 import {
   db,
   providerIdentities,
@@ -145,7 +145,8 @@ export class MigrationLogger {
 }
 
 /**
- * Transfers a single chunk or whole file between two providers with streaming and verification.
+ * Transfers a single chunk directly from source provider to destination provider
+ * via direct HTTP memory streaming (ZERO DISK WRITES).
  */
 async function transferChunk(
   sourceProvider: any,
@@ -157,134 +158,120 @@ async function transferChunk(
   targetFileName: string,
   targetMimeType: string,
 ): Promise<string> {
-  const tempFilePath = path.join(
-    os.tmpdir(),
-    `fuze_mig_${chunk.id}_${Date.now()}.tmp`,
-  );
+  const sourceAdapter = getStorageAdapter(sourceProvider.provider);
+  const destAdapter = getStorageAdapter(destProvider.provider);
+  // 1. Get source download stream URL
+  const downloadUrl = await sourceAdapter.getDownloadUrl({
+    providerFileId: chunk.providerFileId,
+    accessToken: sourceToken,
+  });
+  const dlRes = await fetch(downloadUrl);
+  if (!dlRes.ok || !dlRes.body) {
+    const errText = await dlRes.text().catch(() => "");
+    throw new Error(
+      `Failed to download from ${sourceProvider.provider} (HTTP ${dlRes.status}): ${errText}`,
+    );
+  }
+  // 2. Prepare destination upload session
+  const uploadSession = await destAdapter.createResumableUploadSession({
+    fileName: targetFileName,
+    mimeType: targetMimeType || "application/octet-stream",
+    size: chunkSize,
+    accessToken: destToken,
+  });
+  let newFileId: string;
+  // Convert Web stream to Node readable stream
+  const nodeReadableStream = Readable.fromWeb(dlRes.body as any);
+  // 3. Direct Streaming upload
+  if (
+    uploadSession.uploadType === "multipart" ||
+    destProvider.provider === "pcloud"
+  ) {
+    // Collect stream in memory buffer only for multipart boundaries
+    const chunks: Buffer[] = [];
+    for await (const chunkData of nodeReadableStream) {
+      chunks.push(Buffer.from(chunkData));
+    }
+    const fileBuffer = Buffer.concat(chunks);
+    const formData = new FormData();
+    if (uploadSession.formDataFields) {
+      for (const [k, v] of Object.entries(uploadSession.formDataFields)) {
+        formData.append(k, v);
+      }
+    }
+    formData.append(
+      "file",
+      new Blob([fileBuffer], {
+        type: targetMimeType || "application/octet-stream",
+      }),
+      targetFileName,
+    );
+    const upRes = await fetch(uploadSession.sessionUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${destToken}`,
+      },
+      body: formData,
+    });
+    if (!upRes.ok && upRes.status !== 200 && upRes.status !== 201) {
+      const errText = await upRes.text().catch(() => "");
+      throw new Error(
+        `Upload to ${destProvider.provider} failed (${upRes.status}): ${errText}`,
+      );
+    }
+    const data = (await upRes.json().catch(() => ({}))) as any;
+    newFileId = String(
+      data.fileids?.[0] || data.id || data.name || targetFileName,
+    );
+  } else {
+    // Pure zero-copy pass-through stream (Box, Google Drive, OneDrive)
+    const upRes = await fetch(uploadSession.sessionUrl, {
+      method: uploadSession.httpMethod || "POST",
+      headers: {
+        ...(uploadSession.headers || {}),
+        "Content-Length": String(chunkSize),
+      },
+      body: nodeReadableStream as any,
+      duplex: "half",
+    } as any);
+    if (!upRes.ok && upRes.status !== 200 && upRes.status !== 201) {
+      const errText = await upRes.text().catch(() => "");
+      throw new Error(
+        `Upload to ${destProvider.provider} failed (${upRes.status}): ${errText}`,
+      );
+    }
+    const data = (await upRes.json().catch(() => ({}))) as any;
+    if (destProvider.provider === "box") {
+      newFileId = data.entries?.[0]?.id || data.id;
+    } else if (destProvider.provider === "pcloud") {
+      newFileId = String(data.fileids?.[0] || data.metadata?.fileid || data.id);
+    } else if (
+      destProvider.provider === "google_drive" ||
+      destProvider.provider === "one_drive"
+    ) {
+      newFileId = data.id;
+    } else if (destProvider.provider === "dropbox") {
+      newFileId = data.id || data.path_lower || targetFileName;
+    } else {
+      newFileId = data.id || data.name || targetFileName;
+    }
 
-  try {
-    // 1. Stream from source provider
-    const sourceAdapter = getStorageAdapter(sourceProvider.provider);
-    const downloadUrl = await sourceAdapter.getDownloadUrl({
+    if (!newFileId) {
+      throw new Error(
+        `Upload succeeded but could not parse file ID from ${destProvider.provider} response.`,
+      );
+    }
+  }
+  // 4. Delete source chunk only after destination upload is verified
+  await sourceAdapter
+    .deleteFile({
       providerFileId: chunk.providerFileId,
       accessToken: sourceToken,
-    });
-
-    let dlRes: Response;
-    try {
-      dlRes = await fetch(downloadUrl);
-    } catch (e: any) {
-      throw new Error(
-        `Failed to download from ${sourceProvider.provider}: ${e?.cause?.message || e?.message || e}`,
-      );
-    }
-    if (!dlRes.ok || !dlRes.body) {
-      const errBody = await dlRes.text().catch(() => "");
-      throw new Error(
-        `Failed to download from ${sourceProvider.provider} (HTTP ${dlRes.status}): ${errBody}`,
-      );
-    }
-
-    const fileStream = fs.createWriteStream(tempFilePath);
-    await pipeline(Readable.fromWeb(dlRes.body as any), fileStream);
-
-    const stat = await fs.promises.stat(tempFilePath);
-    if (stat.size === 0 && chunkSize > 0) {
-      throw new Error("Downloaded empty chunk from source provider.");
-    }
-
-    // 2. Upload to destination provider
-    const destAdapter = getStorageAdapter(destProvider.provider);
-    const uploadSession = await destAdapter.createResumableUploadSession({
-      fileName: targetFileName,
-      mimeType: targetMimeType || "application/octet-stream",
-      size: stat.size,
-      accessToken: destToken,
-    });
-
-    let newFileId: string;
-
-    try {
-      // Handle pCloud / Multipart form-data uploads
-      if (
-        uploadSession.uploadType === "multipart" ||
-        destProvider.provider === "pcloud"
-      ) {
-        const fileBuffer = await fs.promises.readFile(tempFilePath);
-        const formData = new FormData();
-
-        if (uploadSession.formDataFields) {
-          for (const [k, v] of Object.entries(uploadSession.formDataFields)) {
-            formData.append(k, v);
-          }
-        }
-
-        formData.append(
-          "file",
-          new Blob([fileBuffer], {
-            type: targetMimeType || "application/octet-stream",
-          }),
-          targetFileName,
-        );
-
-        const upRes = await fetch(uploadSession.sessionUrl, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${destToken}`,
-          },
-          body: formData,
-        });
-
-        if (!upRes.ok && upRes.status !== 200 && upRes.status !== 201) {
-          const errText = await upRes.text().catch(() => "");
-          throw new Error(
-            `Upload to ${destProvider.provider} failed (${upRes.status}): ${errText}`,
-          );
-        }
-        const data = (await upRes.json().catch(() => ({}))) as any;
-        newFileId = String(
-          data.fileids?.[0] || data.id || data.name || targetFileName,
-        );
-      } else {
-        // Standard binary stream upload (Box, Google Drive, OneDrive)
-        const upRes = await fetch(uploadSession.sessionUrl, {
-          method: uploadSession.httpMethod || "POST",
-          headers: {
-            ...(uploadSession.headers || {}),
-            "Content-Length": String(stat.size),
-          },
-          body: fs.createReadStream(tempFilePath) as any,
-          duplex: "half",
-        } as any);
-
-        if (!upRes.ok && upRes.status !== 200 && upRes.status !== 201) {
-          const errText = await upRes.text().catch(() => "");
-          throw new Error(
-            `Upload to ${destProvider.provider} failed (${upRes.status}): ${errText}`,
-          );
-        }
-        const data = (await upRes.json().catch(() => ({}))) as any;
-        newFileId = data.id || data.name || targetFileName;
-      }
-    } catch (e: any) {
-      throw new Error(
-        `Upload to ${destProvider.provider} failed: ${e?.cause?.message || e?.message || e}`,
-      );
-    }
-
-    // 3. Delete source chunk ONLY after upload is completely verified
-    await sourceAdapter
-      .deleteFile({
-        providerFileId: chunk.providerFileId,
-        accessToken: sourceToken,
-      })
-      .catch(() => {});
-
-    return newFileId;
-  } finally {
-    await fs.promises.unlink(tempFilePath).catch(() => {});
-  }
+    })
+    .catch(() => {});
+  return newFileId;
 }
+
 /**
  * Main Migration Execution Engine
  */
