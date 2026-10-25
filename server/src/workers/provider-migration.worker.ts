@@ -25,6 +25,7 @@ export interface ProviderMigrationJobData {
   userId: string;
   providerIdentityId: string;
   action: "migrate" | "delete" | "smart_unlink";
+  migrationJobId?: string;
 }
 
 /**
@@ -299,6 +300,10 @@ export async function executeProviderMigration(
   }
 
   const providerName = targetProvider.provider.toUpperCase();
+  const effectiveJobId = data.migrationJobId || jobId;
+  const logger = new MigrationLogger(effectiveJobId, userId, providerIdentityId, providerName);
+  await logger.log("info", `Job #${effectiveJobId}: Migration worker started for ${providerName} (${action.toUpperCase()} mode).`);
+
   let targetToken = "";
   try {
     targetToken = await TokenService.getValidAccessToken(providerIdentityId);
@@ -315,6 +320,9 @@ export async function executeProviderMigration(
 
   const totalChunks = localChunks.length;
   let processed = 0;
+  const totalBytes = localChunks.reduce((sum, c) => sum + (Number(c.byteEnd) - Number(c.byteStart)), 0);
+  let transferredBytes = 0;
+  await logger.log("info", `Found ${totalChunks} chunk(s) totaling ${(totalBytes / (1024 * 1024)).toFixed(2)} MB on ${providerName}.`);
 
   // Pre-load all affected VFS nodes to preserve real filenames and extensions
   const affectedNodeIds = Array.from(
@@ -330,7 +338,7 @@ export async function executeProviderMigration(
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
 
   // -------------------------------------------------------------
-  // ACTION: SMART EVACUATE (Smart Preservation + Reverse Consolidation)
+  // ACTION: SMART EVACUATE (Smart Preservation + Multi-Destination Relocation)
   // -------------------------------------------------------------
   if (action === "smart_unlink") {
     const otherProviders = await db
@@ -340,8 +348,17 @@ export async function executeProviderMigration(
         and(
           eq(providerIdentities.userId, userId),
           ne(providerIdentities.id, providerIdentityId),
+          eq(providerIdentities.isDisconnected, false),
+          eq(providerIdentities.isRevoked, false),
         ),
       );
+
+    await logger.log(
+      "info",
+      `Smart Evacuate initiated. Scanning ${affectedNodeIds.length} affected file(s)...`,
+    );
+
+    let processedNodes = 0;
 
     for (const nodeId of affectedNodeIds) {
       const allChunksForNode = await db
@@ -354,11 +371,11 @@ export async function executeProviderMigration(
 
       // 1. Whole File (totalChunks === 1) -> 0 MB transfer! Left intact in cloud
       if (allChunksForNode.length === 1) {
-        // Preserved intact in cloud for re-linking
-        // Preserved VFS node intact
-        console.log(
-          `[SmartEvacuate] ✓ Preserved whole file intact in ${providerName}: ${node?.name || nodeId}`,
+        await logger.log(
+          "info",
+          `✓ Preserved whole file "${node?.name || nodeId}" intact in ${providerName} (0 MB transfer).`,
         );
+        processedNodes++;
         continue;
       }
 
@@ -368,16 +385,15 @@ export async function executeProviderMigration(
       );
 
       if (chunksOnOthers.length === 0) {
-        // Prevent ghost files: delete chunks and parent VFS node
-        // Preserved intact in cloud for re-linking
-        // Preserved VFS node intact
-        console.log(
-          `[SmartEvacuate] ✓ All ${allChunksForNode.length} parts already in ${providerName}: ${node?.name || nodeId}`,
+        await logger.log(
+          "info",
+          `✓ All ${allChunksForNode.length} parts of "${node?.name || nodeId}" reside in ${providerName}. Preserved intact.`,
         );
+        processedNodes++;
         continue;
       }
 
-      // 3. Chunks are split: Try FORWARD evacuation first (move this cloud's chunk to remaining clouds)
+      // 3. Chunks are split across clouds: Try FORWARD evacuation first (move this cloud's chunk to remaining clouds)
       const chunkOnThisCloud = allChunksForNode.find(
         (c) => c.providerIdentityId === providerIdentityId,
       );
@@ -397,15 +413,16 @@ export async function executeProviderMigration(
             (a, b) => b.quotaTotal - b.quotaUsed - (a.quotaTotal - a.quotaUsed),
           );
 
-        const dest = eligible[0];
-        if (dest) {
+        const targetFileName = `${node?.name || "chunk"}.part${chunkOnThisCloud.chunkIndex}`;
+        const targetMime = node?.mimeType || "application/octet-stream";
+
+        for (const dest of eligible) {
           try {
+            await logger.log(
+              "info",
+              `Evacuating split chunk ${chunkOnThisCloud.chunkIndex} of "${targetFileName}" (${(chunkSize / (1024 * 1024)).toFixed(2)} MB) to ${dest.provider.toUpperCase()}...`,
+            );
             const destToken = await TokenService.getValidAccessToken(dest.id);
-            const targetFileName =
-              allChunksForNode.length === 1
-                ? node?.name || `file_${chunkOnThisCloud.id}`
-                : `${node?.name || "chunk"}.part${chunkOnThisCloud.chunkIndex}`;
-            const targetMime = node?.mimeType || "application/octet-stream";
 
             const newFileId = await transferChunk(
               targetProvider,
@@ -418,31 +435,39 @@ export async function executeProviderMigration(
               targetMime,
             );
 
-          
-              await db
+            await db
               .update(fileChunks)
               .set({ providerIdentityId: dest.id, providerFileId: newFileId })
               .where(eq(fileChunks.id, chunkOnThisCloud.id));
 
             dest.quotaUsed += chunkSize;
-          
-              await db
+            await db
               .update(providerIdentities)
               .set({ quotaUsed: dest.quotaUsed })
               .where(eq(providerIdentities.id, dest.id));
 
+            transferredBytes += chunkSize;
             forwardSuccess = true;
-            console.log(
-              `[SmartEvacuate] ✓ Forward evacuated chunk to ${dest.provider}`,
+            await logger.log(
+              "success",
+              `✓ Successfully relocated split chunk to ${dest.provider.toUpperCase()}`,
             );
-          } catch {}
+            break;
+          } catch (err: any) {
+            await logger.log(
+              "warn",
+              `Relocation to ${dest.provider.toUpperCase()} failed (${err?.message || err}). Trying next cloud...`,
+            );
+          }
         }
       }
 
-      if (forwardSuccess) continue;
+      if (forwardSuccess) {
+        processedNodes++;
+        continue;
+      }
 
-      // 4. FORWARD failed (other clouds full): Try REVERSE CONSOLIDATION!
-      // Pull missing chunks from other clouds into this disconnecting provider
+      // 4. FORWARD failed (other clouds full or offline): Try REVERSE CONSOLIDATION!
       let reverseSuccess = true;
       const bytesNeeded = chunksOnOthers.reduce(
         (sum, c) => sum + (c.byteEnd - c.byteStart),
@@ -452,8 +477,9 @@ export async function executeProviderMigration(
         targetProvider.quotaTotal - targetProvider.quotaUsed;
 
       if (targetFreeBytes >= bytesNeeded) {
-        console.log(
-          `[SmartEvacuate] 🔄 Initiating Reverse Consolidation: Pulling ${chunksOnOthers.length} parts into ${providerName}...`,
+        await logger.log(
+          "info",
+          `Consolidating ${chunksOnOthers.length} parts of "${node?.name || nodeId}" into ${providerName}...`,
         );
 
         for (const remoteChunk of chunksOnOthers) {
@@ -472,8 +498,6 @@ export async function executeProviderMigration(
               remoteProvider.id,
             );
             const chunkSize = remoteChunk.byteEnd - remoteChunk.byteStart;
-
-            const node = nodeMap.get(remoteChunk.vfsNodeId);
             const targetFileName = `${node?.name || "chunk"}.part${remoteChunk.chunkIndex}`;
             const targetMime = node?.mimeType || "application/octet-stream";
 
@@ -488,9 +512,7 @@ export async function executeProviderMigration(
               targetMime,
             );
 
-            // Update chunk location to target provider
-          
-              await db
+            await db
               .update(fileChunks)
               .set({
                 providerIdentityId: providerIdentityId,
@@ -498,20 +520,22 @@ export async function executeProviderMigration(
               })
               .where(eq(fileChunks.id, remoteChunk.id));
 
-            // Refund quota on remote cloud!
-          
-              await db
-              .update(providerIdentities)
-              .set({
-                quotaUsed: remoteProvider.quotaUsed - chunkSize,
-              })
-              .where(eq(providerIdentities.id, remoteProvider.id));
-
             targetProvider.quotaUsed += chunkSize;
-            console.log(
-              `[SmartEvacuate] ✓ Reverse consolidated chunk to ${providerName}`,
+            await db
+              .update(providerIdentities)
+              .set({ quotaUsed: targetProvider.quotaUsed })
+              .where(eq(providerIdentities.id, providerIdentityId));
+
+            transferredBytes += chunkSize;
+            await logger.log(
+              "success",
+              `✓ Consolidated part ${remoteChunk.chunkIndex} into ${providerName}`,
             );
-          } catch {
+          } catch (err: any) {
+            await logger.log(
+              "warn",
+              `Reverse consolidation failed: ${err?.message || err}`,
+            );
             reverseSuccess = false;
             break;
           }
@@ -520,18 +544,29 @@ export async function executeProviderMigration(
         reverseSuccess = false;
       }
 
-      // 5. If BOTH forward evacuation and reverse consolidation failed -> Cascade Purge
       if (!reverseSuccess) {
-        await CascadePurgeService.purgeUnsalvageableFile(
-          userId,
-          nodeId,
-          providerIdentityId,
+        await logger.log(
+          "warn",
+          `File "${node?.name || nodeId}" could not be unified across clouds. Preserving DB record.`,
         );
       }
+      processedNodes++;
     }
 
-    // Deploy Recovery Kit with RESTORE_ALL_FILES.bat to provider before unlinking
-    await RecoveryKitService.deployRecoveryKit(userId, providerIdentityId);
+    try {
+      await RecoveryKitService.deployRecoveryKit(userId, providerIdentityId);
+    } catch {}
+
+    await logger.updateProgress({
+      completed: totalChunks,
+      total: totalChunks,
+      percent: 100,
+      transferredBytes,
+      totalBytes,
+      statusText: "Smart Evacuation completed successfully.",
+      action,
+    });
+    await logger.finish("completed");
   }
 
   // -------------------------------------------------------------
@@ -545,6 +580,8 @@ export async function executeProviderMigration(
         and(
           eq(providerIdentities.userId, userId),
           ne(providerIdentities.id, providerIdentityId),
+          eq(providerIdentities.isDisconnected, false),
+          eq(providerIdentities.isRevoked, false),
         ),
       );
 
@@ -561,20 +598,25 @@ export async function executeProviderMigration(
           (a, b) => b.quotaTotal - b.quotaUsed - (a.quotaTotal - a.quotaUsed),
         );
 
-      const dest = eligible[0];
+      const node = nodeMap.get(chunk.vfsNodeId);
+      const totalPartsForFile = localChunks.filter(
+        (c) => c.vfsNodeId === chunk.vfsNodeId,
+      ).length;
+      const targetFileName =
+        totalPartsForFile > 1
+          ? `${node?.name || "chunk"}.part${chunk.chunkIndex}`
+          : (node?.name || `fuze_file_${chunk.id}`);
+      const targetMime = node?.mimeType || "application/octet-stream";
 
-      if (dest) {
+      let chunkMoved = false;
+
+      for (const dest of eligible) {
         try {
+          await logger.log(
+            "info",
+            `Transferring chunk ${processed + 1}/${totalChunks} of "${targetFileName}" (${(chunkSize / (1024 * 1024)).toFixed(2)} MB) to ${dest.provider.toUpperCase()}...`,
+          );
           const destToken = await TokenService.getValidAccessToken(dest.id);
-          const node = nodeMap.get(chunk.vfsNodeId);
-          const totalPartsForFile = localChunks.filter(
-            (c) => c.vfsNodeId === chunk.vfsNodeId,
-          ).length;
-          const targetFileName =
-            totalPartsForFile > 1
-              ? `${node?.name || "chunk"}.part${chunk.chunkIndex}`
-              : (node?.name || `fuze_file_${chunk.id}`);
-          const targetMime = node?.mimeType || "application/octet-stream";
 
           const newFileId = await transferChunk(
             targetProvider,
@@ -587,48 +629,62 @@ export async function executeProviderMigration(
             targetMime,
           );
 
-        
-            await db
+          await db
             .update(fileChunks)
             .set({ providerIdentityId: dest.id, providerFileId: newFileId })
             .where(eq(fileChunks.id, chunk.id));
 
           dest.quotaUsed += chunkSize;
-        
-            await db
+          await db
             .update(providerIdentities)
             .set({ quotaUsed: dest.quotaUsed })
             .where(eq(providerIdentities.id, dest.id));
-        } catch (err: any) {
-          console.error(
-            `[Worker: ProviderMigration] Transfer failed for chunk ${chunk.id}:`,
-            err?.message || err,
+
+          transferredBytes += chunkSize;
+          chunkMoved = true;
+          await logger.log(
+            "success",
+            `✓ Relocated chunk ${processed + 1}/${totalChunks} of "${targetFileName}" to ${dest.provider.toUpperCase()}`,
           );
-          failedChunks.push(chunk);
+          break;
+        } catch (err: any) {
+          await logger.log(
+            "warn",
+            `Transfer to ${dest.provider.toUpperCase()} failed (${err?.message || err}). Trying next cloud...`,
+          );
         }
-      } else {
-        console.warn(
-          `[Worker: ProviderMigration] No eligible provider with capacity for chunk ${chunk.id} (${chunkSize} bytes)`,
+      }
+
+      if (!chunkMoved) {
+        await logger.log(
+          "error",
+          `✗ Failed to relocate chunk "${targetFileName}" to any connected cloud.`,
         );
         failedChunks.push(chunk);
       }
 
       processed++;
-      socketManager.broadcastToUser(userId, {
-        type: "PROVIDER_CLEANUP_PROGRESS",
-        payload: {
-          providerId: providerIdentityId,
-          action: "migrate",
-          completed: processed,
-          total: totalChunks,
-          percent: Math.round((processed / totalChunks) * 100),
-        },
+      const currentPercent = Math.round((processed / totalChunks) * 100);
+      await logger.updateProgress({
+        completed: processed,
+        total: totalChunks,
+        percent: currentPercent,
+        transferredBytes,
+        totalBytes,
+        currentFileName: targetFileName,
+        statusText: `Relocating "${targetFileName}" (${currentPercent}%)`,
+        action,
       });
     }
 
     if (failedChunks.length > 0) {
-      console.warn(
-        `[Worker: ProviderMigration] ⚠️ ${failedChunks.length} chunk(s) could not be relocated. Preserving original records and halting disconnection.`,
+      await logger.log(
+        "error",
+        `${failedChunks.length} chunk(s) could not be relocated. Preserving original records and halting disconnection.`,
+      );
+      await logger.finish(
+        "failed",
+        `${failedChunks.length} file part(s) could not be moved because destination storage was full or unavailable.`,
       );
       socketManager.broadcastToUser(userId, {
         type: "PROVIDER_MIGRATION_FAILED",
@@ -641,6 +697,8 @@ export async function executeProviderMigration(
       });
       return;
     }
+
+    await logger.finish("completed");
   }
 
   // -------------------------------------------------------------
@@ -668,12 +726,12 @@ export async function executeProviderMigration(
         providerIdentityId,
       );
     }
+    await logger.finish("completed");
   }
 
   // -------------------------------------------------------------
   // FINALIZE: Unlink provider row and broadcast
   // -------------------------------------------------------------
-
   if (action === "smart_unlink") {
     await db
       .update(providerIdentities)

@@ -7,6 +7,7 @@ import {
   fileChunks,
   uploadChunks,
   vfsNodes,
+  migrationJobs,
 } from "../db/index.js";
 import { eq, and, ne, sql, inArray, isNull, or, desc } from "drizzle-orm";
 import { encrypt, decrypt } from "../utils/crypto.js";
@@ -827,8 +828,115 @@ export async function providerRoutes(fastify: FastifyInstance) {
     },
   );
 
+    // -------------------------------------------------------------
+  // MIGRATIONS: ACTIVE JOB & HISTORY MONITORING
+  // -------------------------------------------------------------
+  fastify.get(
+    "/migrations/active",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        return reply.status(401).send({ error: "Unauthorized" });
+      }
+      const user = request.user as { userId: string };
+
+      const [activeJob] = await db
+        .select()
+        .from(migrationJobs)
+        .where(
+          and(
+            eq(migrationJobs.userId, user.userId),
+            or(
+              eq(migrationJobs.status, "running"),
+              eq(migrationJobs.status, "pending"),
+            ),
+          ),
+        )
+        .orderBy(desc(migrationJobs.startedAt))
+        .limit(1);
+
+      if (!activeJob) {
+        return reply.send({ job: null });
+      }
+
+      let parsedLogs: any[] = [];
+      try {
+        parsedLogs = activeJob.logs ? JSON.parse(activeJob.logs) : [];
+      } catch {}
+
+      return reply.send({
+        job: {
+          id: activeJob.id,
+          jobId: activeJob.id,
+          providerId: activeJob.providerIdentityId,
+          provider: activeJob.provider,
+          action: activeJob.action,
+          status: activeJob.status,
+          completed: activeJob.completedChunks,
+          total: activeJob.totalChunks,
+          percent: activeJob.percent,
+          transferredBytes: Number(activeJob.transferredBytes || 0),
+          totalBytes: Number(activeJob.totalBytes || 0),
+          currentFileName: activeJob.currentFileName,
+          statusText: activeJob.statusText,
+          logs: parsedLogs,
+          startedAt: activeJob.startedAt,
+        },
+      });
+    },
+  );
+
+  fastify.get(
+    "/migrations/history",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        return reply.status(401).send({ error: "Unauthorized" });
+      }
+      const user = request.user as { userId: string };
+
+      const jobs = await db
+        .select()
+        .from(migrationJobs)
+        .where(eq(migrationJobs.userId, user.userId))
+        .orderBy(desc(migrationJobs.startedAt))
+        .limit(10);
+
+      const items = jobs.map((job) => {
+        let parsedLogs: any[] = [];
+        try {
+          parsedLogs = job.logs ? JSON.parse(job.logs) : [];
+        } catch {}
+        return {
+          id: job.id,
+          jobId: job.id,
+          providerId: job.providerIdentityId,
+          provider: job.provider,
+          action: job.action,
+          status: job.status,
+          completed: job.completedChunks,
+          total: job.totalChunks,
+          percent: job.percent,
+          transferredBytes: Number(job.transferredBytes || 0),
+          totalBytes: Number(job.totalBytes || 0),
+          currentFileName: job.currentFileName,
+          statusText: job.statusText,
+          logs: parsedLogs,
+          errorMessage: job.errorMessage,
+          startedAt: job.startedAt,
+          completedAt: job.completedAt,
+        };
+      });
+
+      return reply.send({ history: items });
+    },
+  );
+
   // -------------------------------------------------------------
   // 4. DISCONNECT PRE-FLIGHT CHECK (/providers/:id/disconnect-preview)
+
   // -------------------------------------------------------------
   fastify.get(
     "/:id/disconnect-preview",
@@ -879,7 +987,12 @@ export async function providerRoutes(fastify: FastifyInstance) {
 
       // 1. Fetch chunks on this provider
       const chunks = await db
-        .select({ id: fileChunks.id, vfsNodeId: fileChunks.vfsNodeId })
+        .select({
+          id: fileChunks.id,
+          vfsNodeId: fileChunks.vfsNodeId,
+          byteStart: fileChunks.byteStart,
+          byteEnd: fileChunks.byteEnd,
+        })
         .from(fileChunks)
         .where(eq(fileChunks.providerIdentityId, id));
 
@@ -975,15 +1088,49 @@ export async function providerRoutes(fastify: FastifyInstance) {
       }
 
       // 3. Heavy evacuation needed: queue background BullMQ worker
-      const job = await providerMigrationQueue.add("disconnect-provider", {
+      // 3. Create persistent migrationJobs record in DB
+      const [targetProv] = await db
+        .select()
+        .from(providerIdentities)
+        .where(and(eq(providerIdentities.id, id), eq(providerIdentities.userId, user.userId)));
+
+      const totalBytes = chunks.reduce(
+        (sum, c) => sum + (Number(c.byteEnd) - Number(c.byteStart)),
+        0,
+      );
+
+      const [newJob] = await db
+        .insert(migrationJobs)
+        .values({
+          userId: user.userId,
+          providerIdentityId: id,
+          provider: targetProv?.provider || "cloud",
+          action,
+          status: "running",
+          totalChunks: chunks.length,
+          totalBytes,
+          percent: 0,
+          statusText: `Preparing ${action === "migrate" ? "full cloud evacuation" : "smart chunk relocation"}...`,
+          logs: JSON.stringify([
+            {
+              timestamp: new Date().toISOString(),
+              level: "info",
+              message: `Job queued: Processing ${chunks.length} chunk(s) (${(totalBytes / (1024 * 1024)).toFixed(2)} MB) from ${(targetProv?.provider || "").toUpperCase()} (${action.toUpperCase()} mode).`,
+            },
+          ]),
+        })
+        .returning({ id: migrationJobs.id });
+
+      const queued = await queueProviderMigration({
         userId: user.userId,
         providerIdentityId: id,
         action,
+        migrationJobId: newJob.id,
       });
 
       return reply.send({
         success: true,
-        jobId: job.id,
+        jobId: newJob.id,
         message: `Disconnection process started in background (${action} mode).`,
       });
     },
