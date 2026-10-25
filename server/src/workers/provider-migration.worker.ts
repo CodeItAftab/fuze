@@ -177,6 +177,40 @@ export class MigrationLogger {
   }
 }
 
+function parseUploadedFileId(
+  provider: string,
+  data: any,
+  targetFileName: string,
+): string {
+  let fileId = "";
+  if (provider === "box") {
+    fileId = data.entries?.[0]?.id || data.id;
+  } else if (provider === "pcloud") {
+    fileId = String(
+      data.fileids?.[0] || data.metadata?.fileid || data.id || "",
+    );
+  } else if (provider === "google_drive" || provider === "one_drive") {
+    fileId = data.id;
+  } else if (provider === "dropbox") {
+    fileId = data.id || data.path_lower;
+  } else {
+    fileId = data.id || data.fileids?.[0] || data.entries?.[0]?.id;
+  }
+
+  if (!fileId || fileId === targetFileName) {
+    if (provider === "box") {
+      throw new Error(
+        `Box upload succeeded but could not parse entry ID. Response: ${JSON.stringify(data).slice(0, 200)}`,
+      );
+    }
+    if (provider === "dropbox") {
+      return data.path_lower || targetFileName;
+    }
+  }
+
+  return fileId || targetFileName;
+}
+
 /**
  * Transfers a single chunk directly from source provider to destination provider
  * via direct HTTP memory streaming (ZERO DISK WRITES).
@@ -253,9 +287,7 @@ async function transferChunk(
       );
     }
     const data = (await upRes.json().catch(() => ({}))) as any;
-    newFileId = String(
-      data.fileids?.[0] || data.id || data.name || targetFileName,
-    );
+    newFileId = parseUploadedFileId(destProvider.provider, data, targetFileName);
   } else {
     // Pure zero-copy pass-through stream (Box, Google Drive, OneDrive)
     const upRes = await fetch(uploadSession.sessionUrl, {
@@ -274,26 +306,12 @@ async function transferChunk(
       );
     }
     const data = (await upRes.json().catch(() => ({}))) as any;
-    if (destProvider.provider === "box") {
-      newFileId = data.entries?.[0]?.id || data.id;
-    } else if (destProvider.provider === "pcloud") {
-      newFileId = String(data.fileids?.[0] || data.metadata?.fileid || data.id);
-    } else if (
-      destProvider.provider === "google_drive" ||
-      destProvider.provider === "one_drive"
-    ) {
-      newFileId = data.id;
-    } else if (destProvider.provider === "dropbox") {
-      newFileId = data.id || data.path_lower || targetFileName;
-    } else {
-      newFileId = data.id || data.name || targetFileName;
-    }
-
-    if (!newFileId) {
-      throw new Error(
-        `Upload succeeded but could not parse file ID from ${destProvider.provider} response.`,
-      );
-    }
+    newFileId = parseUploadedFileId(destProvider.provider, data, targetFileName);
+  }
+  if (!newFileId) {
+    throw new Error(
+      `Upload succeeded but could not parse file ID from ${destProvider.provider} response.`,
+    );
   }
   // 4. Delete source chunk only after destination upload is verified
   await sourceAdapter
