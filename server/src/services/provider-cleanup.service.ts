@@ -118,6 +118,8 @@ export class ProviderCleanupService {
         and(
           eq(providerIdentities.userId, userId),
           ne(providerIdentities.id, providerIdentityId),
+          eq(providerIdentities.isDisconnected, false),
+          eq(providerIdentities.isRevoked, false),
         ),
       );
 
