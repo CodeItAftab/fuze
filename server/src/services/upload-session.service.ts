@@ -14,6 +14,7 @@ import { computeMerkleRoot } from "../utils/crypto.js";
 import { socketManager } from "../websocket/socket-manager.js";
 import { VfsService } from "./vfs.service.js";
 import { CacheService } from "./cache.service.js";
+import { QuotaService } from "./quota.service.js";
 
 export class UploadSessionService {
   static async createSession(params: {
@@ -257,7 +258,8 @@ export class UploadSessionService {
       })
       .returning();
 
-    // 2. Link fileChunks to permanent VFS node and update provider quotaUsed
+    // 2. Link fileChunks to permanent VFS node and update provider quota
+    const affectedProviderIds = new Set<string>();
     for (const c of chunks) {
       await db.insert(fileChunks).values({
         vfsNodeId: vfsNode!.id,
@@ -268,15 +270,12 @@ export class UploadSessionService {
         chunkHash: c.chunkHash!,
         chunkIndex: c.chunkIndex,
       });
+      affectedProviderIds.add(c.providerIdentityId);
+    }
 
-      const chunkSize = c.byteEnd - c.byteStart + 1;
-      await db
-        .update(providerIdentities)
-        .set({
-          quotaUsed: sql`${providerIdentities.quotaUsed} + ${chunkSize}`,
-          lastSyncedAt: new Date(),
-        })
-        .where(eq(providerIdentities.id, c.providerIdentityId));
+    // Sync quotas across all affected cloud providers
+    for (const providerId of affectedProviderIds) {
+      await QuotaService.syncProviderQuota(providerId);
     }
 
     // 3. Mark upload session completed
@@ -309,6 +308,8 @@ export class UploadSessionService {
         dropbox: "Dropbox",
         pcloud: "pCloud",
         box: "Box",
+        mega: "MEGA",
+        koofr: "Koofr",
       };
       providerBadge = nameMap[prov] || prov;
     } else if (unique.size > 1) {

@@ -12,6 +12,7 @@ import {
   AvailableCloudCard,
   AvailableCloud,
 } from "@/components/storage/AvailableCloudCard";
+import { ConnectCredentialsModal } from "@/components/storage/ConnectCredentialsModal";
 import { RevocationWarningBanner } from "@/components/storage/RevocationWarningBanner";
 import { RefreshCw, Menu, Check, AlertCircle } from "lucide-react";
 import { formatBytes } from "@/utils/formatters";
@@ -26,6 +27,8 @@ export function StorageView() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [disconnectingProvider, setDisconnectingProvider] =
     useState<ProviderSummary | null>(null);
+  const [selectedCredentialsCloud, setSelectedCredentialsCloud] =
+    useState<AvailableCloud | null>(null);
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -90,27 +93,23 @@ export function StorageView() {
       name: "Google Drive",
       freeTier: "+15 GB Free",
       color: "border-emerald-200 bg-emerald-50/40 text-emerald-700",
+      authType: "oauth",
       connectedProvider: providers.find((p) => p.provider === "google_drive"),
     },
     {
-      id: "onedrive",
-      name: "Microsoft OneDrive",
-      freeTier: "+5 GB Free",
-      color: "border-blue-200 bg-blue-50/40 text-blue-700",
-      connectedProvider: providers.find((p) => p.provider === "one_drive"),
-    },
-    {
-      id: "dropbox",
-      name: "Dropbox",
-      freeTier: "+2 GB Free",
-      color: "border-sky-200 bg-sky-50/40 text-sky-700",
-      connectedProvider: providers.find((p) => p.provider === "dropbox"),
+      id: "mega",
+      name: "MEGA",
+      freeTier: "+20 GB Free",
+      color: "border-rose-200 bg-rose-50/40 text-rose-700",
+      authType: "credentials",
+      connectedProvider: providers.find((p) => p.provider === "mega"),
     },
     {
       id: "box",
       name: "Box",
       freeTier: "+10 GB Free",
       color: "border-indigo-200 bg-indigo-50/40 text-indigo-700",
+      authType: "oauth",
       connectedProvider: providers.find((p) => p.provider === "box"),
     },
     {
@@ -118,7 +117,32 @@ export function StorageView() {
       name: "pCloud",
       freeTier: "+10 GB Free",
       color: "border-cyan-200 bg-cyan-50/40 text-cyan-700",
+      authType: "oauth",
       connectedProvider: providers.find((p) => p.provider === "pcloud"),
+    },
+    {
+      id: "koofr",
+      name: "Koofr",
+      freeTier: "+10 GB Free",
+      color: "border-teal-200 bg-teal-50/40 text-teal-700",
+      authType: "credentials",
+      connectedProvider: providers.find((p) => p.provider === "koofr"),
+    },
+    {
+      id: "onedrive",
+      name: "Microsoft OneDrive",
+      freeTier: "+5 GB Free",
+      color: "border-blue-200 bg-blue-50/40 text-blue-700",
+      authType: "oauth",
+      connectedProvider: providers.find((p) => p.provider === "one_drive"),
+    },
+    {
+      id: "dropbox",
+      name: "Dropbox",
+      freeTier: "+2 GB Free",
+      color: "border-sky-200 bg-sky-50/40 text-sky-700",
+      authType: "oauth",
+      connectedProvider: providers.find((p) => p.provider === "dropbox"),
     },
   ];
 
@@ -241,12 +265,25 @@ export function StorageView() {
                   cloud={cloud}
                   isVerified={isVerified}
                   apiUrl={apiUrl}
+                  onConnectCredentials={setSelectedCredentialsCloud}
                 />
               ))}
             </div>
           </div>
         </main>
       </div>
+
+      {selectedCredentialsCloud && (
+        <ConnectCredentialsModal
+          cloud={selectedCredentialsCloud}
+          apiUrl={apiUrl}
+          onClose={() => setSelectedCredentialsCloud(null)}
+          onSuccess={(name) => {
+            setSuccessMessage(`Successfully connected ${name}!`);
+            void refreshProviders(true);
+          }}
+        />
+      )}
 
       {disconnectingProvider && (
         <DisconnectModal

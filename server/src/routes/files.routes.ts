@@ -19,6 +19,19 @@ import { TokenService } from "../services/token.service.js";
 import { ThumbnailCacheService } from "../services/thumbnail-cache.service.js";
 import { socketManager } from "../websocket/socket-manager.js";
 
+function getProviderAuthHeaders(provider: string, token: string): Record<string, string> {
+  try {
+    const adapter = getStorageAdapter(provider as any);
+    if (adapter.getDownloadHeaders) {
+      return adapter.getDownloadHeaders(token);
+    }
+  } catch {}
+  if (provider === "google_drive") {
+    return { Authorization: `Bearer ${token}` };
+  }
+  return {};
+}
+
 export async function fileRoutes(fastify: FastifyInstance) {
   fastify.addHook(
     "preHandler",
@@ -523,10 +536,9 @@ export async function fileRoutes(fastify: FastifyInstance) {
         }
 
         // Stream bytes to client with proper Content-Disposition to ensure exact file size and name
-        const cdnHeaders: Record<string, string> = {};
-        if (single.provider === "google_drive") {
-          cdnHeaders["Authorization"] = `Bearer ${token}`;
-        }
+        const cdnHeaders: Record<string, string> = {
+          ...getProviderAuthHeaders(single.provider, token),
+        };
         if (request.headers.range) {
           cdnHeaders["Range"] = request.headers.range;
         }
@@ -634,10 +646,9 @@ export async function fileRoutes(fastify: FastifyInstance) {
               accessToken: token,
             });
 
-            const headers: Record<string, string> = {};
-            if (c.provider === "google_drive") {
-              headers["Authorization"] = `Bearer ${token}`;
-            }
+            const headers: Record<string, string> = {
+              ...getProviderAuthHeaders(c.provider, token),
+            };
 
             const res = await fetch(url, { headers });
             if (!res.ok || !res.body) {
@@ -831,10 +842,9 @@ export async function fileRoutes(fastify: FastifyInstance) {
           accessToken: token,
         });
 
-        const cdnHeaders: Record<string, string> = {};
-        if (single.provider === "google_drive") {
-          cdnHeaders["Authorization"] = `Bearer ${token}`;
-        }
+        const cdnHeaders: Record<string, string> = {
+          ...getProviderAuthHeaders(single.provider, token),
+        };
         if (request.headers.range) {
           cdnHeaders["Range"] = request.headers.range;
         }
@@ -923,10 +933,9 @@ export async function fileRoutes(fastify: FastifyInstance) {
               providerFileId: c.providerFileId,
               accessToken: token,
             });
-            const headers: Record<string, string> = {};
-            if (c.provider === "google_drive") {
-              headers["Authorization"] = `Bearer ${token}`;
-            }
+            const headers: Record<string, string> = {
+              ...getProviderAuthHeaders(c.provider, token),
+            };
             const res = await fetch(url, { headers });
             if (!res.ok) throw new Error(`Chunk ${c.chunkIndex} fetch failed`);
             const chunkBuf = Buffer.from(await res.arrayBuffer());
@@ -986,10 +995,9 @@ export async function fileRoutes(fastify: FastifyInstance) {
               providerFileId: c.providerFileId,
               accessToken: token,
             });
-            const headers: Record<string, string> = {};
-            if (c.provider === "google_drive") {
-              headers["Authorization"] = `Bearer ${token}`;
-            }
+            const headers: Record<string, string> = {
+              ...getProviderAuthHeaders(c.provider, token),
+            };
             const res = await fetch(url, { headers });
             if (!res.ok || !res.body) break;
             const reader = res.body.getReader();
@@ -1377,10 +1385,7 @@ export async function fileRoutes(fastify: FastifyInstance) {
         }
 
         const cdnRes = await fetch(directUrl, {
-          headers:
-            single.provider === "google_drive"
-              ? { Authorization: `Bearer ${token}` }
-              : {},
+          headers: getProviderAuthHeaders(single.provider, token),
         });
 
         if (!cdnRes.ok || !cdnRes.body) {
@@ -1435,10 +1440,9 @@ export async function fileRoutes(fastify: FastifyInstance) {
               accessToken: token,
             });
 
-            const headers: Record<string, string> = {};
-            if (c.provider === "google_drive") {
-              headers["Authorization"] = `Bearer ${token}`;
-            }
+            const headers: Record<string, string> = {
+              ...getProviderAuthHeaders(c.provider, token),
+            };
 
             const res = await fetch(url, { headers });
             if (!res.ok || !res.body) {

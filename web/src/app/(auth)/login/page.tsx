@@ -2,11 +2,16 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import { LoginForm } from "@/components/auth/LoginForm";
+import { TOTAL_FREE_STORAGE_GB } from "@/lib/facts";
 
 export const metadata: Metadata = {
-  title: "Sign In & Register | Fuze Drive",
+  title: "Sign In | Fuze Drive",
   description:
-    "Sign in to your unified personal cloud storage or create a free account to aggregate 42 GB across Google Drive, OneDrive, Dropbox, and Box.",
+    `Sign in to your unified personal cloud storage or create a free account to aggregate up to ${TOTAL_FREE_STORAGE_GB} GB across 7 free clouds.`,
+  robots: {
+    index: false,
+    follow: false,
+  },
   alternates: {
     canonical: "https://fuzedrive.tech/login",
   },

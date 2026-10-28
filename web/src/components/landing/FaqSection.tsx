@@ -1,29 +1,31 @@
-import { HelpCircle, ChevronDown } from "lucide-react";
+import Link from "next/link";
+import { HelpCircle, ChevronDown, ArrowRight } from "lucide-react";
+import { TOTAL_FREE_STORAGE_GB } from "@/lib/facts";
 
-const FAQ_ITEMS = [
+export const FAQ_ITEMS = [
   {
-    q: "How does Fuze combine 42 GB of free cloud storage into one drive?",
-    a: "Fuze connects your individual free cloud storage quotas—Google Drive (15 GB), Box (10 GB), pCloud (10 GB), OneDrive (5 GB), and Dropbox (2 GB)—into a single unified Virtual File System (VFS). An intelligent allocation engine stores files whole on the fastest available cloud and only chunks files when they exceed individual limits.",
+    q: `How does Fuze Drive combine up to ${TOTAL_FREE_STORAGE_GB} GB of free cloud storage into one drive?`,
+    a: `Fuze Drive connects your personal free consumer cloud storage quotas—MEGA (20 GB), Google Drive (15 GB), Box (10 GB), Koofr (10 GB), pCloud (up to 10 GB), Microsoft OneDrive (5 GB), and Dropbox (2 GB)—into a single unified Virtual File System (VFS). An allocation engine prioritizes whole files on the fastest available cloud and only chunks files when they exceed individual provider storage or file size ceilings.`,
   },
   {
-    q: "Is Fuze really 100% free with no monthly subscription?",
-    a: "Yes, Fuze is 100% free and open-source under the MIT license. Because Fuze uses a zero-proxy architecture where files stream directly between your browser and cloud provider APIs, Fuze incurs virtually zero storage transit costs and passes that savings directly to you with no credit card required.",
+    q: "Is Fuze Drive really 100% free with no monthly subscription?",
+    a: "Yes, Fuze Drive is 100% free and open-source under the MIT license. Because Fuze Drive uses a client-side streaming architecture where file uploads and downloads travel directly between your browser and cloud provider APIs, Fuze Drive incurs minimal server transit overhead and does not charge subscription fees or require credit cards.",
   },
   {
-    q: "Does Fuze see, proxy, or store my personal files on its servers?",
-    a: "No. Fuze utilizes direct-to-cloud presigned resumable URLs. Your raw files travel directly between your browser and the respective cloud provider endpoints (Google, Microsoft, Box, Dropbox, pCloud). Fuze never buffers, intercepts, or hosts your file contents.",
+    q: "Does Fuze Drive see, proxy, or store my personal file contents?",
+    a: "No. File uploads and standard downloads stream directly between your browser and each cloud provider's official REST endpoints. Fuze Drive servers index your file metadata and folder structure. For optional features (like video thumbnails and document previews), the backend temporarily buffers requested chunks in an ephemeral cache with a 14-day time-to-live.",
   },
   {
-    q: "Which cloud storage providers can I connect to Fuze?",
-    a: "Fuze natively supports Google Drive, Box, pCloud, Microsoft OneDrive, and Dropbox, aggregating up to 42 GB of free storage with native video, document, and image thumbnail previews.",
+    q: "Which cloud storage providers can I connect to Fuze Drive?",
+    a: `Fuze Drive natively supports 7 major cloud storage providers: Google Drive, MEGA, Box, pCloud, Koofr, Microsoft OneDrive, and Dropbox, delivering up to ${TOTAL_FREE_STORAGE_GB} GB of pooled personal storage. Instructions for each provider (including Koofr's WebDAV app password) are available in our step-by-step connection guide.`,
   },
   {
-    q: "What happens if a file is larger than a single provider's free space?",
-    a: "Fuze automatically falls back to Rule 2: Multi-Cloud Dynamic Chunking. The file is split into cryptographic chunks, distributed across remaining connected clouds, and verified using SHA-256 Merkle root trees.",
+    q: "What happens if a file is larger than a single provider's available space?",
+    a: "Fuze Drive automatically uses dynamic multi-cloud chunking: the file is split into cryptographic chunks, distributed across your remaining connected clouds with available quota, and indexed with composite SHA-256 chunk hashes.",
   },
   {
-    q: "Can other users connect to the same cloud account?",
-    a: "No. Fuze enforces strict cross-user account collision protection. Once a cloud account email is linked to your Fuze profile, no other user can link that same account, protecting your files against unauthorized access.",
+    q: "Can other users connect to or access my cloud accounts?",
+    a: "No. Fuze Drive enforces cross-user account collision protection. Once a cloud account email is linked to your profile, no other user can link that same account, ensuring your storage remains isolated and secure.",
   },
 ];
 
@@ -38,7 +40,7 @@ export function FaqSection() {
           Frequently Asked Questions
         </h2>
         <p className="mt-2 text-sm text-slate-600 max-w-lg mx-auto">
-          Everything you need to know about Fuze, free quota pooling, and zero-proxy privacy.
+          Everything you need to know about Fuze Drive, free quota pooling, and zero-proxy privacy.
         </p>
       </div>
 
@@ -57,6 +59,16 @@ export function FaqSection() {
             </div>
           </details>
         ))}
+      </div>
+
+      <div className="mt-8 text-center">
+        <Link
+          href="/faq"
+          className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-blue-600 hover:text-blue-800 transition"
+        >
+          <span>Have more questions? Read all questions in our full Knowledge Base &amp; FAQ</span>
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
       </div>
     </section>
   );

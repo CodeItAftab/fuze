@@ -17,6 +17,8 @@ export const cloudProviderEnum = pgEnum("cloud_provider", [
   "one_drive",
   "pcloud",
   "box",
+  "mega",
+  "koofr",
 ]);
 export const nodeTypeEnum = pgEnum("node_type", ["file", "folder"]);
 export const uploadStrategyEnum = pgEnum("upload_strategy", [

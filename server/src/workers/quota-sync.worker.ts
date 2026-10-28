@@ -1,8 +1,5 @@
 import { db, providerIdentities } from "../db/index.js";
-import { eq } from "drizzle-orm";
-import { TokenService } from "../services/token.service.js";
-import { getStorageAdapter } from "../adapters/factory.js";
-import { socketManager } from "../websocket/socket-manager.js";
+import { QuotaService } from "../services/quota.service.js";
 
 function formatBytes(bytes: number) {
   if (bytes === 0) return "0 B";
@@ -42,25 +39,7 @@ export async function runQuotaSyncTask(): Promise<{
     for (const identity of identities) {
       const providerTag = `${identity.provider.toUpperCase()} (${identity.accountEmail || identity.id})`;
       try {
-        const accessToken = await TokenService.getValidAccessToken(identity.id);
-
-        // Dynamically invoke the correct adapter for this provider
-        const adapter = getStorageAdapter(identity.provider);
-        const quota = await adapter.fetchQuota(accessToken);
-
-        await db
-          .update(providerIdentities)
-          .set({
-            quotaTotal: quota.totalBytes,
-            quotaUsed: quota.usedBytes,
-            lastSyncedAt: new Date(),
-          })
-          .where(eq(providerIdentities.id, identity.id));
-
-        socketManager.broadcastToUser(identity.userId, {
-          type: "QUOTA_UPDATED",
-          payload: { providerId: identity.id, quota },
-        });
+        const quota = await QuotaService.syncProviderQuota(identity.id, { forceApi: true });
 
         successful++;
         console.log(

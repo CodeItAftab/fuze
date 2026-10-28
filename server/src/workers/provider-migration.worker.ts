@@ -21,6 +21,7 @@ import { PROVIDER_MAX_FILE_LIMITS } from "../services/chunk-decision.service.js"
 import { CascadePurgeService } from "../services/cascade-purge.service.js";
 import { RecoveryKitService } from "../services/recovery-kit.service.js";
 import { CacheService } from "../services/cache.service.js";
+import { QuotaService } from "../services/quota.service.js";
 
 export interface ProviderMigrationJobData {
   userId: string;
@@ -245,23 +246,59 @@ async function transferChunk(
   const sourceAdapter = getStorageAdapter(sourceProvider.provider);
   const destAdapter = getStorageAdapter(destProvider.provider);
 
-  // 1. Get source download stream URL
-  const downloadUrl = await sourceAdapter.getDownloadUrl({
-    providerFileId: chunk.providerFileId,
-    accessToken: sourceToken,
-    fileName: targetFileName,
-  });
+  // 1. Get source download stream URL with auto-refresh on 401
+  let currentSourceToken = sourceToken;
+  let downloadUrl: string;
+  try {
+    downloadUrl = await sourceAdapter.getDownloadUrl({
+      providerFileId: chunk.providerFileId,
+      accessToken: currentSourceToken,
+      fileName: targetFileName,
+    });
+  } catch (err: any) {
+    if (err?.message?.includes("401") || err?.message?.includes("Location")) {
+      currentSourceToken = await TokenService.getValidAccessToken(sourceProvider.id, true);
+      downloadUrl = await sourceAdapter.getDownloadUrl({
+        providerFileId: chunk.providerFileId,
+        accessToken: currentSourceToken,
+        fileName: targetFileName,
+      });
+    } else {
+      throw err;
+    }
+  }
 
-  const downloadHeaders: Record<string, string> = {};
-  if (sourceProvider.provider === "google_drive") {
-    downloadHeaders["Authorization"] = `Bearer ${sourceToken}`;
+  let downloadHeaders: Record<string, string> = {
+    ...(sourceAdapter.getDownloadHeaders ? sourceAdapter.getDownloadHeaders(currentSourceToken) : {}),
+  };
+  if (sourceProvider.provider === "google_drive" && !downloadHeaders["Authorization"]) {
+    downloadHeaders["Authorization"] = `Bearer ${currentSourceToken}`;
   }
 
   // 2-minute connection timeout on download
-  const dlRes = await fetch(downloadUrl, {
+  let dlRes = await fetch(downloadUrl, {
     headers: downloadHeaders,
     signal: AbortSignal.timeout(120_000),
   });
+
+  if (dlRes.status === 401) {
+    currentSourceToken = await TokenService.getValidAccessToken(sourceProvider.id, true);
+    downloadHeaders = {
+      ...(sourceAdapter.getDownloadHeaders ? sourceAdapter.getDownloadHeaders(currentSourceToken) : {}),
+    };
+    if (sourceProvider.provider === "google_drive" && !downloadHeaders["Authorization"]) {
+      downloadHeaders["Authorization"] = `Bearer ${currentSourceToken}`;
+    }
+    const freshUrl = await sourceAdapter.getDownloadUrl({
+      providerFileId: chunk.providerFileId,
+      accessToken: currentSourceToken,
+      fileName: targetFileName,
+    });
+    dlRes = await fetch(freshUrl, {
+      headers: downloadHeaders,
+      signal: AbortSignal.timeout(120_000),
+    });
+  }
 
   if (!dlRes.ok || !dlRes.body) {
     const errText = await dlRes.text().catch(() => "");
@@ -294,7 +331,16 @@ async function transferChunk(
 
   let newFileId: string;
 
-  if (
+  if (destAdapter.uploadBuffer) {
+    // Direct in-memory buffer upload for providers like MEGA (zero HTTP loopback overhead)
+    const res = await destAdapter.uploadBuffer({
+      fileName: targetFileName,
+      buffer: fileBuffer,
+      accessToken: destToken,
+      mimeType: targetMimeType || "application/octet-stream",
+    });
+    newFileId = res.id;
+  } else if (
     uploadSession.uploadType === "multipart" ||
     destProvider.provider === "pcloud"
   ) {
@@ -425,7 +471,7 @@ async function transferChunk(
   await sourceAdapter
     .deleteFile({
       providerFileId: chunk.providerFileId,
-      accessToken: sourceToken,
+      accessToken: currentSourceToken,
     })
     .catch(() => {});
 
@@ -435,6 +481,47 @@ async function transferChunk(
 /**
  * Main Migration Execution Engine
  */
+
+/**
+ * Executes transferChunk with up to 3 automatic retries for transient socket errors (fetch failed, terminated, reset)
+ */
+async function transferChunkWithRetry(
+  sourceProvider: any,
+  sourceToken: string,
+  destProvider: any,
+  destToken: string,
+  chunk: any,
+  chunkSize: number,
+  targetFileName: string,
+  targetMimeType: string,
+): Promise<string> {
+  const MAX_RETRIES = 3;
+  let lastError: any;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await transferChunk(
+        sourceProvider,
+        sourceToken,
+        destProvider,
+        destToken,
+        chunk,
+        chunkSize,
+        targetFileName,
+        targetMimeType,
+      );
+    } catch (err: any) {
+      lastError = err;
+      if (attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
+        try {
+          sourceToken = await TokenService.getValidAccessToken(sourceProvider.id, true);
+        } catch {}
+      }
+    }
+  }
+  throw lastError;
+}
+
 export async function executeProviderMigration(
   data: ProviderMigrationJobData,
   jobId: string = `mig_${Date.now()}`,
@@ -619,10 +706,11 @@ export async function executeProviderMigration(
             "info",
             `Evacuating split piece part #${chunkOnThisCloud.chunkIndex} of "${node?.name}" (${(chunkSize / (1024 * 1024)).toFixed(2)} MB) to ${dest.provider.toUpperCase()}...`,
           );
+          const currentSourceToken = await TokenService.getValidAccessToken(targetProvider.id);
           const destToken = await TokenService.getValidAccessToken(dest.id);
-          const newFileId = await transferChunk(
+          const newFileId = await transferChunkWithRetry(
             targetProvider,
-            targetToken,
+            currentSourceToken,
             dest,
             destToken,
             chunkOnThisCloud,
@@ -701,6 +789,9 @@ export async function executeProviderMigration(
         "Smart Unlink completed. Whole files remain safe in your cloud.",
       action,
     });
+    // Sync quotas across all providers for this user after migration
+    await QuotaService.syncAllUserProviders(userId);
+
     await logger.finish("completed");
 
     socketManager.broadcastToUser(userId, {
@@ -777,7 +868,7 @@ export async function executeProviderMigration(
             `Transferring (${processed + 1}/${totalChunks}) "${targetFileName}" (${(chunkSize / (1024 * 1024)).toFixed(2)} MB) to ${dest.provider.toUpperCase()}...`,
           );
           const destToken = await TokenService.getValidAccessToken(dest.id);
-          const newFileId = await transferChunk(
+          const newFileId = await transferChunkWithRetry(
             targetProvider,
             targetToken,
             dest,
@@ -812,6 +903,8 @@ export async function executeProviderMigration(
             dropbox: "Dropbox",
             pcloud: "pCloud",
             box: "Box",
+            mega: "MEGA",
+            koofr: "Koofr",
           };
           const newBadge = providerNames[dest.provider] || dest.provider;
 
@@ -887,6 +980,9 @@ export async function executeProviderMigration(
       return;
     }
 
+    // Sync quotas across all providers for this user after migration
+    await QuotaService.syncAllUserProviders(userId);
+
     await logger.finish("completed");
   }
 
@@ -916,6 +1012,9 @@ export async function executeProviderMigration(
         providerIdentityId,
       );
     }
+    // Sync quotas across all providers for this user after migration
+    await QuotaService.syncAllUserProviders(userId);
+
     await logger.finish("completed");
   }
 
@@ -970,7 +1069,13 @@ export async function reconcileReconnectedProvider(
     .from(fileChunks)
     .where(eq(fileChunks.providerIdentityId, providerIdentityId));
 
-  if (chunks.length === 0) return { restoredCount: 0, purgedCount: 0 };
+  if (chunks.length === 0) {
+    await db
+      .update(providerIdentities)
+      .set({ isDisconnected: false, pendingRestore: false, isRevoked: false })
+      .where(eq(providerIdentities.id, providerIdentityId));
+    return { restoredCount: 0, purgedCount: 0 };
+  }
 
   let token = "";
   try {

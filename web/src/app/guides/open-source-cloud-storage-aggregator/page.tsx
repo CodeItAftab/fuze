@@ -11,11 +11,12 @@ import {
 import { MarketingHeader } from "@/components/marketing/MarketingHeader";
 import { MarketingFooter } from "@/components/marketing/MarketingFooter";
 import { MarketingCta } from "@/components/marketing/MarketingCta";
+import { RelatedGuides } from "@/components/marketing/RelatedGuides";
 
 export const metadata: Metadata = {
   title: "Open-Source Cloud Storage Aggregator: The Complete Guide (2026) | Fuze Drive",
   description:
-    "Why an open-source cloud storage aggregator is essential for privacy, cost savings, and zero-knowledge data ownership. Explore Fuze Drive's MIT-licensed architecture.",
+    "Why an open-source cloud storage aggregator is essential for privacy, cost savings, and client-side data ownership. Explore Fuze Drive's MIT-licensed architecture.",
   alternates: {
     canonical: "https://fuzedrive.tech/guides/open-source-cloud-storage-aggregator",
   },
@@ -34,6 +35,67 @@ export default function OpenSourceAggregatorGuidePage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 antialiased flex flex-col justify-between">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify([
+            {
+              "@context": "https://schema.org",
+              "@type": "Article",
+              headline:
+                "Open-Source Cloud Storage Aggregator: The Complete Guide (2026)",
+              description:
+                "Why an open-source cloud storage aggregator is essential for privacy, cost savings, and client-side data ownership. Explore Fuze Drive's MIT-licensed architecture.",
+              url: "https://fuzedrive.tech/guides/open-source-cloud-storage-aggregator",
+              datePublished: "2026-10-15T00:00:00Z",
+              dateModified: "2026-10-15T00:00:00Z",
+              author: {
+                "@type": "Person",
+                name: "Aftab Alam",
+                url: "https://aftabalam.me",
+              },
+              publisher: {
+                "@type": "Organization",
+                name: "Fuze Drive",
+                url: "https://fuzedrive.tech",
+                logo: {
+                  "@type": "ImageObject",
+                  url: "https://fuzedrive.tech/favicon.svg",
+                },
+              },
+              mainEntityOfPage: {
+                "@type": "WebPage",
+                "@id":
+                  "https://fuzedrive.tech/guides/open-source-cloud-storage-aggregator",
+              },
+            },
+            {
+              "@context": "https://schema.org",
+              "@type": "BreadcrumbList",
+              itemListElement: [
+                {
+                  "@type": "ListItem",
+                  position: 1,
+                  name: "Home",
+                  item: "https://fuzedrive.tech",
+                },
+                {
+                  "@type": "ListItem",
+                  position: 2,
+                  name: "Guides",
+                  item: "https://fuzedrive.tech/guides/open-source-cloud-storage-aggregator",
+                },
+                {
+                  "@type": "ListItem",
+                  position: 3,
+                  name: "Open Source Aggregator",
+                  item: "https://fuzedrive.tech/guides/open-source-cloud-storage-aggregator",
+                },
+              ],
+            },
+          ]),
+        }}
+      />
       <MarketingHeader />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-12 flex-1">
@@ -176,13 +238,13 @@ export default function OpenSourceAggregatorGuidePage() {
               </div>
 
               <p className="text-sm">
-                <strong>1. Whole-File Prioritization Engine</strong>: Rather than fragmenting every file across clouds, Fuze&rsquo;s backend algorithm first determines if any single provider (e.g. Google Drive with 15 GB or pCloud with 10 GB) has sufficient free space. If so, the file is designated as a whole object, ensuring maximum download speeds and native cloud preview generation.
+                <strong>1. Whole-File Prioritization Engine</strong>: Rather than fragmenting every file across clouds, Fuze Drive&rsquo;s backend algorithm first determines if any single provider (e.g. Google Drive with 15 GB or pCloud with 10 GB) has sufficient free space. If so, the file is designated as a whole object, ensuring maximum download speeds and native cloud preview generation.
               </p>
               <p className="text-sm">
-                <strong>2. Dynamic Merkle Tree Chunking (Fallback)</strong>: When a massive file exceeds the remaining capacity of any individual cloud account, Fuze splits it into SHA-256 validated chunks across multiple accounts and generates a cryptographic Merkle root for verification.
+                <strong>2. Dynamic Merkle Tree Chunking (Fallback)</strong>: When a massive file exceeds the remaining capacity of any individual cloud account, Fuze Drive splits it into SHA-256 validated chunks across multiple accounts and generates a cryptographic Merkle root for verification.
               </p>
               <p className="text-sm">
-                <strong>3. Distributed Token Refresh Locking</strong>: Multi-part transfers can trigger simultaneous token expirations. Using Redis distributed locks (Redlock pattern), Fuze ensures only one worker refreshes the OAuth session while concurrent requests wait safely, avoiding provider rate limits.
+                <strong>3. Distributed Token Refresh Locking</strong>: Multi-part transfers can trigger simultaneous token expirations. Using Redis distributed locks (Redlock pattern), Fuze Drive ensures only one worker refreshes the OAuth session while concurrent requests wait safely, avoiding provider rate limits.
               </p>
             </div>
           </section>
@@ -209,11 +271,13 @@ export default function OpenSourceAggregatorGuidePage() {
             </div>
           </section>
 
+          <RelatedGuides currentPath="/guides/open-source-cloud-storage-aggregator" />
+
           {/* CTA Box */}
           <div className="mt-12">
             <MarketingCta
               title="Experience Modern Open-Source Cloud Aggregation"
-              description="42 GB of free personal cloud storage. Zero proxy servers, zero data caps, and 100% open-source transparency."
+              description="Up to 72 GB of free personal cloud storage. Direct browser-to-cloud streams, zero monthly subscriptions, and 100% open-source transparency."
               buttonText="Launch Fuze Drive Free"
               buttonHref="/register"
             />

@@ -31,6 +31,8 @@ export interface StorageAdapter {
     accessToken: string;
   }): Promise<string>;
 
+  getDownloadHeaders?(accessToken: string): Record<string, string>;
+
   getThumbnail?(params: {
     providerFileId: string;
     accessToken: string;
@@ -49,6 +51,13 @@ export interface StorageAdapter {
 
   fetchQuota(accessToken: string): Promise<QuotaResult>;
 
+  uploadBuffer?(params: {
+    fileName: string;
+    buffer: Buffer;
+    accessToken: string;
+    mimeType?: string;
+  }): Promise<{ id: string; name: string }>;
+
   listFiles?(accessToken: string): Promise<
     Array<{ providerFileId: string; fileName: string; size: number }>
   >;
@@ -59,4 +68,3 @@ export interface StorageAdapter {
     expiresInSeconds: number;
   }>;
 }
-

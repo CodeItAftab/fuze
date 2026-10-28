@@ -68,7 +68,7 @@ export function SessionsSection({
             </h2>
           </div>
           <p className="text-[11px] text-slate-500 mt-0.5">
-            Devices and browsers currently authenticated to your Fuze account
+            Devices and browsers currently authenticated to your Fuze Drive account
           </p>
         </div>
 

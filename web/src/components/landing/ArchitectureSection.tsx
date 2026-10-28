@@ -1,4 +1,5 @@
-import { Zap, ShieldCheck, Layers } from "lucide-react";
+import Link from "next/link";
+import { Zap, ShieldCheck, Layers, ArrowRight } from "lucide-react";
 
 export function ArchitectureSection() {
   return (
@@ -8,7 +9,7 @@ export function ArchitectureSection() {
           Engineering Principles
         </div>
         <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900">
-          How Fuze Unifies Multi-Cloud Files
+          How Fuze Drive Unifies Multi-Cloud Files
         </h2>
         <p className="mt-3 text-sm sm:text-base text-slate-600">
           Engineered from first principles for direct speed, cryptographic safety, and complete privacy.
@@ -36,7 +37,7 @@ export function ArchitectureSection() {
             Direct-to-Cloud Streaming
           </h3>
           <p className="text-xs text-slate-600 leading-relaxed">
-            Files stream directly between your browser and cloud REST APIs via authorized resumable sessions. Fuze servers only manage your metadata, virtual folder tree, and cached previews.
+            Files stream directly between your browser and cloud REST APIs via authorized resumable sessions. Fuze Drive servers only manage your metadata, virtual folder tree, and cached previews.
           </p>
         </div>
 
@@ -48,9 +49,19 @@ export function ArchitectureSection() {
             Multi-Cloud Dynamic Chunking
           </h3>
           <p className="text-xs text-slate-600 leading-relaxed">
-            When a large file exceeds all individual provider limits, Fuze automatically splits it across available clouds with SHA-256 Merkle root verification.
+            When a large file exceeds all individual provider limits, Fuze Drive automatically splits it across available clouds with SHA-256 Merkle root verification.
           </p>
         </div>
+      </div>
+
+      <div className="mt-8 text-center">
+        <Link
+          href="/guides/open-source-cloud-storage-aggregator"
+          className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-blue-600 hover:text-blue-800 transition"
+        >
+          <span>Deep dive into our open-source cloud storage aggregator architecture</span>
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
       </div>
     </section>
   );

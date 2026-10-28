@@ -2,34 +2,39 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Cloud, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import { useAuthStore } from "@/stores/auth.store";
+import { ProviderIcon, type ProviderType } from "@/components/drive/ProviderBadge";
 
 interface Provider {
-  id: string;
+  id: ProviderType;
   name: string;
   quotaGB: number;
 }
 
 const PROVIDERS: Provider[] = [
-  { id: "gdrive", name: "Google Drive", quotaGB: 15 },
+  { id: "google_drive", name: "Google Drive", quotaGB: 15 },
+  { id: "mega", name: "MEGA", quotaGB: 20 },
   { id: "box", name: "Box", quotaGB: 10 },
   { id: "pcloud", name: "pCloud", quotaGB: 10 },
-  { id: "onedrive", name: "Microsoft OneDrive", quotaGB: 5 },
+  { id: "koofr", name: "Koofr", quotaGB: 10 },
+  { id: "one_drive", name: "OneDrive", quotaGB: 5 },
   { id: "dropbox", name: "Dropbox", quotaGB: 2 },
 ];
 
 export function StorageCalculator() {
   const { user } = useAuthStore();
-  const [selectedProviders, setSelectedProviders] = useState<string[]>([
-    "gdrive",
+  const [selectedProviders, setSelectedProviders] = useState<ProviderType[]>([
+    "google_drive",
+    "mega",
     "box",
     "pcloud",
-    "onedrive",
+    "koofr",
+    "one_drive",
     "dropbox",
   ]);
 
-  const toggleProvider = (id: string) => {
+  const toggleProvider = (id: ProviderType) => {
     setSelectedProviders((prev) =>
       prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
     );
@@ -55,7 +60,7 @@ export function StorageCalculator() {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-8">
           {PROVIDERS.map((provider) => {
             const isChecked = selectedProviders.includes(provider.id);
             return (
@@ -70,8 +75,8 @@ export function StorageCalculator() {
                 }`}
               >
                 <div className="flex items-center justify-between mb-3">
-                  <div className="h-8 w-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center">
-                    <Cloud className="h-4 w-4 text-slate-700" />
+                  <div className="h-8 w-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center p-1.5 overflow-hidden">
+                    <ProviderIcon type={provider.id} className="h-5 w-5 object-contain" />
                   </div>
                   <div
                     className={`h-4 w-4 rounded-md flex items-center justify-center text-xs font-bold ${
@@ -106,7 +111,7 @@ export function StorageCalculator() {
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-              100% free forever. No credit cards, no recurring bills, and no
+              100% free under MIT open source. No credit cards, no recurring bills, and no
               vendor lock-in.
             </p>
           </div>
@@ -126,6 +131,10 @@ export function StorageCalculator() {
             </Link>
           )}
         </div>
+
+        <p className="mt-4 text-center text-[11px] text-slate-600 leading-relaxed max-w-2xl mx-auto">
+          All product names, logos, and brands are property of their respective owners. Fuze Drive is an independent open-source tool and is not affiliated with or endorsed by Google, Microsoft, Dropbox, Box, MEGA, pCloud, or Koofr.
+        </p>
       </div>
     </section>
   );

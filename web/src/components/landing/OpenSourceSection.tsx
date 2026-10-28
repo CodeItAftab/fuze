@@ -9,6 +9,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { GithubIcon } from "@/components/icons/GithubIcon";
+import { TOTAL_FREE_STORAGE_GB } from "@/lib/facts";
 
 const GITHUB_REPO_URL = "https://github.com/CodeItAftab/fuze";
 
@@ -27,7 +28,7 @@ export function OpenSourceSection() {
             Build With Us: Help Add More Free Cloud Adapters
           </h2>
           <p className="mt-3 text-sm sm:text-base text-slate-300 leading-relaxed">
-            Fuze is 100% community-driven and MIT licensed. We want to expand our free storage pool from 42 GB to 100+ GB—and we invite you to collaborate with us! Whether you are an experienced TypeScript developer or a first-time contributor, help us build connectors for the world&apos;s best free clouds:
+            Fuze Drive is 100% community-driven and MIT licensed. We recently expanded our storage pool to {TOTAL_FREE_STORAGE_GB} GB across 7 clouds—and we invite you to collaborate with us to reach 100+ GB! Help us author connectors for more consumer and self-hosted clouds:
           </p>
         </div>
 
@@ -43,10 +44,10 @@ export function OpenSourceSection() {
               </span>
             </div>
             <h3 className="text-sm font-bold text-white mb-1.5">
-              Mega &amp; MediaFire Adapters
+              MediaFire &amp; InfiniCLOUD
             </h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Help us write connectors for Mega.nz (20 GB free) and MediaFire (10 GB free) using our typed <code>base.adapter.ts</code>.
+              Help author adapters for MediaFire (10 GB free) and InfiniCLOUD (20 GB WebDAV) using our typed <code>base.adapter.ts</code>.
             </p>
           </div>
 
@@ -60,10 +61,10 @@ export function OpenSourceSection() {
               </span>
             </div>
             <h3 className="text-sm font-bold text-white mb-1.5">
-              Proton Drive &amp; IceDrive
+              Proton Drive &amp; Icedrive
             </h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Collaborate on adding privacy-first Swiss and EU free cloud providers (Proton 5 GB, IceDrive 10 GB) with client-side safety.
+              Collaborate on adding privacy-first Swiss and EU free cloud providers (Proton 5 GB, Icedrive 10 GB) with client-side streaming.
             </p>
           </div>
 
@@ -77,10 +78,10 @@ export function OpenSourceSection() {
               </span>
             </div>
             <h3 className="text-sm font-bold text-white mb-1.5">
-              Nextcloud, WebDAV &amp; MinIO
+              Nextcloud &amp; MinIO
             </h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Want to mount your own private server? Help us author self-hosted connectors for Nextcloud, MinIO, or S3-compatible buckets.
+              Want to mount your own private server? Help author self-hosted connectors for Nextcloud, MinIO, or S3-compatible endpoints.
             </p>
           </div>
 
@@ -94,10 +95,10 @@ export function OpenSourceSection() {
               </span>
             </div>
             <h3 className="text-sm font-bold text-white mb-1.5">
-              Engine &amp; Chunk Optimizations
+              Engine &amp; Performance
             </h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Optimize multi-stream browser transfer speeds, improve mobile accessibility, fix bugs, or suggest architectural enhancements.
+              Optimize multi-stream browser transfer speeds, improve mobile touch UX, fix bugs, or suggest architectural enhancements.
             </p>
           </div>
         </div>
@@ -118,47 +119,24 @@ export function OpenSourceSection() {
                     Ready to Build an Adapter With Us?
                   </h3>
                   <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Open Source &amp; Active
+                    <GitPullRequest className="h-3 w-3" /> PRs Welcome
                   </span>
                 </div>
                 <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed">
-                  Every adapter in Fuze Drive is an isolated TypeScript class implementing{" "}
-                  <a
-                    href={`${GITHUB_REPO_URL}/blob/main/server/src/adapters/base.adapter.ts`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-blue-300 hover:text-blue-200 font-mono text-[11px] sm:text-xs bg-slate-950/70 hover:bg-slate-950 px-1.5 py-0.5 rounded border border-slate-700/80 hover:border-blue-500/40 transition"
-                    title="Inspect base.adapter.ts on GitHub"
-                  >
-                    <code>base.adapter.ts</code>
-                    <ExternalLink className="h-2.5 w-2.5 text-blue-400" />
-                  </a>
-                  . Fork the repository, plug in a new free provider, and open a PR!
+                  Fork <code className="text-blue-300">CodeItAftab/fuze</code>, check out our existing adapters in <code className="text-blue-300">server/src/adapters/</code>, and submit a pull request.
                 </p>
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full lg:w-auto shrink-0">
+            <div className="flex items-center gap-3 w-full lg:w-auto shrink-0">
               <a
                 href={GITHUB_REPO_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-white hover:bg-slate-100 text-slate-950 font-semibold text-xs tracking-tight shadow-md hover:shadow-lg transition-all active:scale-95 shrink-0 whitespace-nowrap"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs sm:text-sm transition shadow-md shadow-blue-500/20 active:scale-95"
               >
-                <GithubIcon className="h-4 w-4 text-slate-950" />
-                <span>Fork &amp; Star on GitHub</span>
-              </a>
-
-              <a
-                href={`${GITHUB_REPO_URL}/issues`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-600/80 hover:border-slate-500 font-medium text-xs tracking-tight shadow-sm transition-all active:scale-95 shrink-0 whitespace-nowrap"
-              >
-                <GitPullRequest className="h-4 w-4 text-emerald-400" />
-                <span>View Adapter Issues</span>
-                <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
+                <span>Contribute on GitHub</span>
+                <ArrowRight className="h-4 w-4" />
               </a>
             </div>
           </div>

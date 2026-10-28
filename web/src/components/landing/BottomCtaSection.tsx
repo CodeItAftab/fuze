@@ -25,7 +25,7 @@ export function BottomCtaSection() {
               href="/dashboard"
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 px-6 py-3.5 text-sm font-semibold text-white shadow-md transition"
             >
-              <span>Open Fuze Dashboard</span>
+              <span>Open Fuze Drive Dashboard</span>
               <ArrowRight className="h-4 w-4" />
             </Link>
           ) : (

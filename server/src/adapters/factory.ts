@@ -4,13 +4,17 @@ import { OneDriveAdapter } from "./onedrive.adapter.js";
 import { DropboxAdapter } from "./dropbox.adapter.js";
 import { PCloudAdapter } from "./pcloud.adapter.js";
 import { BoxAdapter } from "./box.adapter.js";
+import { KoofrAdapter } from "./koofr.adapter.js";
+import { MegaAdapter } from "./mega.adapter.js";
 
 export type SupportedProvider =
   | "google_drive"
   | "one_drive"
   | "dropbox"
   | "pcloud"
-  | "box";
+  | "box"
+  | "mega"
+  | "koofr";
 
 const adapters: Record<SupportedProvider, StorageAdapter> = {
   google_drive: new GoogleDriveAdapter(),
@@ -18,6 +22,8 @@ const adapters: Record<SupportedProvider, StorageAdapter> = {
   dropbox: new DropboxAdapter(),
   pcloud: new PCloudAdapter(),
   box: new BoxAdapter(),
+  mega: new MegaAdapter(),
+  koofr: new KoofrAdapter(),
 };
 
 export function getStorageAdapter(provider: SupportedProvider): StorageAdapter {

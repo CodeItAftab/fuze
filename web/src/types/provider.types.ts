@@ -3,7 +3,9 @@ export type ProviderId =
   | "one_drive"
   | "pcloud"
   | "dropbox"
-  | "box";
+  | "box"
+  | "mega"
+  | "koofr";
 
 export interface ProviderMeta {
   id: ProviderId;

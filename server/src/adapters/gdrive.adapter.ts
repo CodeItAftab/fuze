@@ -135,6 +135,12 @@ export class GoogleDriveAdapter implements StorageAdapter {
     return `https://www.googleapis.com/drive/v3/files/${params.providerFileId}?alt=media`;
   }
 
+  getDownloadHeaders(accessToken: string): Record<string, string> {
+    return {
+      Authorization: `Bearer ${accessToken}`,
+    };
+  }
+
   async getThumbnail(params: {
     providerFileId: string;
     accessToken: string;

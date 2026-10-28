@@ -2,27 +2,33 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   Check,
-  X,
+  Info,
   Zap,
   ExternalLink,
   Clock,
   Sparkles,
+  ShieldCheck,
+  Layers,
 } from "lucide-react";
 import { MarketingHeader } from "@/components/marketing/MarketingHeader";
 import { MarketingFooter } from "@/components/marketing/MarketingFooter";
 import { MarketingCta } from "@/components/marketing/MarketingCta";
+import { RelatedGuides } from "@/components/marketing/RelatedGuides";
+import {
+  TOTAL_FREE_STORAGE_GB,
+  MULTCLOUD_VERIFIED_FACTS,
+  PROVIDER_FACTS,
+} from "@/lib/facts";
 
 export const metadata: Metadata = {
-  title: "Best Free MultCloud Alternative in 2026 (Open Source, Zero Proxy) | Fuze Drive",
-  description:
-    "Looking for a free MultCloud alternative? Compare Fuze Drive vs MultCloud. 100% open-source, no 5 GB monthly transfer caps, direct browser-to-cloud transfers, and 42 GB free unified storage.",
+  title: `MultCloud Alternative: Comparing Cloud Management Architectures | Fuze Drive`,
+  description: `Explore the differences between server-side cloud aggregators and Fuze Drive's direct client-side open-source model. Up to ${TOTAL_FREE_STORAGE_GB} GB pooled storage across 7 free clouds.`,
   alternates: {
     canonical: "https://fuzedrive.tech/compare/multcloud-alternative",
   },
   openGraph: {
-    title: "Best Free MultCloud Alternative (Open Source) | Fuze Drive",
-    description:
-      "Tired of MultCloud's 5 GB monthly transfer limits and server proxying? Fuze Drive is open source, free, and streams direct from your browser.",
+    title: `MultCloud Alternative: Architectural Comparison | Fuze Drive`,
+    description: `Compare server-side multi-cloud transfers with client-side direct streaming. 100% open source under MIT license.`,
     url: "https://fuzedrive.tech/compare/multcloud-alternative",
     siteName: "Fuze Drive",
     type: "article",
@@ -30,144 +36,172 @@ export const metadata: Metadata = {
 };
 
 export default function MultCloudAlternativePage() {
-  const lastUpdated = "October 15, 2026";
+  const lastUpdated = "October 28, 2026";
 
   const comparisonData = [
     {
-      feature: "Base Pricing",
-      fuze: "100% Free & Open Source",
-      fuzeHighlight: true,
-      multcloud: "Free tier with expensive upgrades ($9.90 - $24.90/mo)",
+      feature: "Primary Use Case",
+      fuze: `Personal storage pool aggregator (combining up to ${TOTAL_FREE_STORAGE_GB} GB)`,
+      multcloud: "Enterprise & consumer cloud-to-cloud migration across 30+ services",
     },
     {
-      feature: "Monthly Data Transfer Limit",
-      fuze: "Unlimited (Streams directly from browser)",
-      fuzeHighlight: true,
-      multcloud: "5 GB / month (strictly throttled on free)",
+      feature: "Pricing Model",
+      fuze: "100% Free under MIT Open Source License",
+      multcloud: "Free tier with monthly traffic limit; paid plans from ~$19.99/mo to ~$119/yr",
     },
     {
-      feature: "Transfer Architecture",
-      fuze: "Direct Browser-to-Cloud REST APIs",
-      fuzeHighlight: true,
-      multcloud: "Proxied through MultCloud commercial servers",
+      feature: "Free Tier Transfer Allowance",
+      fuze: "Direct browser transfers without monthly proxy meter",
+      multcloud: "5 GB of data traffic per month on free plan (source: multcloud.com)",
     },
     {
-      feature: "File Privacy & Zero-Knowledge",
-      fuze: "Server never touches or buffers file payloads",
-      fuzeHighlight: true,
-      multcloud: "Unencrypted raw bytes transit commercial servers",
+      feature: "Data Transfer Path",
+      fuze: "Direct between browser and cloud provider REST APIs",
+      multcloud: "Cloud-to-cloud server infrastructure (256-bit AES over SSL)",
     },
     {
-      feature: "Unified Pooled Storage",
-      fuze: "Single 42 GB virtual root drive with smart allocation",
-      fuzeHighlight: true,
-      multcloud: "Separate folders per cloud account",
+      feature: "Storage View",
+      fuze: `Unified Virtual Drive combining 7 services into ${TOTAL_FREE_STORAGE_GB} GB`,
+      multcloud: "Separate directory trees for each linked cloud service",
     },
     {
-      feature: "Source Code Auditability",
-      fuze: "MIT Licensed on GitHub (Full transparency)",
-      fuzeHighlight: true,
-      multcloud: "Proprietary closed-source commercial platform",
+      feature: "Code Availability",
+      fuze: "Publicly auditable on GitHub (MIT License)",
+      multcloud: "Proprietary commercial web application",
     },
     {
       feature: "Supported Free Providers",
-      fuze: "Google Drive, OneDrive, Dropbox, Box, pCloud",
-      fuzeHighlight: false,
-      multcloud: "Multiple commercial providers & WebDAV",
+      fuze: "Google Drive, MEGA, Box, pCloud, Koofr, OneDrive, Dropbox (7 clouds)",
+      multcloud: "30+ commercial & enterprise cloud services, FTP, WebDAV, and S3",
+    },
+  ];
+
+  const jsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      headline: "Comparing Cloud Management Architectures: Fuze Drive and Commercial Aggregators",
+      description: `In-depth architectural comparison between server-side cloud sync platforms like MultCloud and client-side storage poolers like Fuze Drive.`,
+      url: "https://fuzedrive.tech/compare/multcloud-alternative",
+      datePublished: "2026-10-15T00:00:00Z",
+      dateModified: "2026-10-28T00:00:00Z",
+      author: {
+        "@type": "Person",
+        name: "Aftab Alam",
+        url: "https://github.com/CodeItAftab",
+      },
+      publisher: {
+        "@type": "Organization",
+        name: "Fuze Drive",
+        url: "https://fuzedrive.tech",
+      },
     },
     {
-      feature: "Self-Hostable Option",
-      fuze: "Yes (Docker, Fastify + Next.js)",
-      fuzeHighlight: true,
-      multcloud: "No (SaaS lock-in only)",
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Home",
+          item: "https://fuzedrive.tech",
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: "Comparisons",
+          item: "https://fuzedrive.tech/compare/multcloud-alternative",
+        },
+      ],
     },
   ];
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 antialiased flex flex-col justify-between">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+
       <MarketingHeader />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-12 flex-1">
         {/* Breadcrumb */}
-        <nav className="flex items-center gap-2 text-xs text-slate-500 mb-6 font-medium">
+        <nav className="flex items-center gap-2 text-xs text-slate-500 mb-6">
           <Link href="/" className="hover:text-blue-600 transition">
             Home
           </Link>
           <span>/</span>
-          <span className="text-slate-700">Compare</span>
+          <span className="text-slate-400">Comparisons</span>
           <span>/</span>
-          <span className="text-blue-600 font-semibold">MultCloud Alternative</span>
+          <span className="text-slate-800 font-semibold">MultCloud Alternative</span>
         </nav>
 
-        {/* Hero Section */}
-        <div className="space-y-4 mb-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold uppercase tracking-wider">
-            <Sparkles className="h-3.5 w-3.5 text-blue-600" />
-            2026 Head-to-Head Comparison
+        {/* Article Header */}
+        <header className="mb-10 space-y-4">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold">
+            <Layers className="h-3.5 w-3.5" /> Architectural Comparison
           </div>
-
           <h1 className="text-3xl sm:text-5xl font-extrabold text-slate-950 tracking-tight leading-tight">
-            The Free, Open-Source MultCloud Alternative
+            Understanding Cloud Aggregation: Fuze Drive vs. Commercial Tools
           </h1>
-
-          <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-3xl">
-            Tired of MultCloud’s 5 GB monthly data transfer limits, proprietary paywalls, and having your private files routed through third-party servers? Explore why users are switching to Fuze Drive for direct-to-cloud personal storage aggregation.
+          <p className="text-base sm:text-lg text-slate-600 leading-relaxed">
+            When managing multiple cloud storage accounts, different tools use fundamentally different technical approaches. This guide examines the architectural differences between server-side cloud managers (like MultCloud) and client-side aggregators (like Fuze Drive).
           </p>
-
-          <div className="flex items-center gap-4 pt-2 text-xs text-slate-500 border-t border-slate-200">
-            <span className="flex items-center gap-1.5 font-medium">
-              <Clock className="h-3.5 w-3.5 text-slate-400" />
-              Last Updated: {lastUpdated}
-            </span>
-            <span>•</span>
-            <span className="font-medium text-slate-600">8 min read</span>
-            <span>•</span>
-            <a
-              href="https://github.com/CodeItAftab/fuze"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:underline flex items-center gap-1"
-            >
-              GitHub Project <ExternalLink className="h-3 w-3" />
-            </a>
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <Clock className="h-3.5 w-3.5" />
+            <span>Updated {lastUpdated} · Verified against official documentation</span>
           </div>
+        </header>
+
+        {/* Legal Trademark Notice */}
+        <div className="p-4 rounded-2xl bg-slate-100/80 border border-slate-200/90 text-slate-500 text-xs mb-8 flex items-start gap-2.5">
+          <Info className="h-4 w-4 text-slate-500 shrink-0 mt-0.5" />
+          <p className="leading-relaxed">
+            {MULTCLOUD_VERIFIED_FACTS.trademarkDisclaimer}
+          </p>
         </div>
 
-        {/* Article Body */}
-        <article className="prose prose-slate max-w-none text-slate-700 leading-relaxed space-y-8">
-          {/* Executive Summary */}
-          <div className="p-6 rounded-2xl bg-blue-50/70 border border-blue-200 text-slate-800 space-y-3">
-            <h2 className="text-lg font-bold text-blue-950 m-0 flex items-center gap-2">
-              <Zap className="h-5 w-5 text-blue-600 shrink-0" />
-              Executive Summary: Why Fuze Drive Over MultCloud?
+        {/* Executive Overview */}
+        <div className="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-10 shadow-xs space-y-8 leading-relaxed text-sm sm:text-base text-slate-700">
+          <section className="space-y-3">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              Two Different Architectural Models
             </h2>
-            <p className="text-sm m-0">
-              <strong>MultCloud</strong> is a popular commercial SaaS tool designed primarily for scheduled cloud-to-cloud backup jobs. However, for everyday users who simply want to pool their free cloud storage into one personal drive, MultCloud imposes a strict <strong>5 GB per month traffic cap</strong> on free accounts and forces your unencrypted files through their servers.
+            <p>
+              Users often evaluate tools like <strong>MultCloud</strong> and <strong>Fuze Drive</strong> when looking to simplify storage management. While both tools connect to cloud storage services via APIs, they are designed for very different purposes:
             </p>
-            <p className="text-sm m-0">
-              <strong>Fuze Drive</strong> is a free, MIT-licensed, open-source alternative. Instead of proxying files through an intermediary, Fuze streams uploads and downloads directly between your browser and cloud provider REST APIs (Google Drive, OneDrive, Dropbox, Box, pCloud) via authorized resumable sessions. You get an aggregated <strong>42 GB virtual drive</strong> with <strong>zero artificial bandwidth limits</strong>.
-            </p>
-          </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                <div className="font-bold text-slate-900 text-sm">Server-Side Cloud Managers (e.g. MultCloud)</div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Engineered primarily for automated cloud-to-cloud migrations, scheduled synchronization, and cross-platform enterprise backups across 30+ services. File transfers run on the vendor&apos;s server clusters.
+                </p>
+              </div>
+              <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200 space-y-2">
+                <div className="font-bold text-blue-950 text-sm">Client-Side Storage Poolers (Fuze Drive)</div>
+                <p className="text-xs text-slate-700 leading-relaxed">
+                  Engineered specifically for individuals who want to pool free consumer storage tiers into a single virtual drive. File uploads and downloads stream directly between your browser and cloud provider APIs.
+                </p>
+              </div>
+            </div>
+          </section>
 
-          {/* Quick Comparison Table */}
+          {/* Comparison Matrix Table */}
           <section className="space-y-4 pt-4">
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-              Feature Matrix: Fuze Drive vs. MultCloud
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              Feature &amp; Architecture Matrix
             </h2>
-            <p className="text-sm text-slate-600">
-              Here is how Fuze Drive compares directly against MultCloud’s free and standard tiers as of 2026:
-            </p>
-
             <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-2xs">
               <table className="w-full text-left text-xs sm:text-sm border-collapse">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-slate-700">
-                    <th className="p-3.5 sm:p-4 font-semibold">Capability</th>
+                    <th className="p-3.5 sm:p-4 font-semibold">Aspect</th>
                     <th className="p-3.5 sm:p-4 font-bold text-blue-700 bg-blue-50/50">
                       ⚡ Fuze Drive
                     </th>
-                    <th className="p-3.5 sm:p-4 font-semibold text-slate-600">
-                      MultCloud (Free / Commercial)
+                    <th className="p-3.5 sm:p-4 font-semibold text-slate-700">
+                      Commercial Aggregators (e.g. MultCloud)
                     </th>
                   </tr>
                 </thead>
@@ -177,17 +211,11 @@ export default function MultCloudAlternativePage() {
                       <td className="p-3.5 sm:p-4 font-medium text-slate-900">
                         {row.feature}
                       </td>
-                      <td className="p-3.5 sm:p-4 bg-blue-50/30 font-semibold text-blue-900">
-                        <span className="inline-flex items-center gap-1.5">
-                          <Check className="h-4 w-4 text-emerald-600 shrink-0" />
-                          {row.fuze}
-                        </span>
+                      <td className="p-3.5 sm:p-4 bg-blue-50/30 font-semibold text-blue-950">
+                        {row.fuze}
                       </td>
                       <td className="p-3.5 sm:p-4 text-slate-600">
-                        <span className="inline-flex items-center gap-1.5">
-                          <X className="h-4 w-4 text-rose-500 shrink-0" />
-                          {row.multcloud}
-                        </span>
+                        {row.multcloud}
                       </td>
                     </tr>
                   ))}
@@ -196,152 +224,100 @@ export default function MultCloudAlternativePage() {
             </div>
           </section>
 
-          {/* Core Difference 1: The 5 GB Limit */}
+          {/* Technical Deep Dive 1: Data Transit Path */}
           <section className="space-y-4 pt-4">
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-              1. No 5 GB Monthly Transfer Bottlenecks
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              1. Understanding Data Transit Paths
             </h2>
             <p>
-              The most frequent complaint among MultCloud free users is the restrictive <strong>5 GB monthly data traffic limit</strong>. If you upload a short 4K video clip, an ISO file, or a photo library, you can exhaust your entire monthly quota in less than ten minutes. Once exceeded, your account is throttled or locked until you pay for an annual subscription ($119+/year).
+              The most fundamental difference is where data transfers physically execute:
             </p>
-            <p>
-              Fuze Drive eliminates this restriction completely. Because Fuze does not act as a relay proxy, you do not pay for server transit. Uploads stream <strong>directly from your browser to your own cloud accounts</strong> using authorized OAuth2 sessions. Whether you transfer 5 GB or 50 GB, Fuze never imposes a paywall or traffic meter.
-            </p>
+            <div className="space-y-3">
+              <div className="p-4 rounded-xl bg-slate-900 text-slate-200 font-mono text-xs overflow-x-auto">
+                <div className="text-slate-400 mb-1 font-sans font-semibold">Server-Side Cloud-to-Cloud Transfer (MultCloud):</div>
+                Cloud Provider A ──► Intermediary Server Cluster ──► Cloud Provider B
+              </div>
+              <p className="text-xs text-slate-600">
+                Because MultCloud provides scheduled tasks that can run when your computer is turned off, transfers must execute through their server infrastructure. MultCloud documents that these transfers use 256-bit AES encryption over SSL and that temporary cache files are removed after task completion (source: multcloud.com/security.html).
+              </p>
+              <div className="p-4 rounded-xl bg-blue-950 text-blue-200 font-mono text-xs overflow-x-auto">
+                <div className="text-blue-300 mb-1 font-sans font-semibold">Client-Side Direct Streaming (Fuze Drive):</div>
+                Your Web Browser ══════(Direct REST API Stream)══════► Cloud Provider
+              </div>
+              <p className="text-xs text-slate-600">
+                In Fuze Drive, file uploads and standard downloads stream directly between your browser and the cloud provider&apos;s REST endpoint using authorized tokens. Fuze Drive servers maintain virtual file system metadata, folder structures, and an ephemeral thumbnail cache, but do not host your file library.
+              </p>
+            </div>
           </section>
 
-          {/* Core Difference 2: Architecture & Security */}
+          {/* Technical Deep Dive 2: Quota Pooling vs. Directory Browsing */}
           <section className="space-y-4 pt-4">
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-              2. Privacy & Architecture: Zero-Proxy vs. Server Relay
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              2. Storage Aggregation: Unified Pool vs. Multi-Folder View
             </h2>
             <p>
-              When you use MultCloud, your files take the following path:
+              Another key distinction is how each application visualizes your storage:
             </p>
-            <div className="p-4 rounded-xl bg-slate-900 text-slate-200 font-mono text-xs overflow-x-auto">
-              Your Device ──(Full File Payload)──► MultCloud Servers ──(Full File Payload)──► Cloud Provider
-            </div>
-            <p>
-              This means a third-party commercial entity receives and processes your personal spreadsheets, private family photos, and confidential documents on their servers before writing them to the destination.
-            </p>
-            <p>
-              In contrast, <strong>Fuze Drive employs a direct-to-cloud architecture</strong>:
-            </p>
-            <div className="p-4 rounded-xl bg-blue-950 text-blue-200 font-mono text-xs overflow-x-auto">
-              1. Browser ──(Get Presigned Upload URL)──► Fuze Backend (Metadata Only)
-              <br />
-              2. Browser ══════(Direct Stream via Presigned REST API)══════► Cloud Provider
-            </div>
-            <p>
-              Fuze servers only maintain your Virtual File System (VFS) folder hierarchy, metadata, and cached thumbnail previews. Your raw file payloads never pass through or get buffered on Fuze compute instances.
-            </p>
-          </section>
-
-          {/* Core Difference 3: True Unified Drive */}
-          <section className="space-y-4 pt-4">
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-              3. True Unified 42 GB Drive vs. Separate Provider Folders
-            </h2>
-            <p>
-              In MultCloud, your connected clouds appear as isolated buckets: you have a &ldquo;Google Drive&rdquo; folder, an &ldquo;OneDrive&rdquo; folder, and a &ldquo;Dropbox&rdquo; folder. If your Google Drive is full, you have to manually switch accounts, navigate into another cloud, and remember which file was placed where.
-            </p>
-            <p>
-              Fuze Drive works differently: it creates a <strong>Unified Virtual Drive</strong> totaling <strong>42 GB</strong> of free storage:
-            </p>
-            <ul className="list-disc pl-5 space-y-1.5 text-sm">
-              <li><strong>Google Drive</strong>: 15 GB</li>
-              <li><strong>Box</strong>: 10 GB</li>
-              <li><strong>pCloud</strong>: 10 GB</li>
-              <li><strong>Microsoft OneDrive</strong>: 5 GB</li>
-              <li><strong>Dropbox</strong>: 2 GB</li>
+            <ul className="list-disc pl-5 space-y-2 text-sm text-slate-600">
+              <li>
+                <strong>Multi-Folder Management:</strong> In traditional cloud managers, your connected clouds appear as separate folders (e.g. a &ldquo;Google Drive&rdquo; folder, an &ldquo;OneDrive&rdquo; folder). You manually decide which file goes to which provider.
+              </li>
+              <li>
+                <strong>Unified Virtual Drive:</strong> Fuze Drive creates a single, aggregated virtual directory pooling up to <strong>{TOTAL_FREE_STORAGE_GB} GB</strong> across 7 free clouds. Our allocation engine evaluates remaining quotas in real-time, prioritizes whole files on the fastest available cloud, and transparently handles provider limits (such as Box&apos;s 250 MB per-file personal limit).
+              </li>
             </ul>
+          </section>
+
+          {/* Licensing & Open Source */}
+          <section className="space-y-4 pt-4">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              3. Licensing &amp; Transparency
+            </h2>
             <p>
-              Our intelligent allocation engine uses <strong>Whole-File Prioritization</strong>: when you drop a file into Fuze, it automatically determines the fastest connected provider that has sufficient space, uploads the file intact, and presents it in your unified folder tree. You manage one drive, not five logins.
+              Fuze Drive is an open-source project released under the permissive <strong>MIT License</strong>. All frontend code, backend services, and adapter logic are publicly available on GitHub for community audit and self-hosting.
+            </p>
+            <p>
+              MultCloud is a commercial proprietary SaaS platform that offers both a free plan and paid professional tiers. Users who require enterprise migrations, automated server schedules, or support for services like Amazon S3 and WebDAV may find MultCloud&apos;s commercial feature set well suited to those requirements.
             </p>
           </section>
 
-          {/* Core Difference 4: Open Source Transparency */}
-          <section className="space-y-4 pt-4">
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-              4. 100% Free & Open Source (MIT License)
+          {/* Setup Walkthrough */}
+          <section className="space-y-4 pt-4 border-t border-slate-100">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              Getting Started with Fuze Drive
             </h2>
-            <p>
-              Commercial services can change their pricing, decrease free allowances, or sell user telemetry at any time. Fuze Drive is open source, hosted publicly on GitHub under the permissive MIT license. 
-            </p>
-            <p>
-              You can inspect every line of code, verify how OAuth tokens are encrypted (AES-256-GCM), or even self-host the entire platform on your own free-tier Supabase, Neon, and Vercel instances with zero lock-in.
-            </p>
-          </section>
-
-          {/* Migration Guide */}
-          <section className="space-y-4 pt-4">
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-              How to Switch from MultCloud to Fuze Drive in 3 Minutes
-            </h2>
-            <ol className="list-decimal pl-5 space-y-2 text-sm">
+            <ol className="list-decimal pl-5 space-y-2 text-sm text-slate-600">
               <li>
-                <strong>Create your free account</strong> on{" "}
-                <Link href="/register" className="text-blue-600 font-semibold hover:underline">
-                  fuzedrive.tech
-                </Link>
-                . No credit card is ever required.
+                Create a free account on <Link href="/register" className="text-blue-600 font-semibold hover:underline">fuzedrive.tech</Link>.
               </li>
               <li>
-                Navigate to <strong>Settings &gt; Connected Clouds</strong> and connect your free Google Drive, OneDrive, Dropbox, Box, or pCloud accounts via standard OAuth2.
+                Navigate to <strong>Connected Clouds</strong> and connect your personal accounts across Google Drive, MEGA, Box, pCloud, Koofr, OneDrive, and Dropbox.
               </li>
               <li>
-                Watch your storage pool immediately aggregate to <strong>42 GB</strong>.
+                For Koofr, generate an App Password in your Koofr account preferences as outlined in our <Link href="/guides/connect-cloud-providers#koofr" className="text-blue-600 font-semibold hover:underline">provider guide</Link>.
               </li>
               <li>
-                Upload your files directly through the web explorer or drag-and-drop interface with zero bandwidth throttling.
+                Enjoy an aggregated personal storage pool of up to {TOTAL_FREE_STORAGE_GB} GB with direct browser transfers.
               </li>
             </ol>
           </section>
+        </div>
 
-          {/* FAQ Section */}
-          <section className="space-y-4 pt-4">
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-              Frequently Asked Questions (FAQ)
-            </h2>
-            <div className="space-y-3">
-              <details className="group border border-slate-200 rounded-xl bg-white p-4">
-                <summary className="font-semibold text-slate-900 cursor-pointer list-none flex items-center justify-between">
-                  <span>Is Fuze Drive really completely free?</span>
-                  <span className="text-blue-600 text-sm group-open:rotate-180 transition">▼</span>
-                </summary>
-                <p className="text-sm text-slate-600 mt-3 pt-3 border-t border-slate-100">
-                  Yes. Fuze Drive is completely free and open source. Because file transfers happen directly between your browser and cloud provider endpoints, there are no astronomical server bandwidth bills to pass on to users.
-                </p>
-              </details>
+        {/* Bottom Disclaimer */}
+        <div className="mt-8 p-4 bg-slate-100 rounded-2xl text-[11px] text-slate-500 leading-relaxed">
+          <strong>Notice:</strong> {MULTCLOUD_VERIFIED_FACTS.trademarkDisclaimer} Data transfer allowances, features, and pricing for MultCloud were verified from MultCloud&apos;s public website (multcloud.com) in {MULTCLOUD_VERIFIED_FACTS.lastCheckedDate} and may change over time.
+        </div>
 
-              <details className="group border border-slate-200 rounded-xl bg-white p-4">
-                <summary className="font-semibold text-slate-900 cursor-pointer list-none flex items-center justify-between">
-                  <span>Can I transfer files between clouds with Fuze Drive?</span>
-                  <span className="text-blue-600 text-sm group-open:rotate-180 transition">▼</span>
-                </summary>
-                <p className="text-sm text-slate-600 mt-3 pt-3 border-t border-slate-100">
-                  Fuze Drive focuses on personal unified storage aggregation rather than server-side scheduled sync jobs. When you access files across multiple clouds, Fuze provides a single file explorer, search, and native thumbnails across all accounts simultaneously.
-                </p>
-              </details>
+        {/* Related Guides */}
+        <RelatedGuides currentPath="/compare/multcloud-alternative" />
 
-              <details className="group border border-slate-200 rounded-xl bg-white p-4">
-                <summary className="font-semibold text-slate-900 cursor-pointer list-none flex items-center justify-between">
-                  <span>Does Fuze Drive store my cloud passwords?</span>
-                  <span className="text-blue-600 text-sm group-open:rotate-180 transition">▼</span>
-                </summary>
-                <p className="text-sm text-slate-600 mt-3 pt-3 border-t border-slate-100">
-                  Never. Fuze connects through official OAuth2 consent screens provided by Google, Microsoft, Dropbox, Box, and pCloud. We only store encrypted access tokens in our database with AES-256-GCM encryption.
-                </p>
-              </details>
-            </div>
-          </section>
-
-          <MarketingCta
-            title="Stop Paying for Cloud Storage Aggregators"
-            description="Combine your free Google Drive, OneDrive, Dropbox, Box, and pCloud into one 42 GB drive today. Free, open source, and unlimited direct browser transfers."
-            buttonText="Create Your Free Fuze Drive"
-            buttonHref="/register"
-          />
-        </article>
+        {/* Call to Action */}
+        <MarketingCta
+          title={`Ready to Pool Up to ${TOTAL_FREE_STORAGE_GB} GB of Free Storage?`}
+          description="Get started in minutes with direct browser-to-cloud streams and zero monthly subscription fees."
+          buttonText="Launch Your Drive"
+          buttonHref="/register"
+        />
       </main>
 
       <MarketingFooter />
