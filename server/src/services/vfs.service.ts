@@ -12,6 +12,7 @@ import { socketManager } from "../websocket/socket-manager.js";
 import { getStorageAdapter } from "../adapters/factory.js";
 import { ThumbnailCacheService } from "./thumbnail-cache.service.js";
 import { CacheService } from "./cache.service.js";
+import { QuotaService } from "./quota.service.js";
 
 export class VfsService {
   static async listChildren(userId: string, parentId: string | null = null) {
@@ -85,6 +86,8 @@ export class VfsService {
           dropbox: "Dropbox",
           pcloud: "pCloud",
           box: "Box",
+          mega: "MEGA",
+          koofr: "Koofr",
         };
         providerBadge = nameMap[prov] || prov;
       } else if (chunks.length > 1) {
@@ -315,9 +318,15 @@ export class VfsService {
     }
 
     // 4. Delete database row (cascades to child vfs_nodes and file_chunks)
+    const affectedProviderIds = new Set(chunks.map((c) => c.providerIdentityId));
     await db
       .delete(vfsNodes)
       .where(and(eq(vfsNodes.id, nodeId), eq(vfsNodes.userId, userId)));
+
+    // Recalculate quota across all affected providers
+    for (const providerId of affectedProviderIds) {
+      await QuotaService.syncProviderQuota(providerId);
+    }
 
     for (const id of allNodeIds) {
       void ThumbnailCacheService.delete(id);
@@ -416,6 +425,8 @@ export class VfsService {
           dropbox: "Dropbox",
           pcloud: "pCloud",
           box: "Box",
+          mega: "MEGA",
+          koofr: "Koofr",
         };
         providerBadge = nameMap[prov] || prov;
       } else if (chunks.length > 1) {

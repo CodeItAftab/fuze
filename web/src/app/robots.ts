@@ -1,8 +1,7 @@
 import { MetadataRoute } from "next";
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL || "https://fuzedrive.tech";
+  const baseUrl = "https://fuzedrive.tech";
 
   return {
     rules: [
@@ -10,9 +9,11 @@ export default function robots(): MetadataRoute.Robots {
         userAgent: "*",
         allow: "/",
         disallow: [
-          "/dashboard/",
-          "/preview/",
-          "/share/",
+          "/dashboard",
+          "/dashboard/*",
+          "/api/*",
+          "/preview/*",
+          "/share/*",
           "/login",
           "/register",
           "/forgot-password",

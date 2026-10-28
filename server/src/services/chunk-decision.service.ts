@@ -1,6 +1,8 @@
+import { SupportedProvider } from "../adapters/factory.js";
+
 export interface StorageProviderQuota {
   providerIdentityId: string;
-  provider: "google_drive" | "dropbox" | "one_drive" | "pcloud" | "box";
+  provider: SupportedProvider;
   freeBytes: number;
 }
 
@@ -9,7 +11,7 @@ export interface ChunkPlanItem {
   byteStart: number;
   byteEnd: number;
   size: number;
-  provider: "google_drive" | "dropbox" | "one_drive" | "pcloud" | "box";
+  provider: SupportedProvider;
   providerIdentityId: string;
 }
 
@@ -26,13 +28,17 @@ export const PROVIDER_MAX_FILE_LIMITS: Record<string, number> = {
   pcloud: 10 * 1024 * 1024 * 1024, // 10 GB
   box: 250 * 1024 * 1024, // 250 MB (standard account single-file upload ceiling)
   dropbox: 140 * 1024 * 1024, // 140 MB (hard cap for Dropbox single files/upload)
+  mega: 20 * 1024 * 1024 * 1024, // 20 GB
+  koofr: 10 * 1024 * 1024 * 1024, // 10 GB
 };
 
 // Provider throughput and capability preference weights for Whole files
 const PROVIDER_PRIORITY_WEIGHT: Record<string, number> = {
   google_drive: 100, // 15 GB free, global high-speed CDN, instant native previews
   pcloud: 95, // 10 GB free, direct high-speed transfers, native previews
+  mega: 92, // 20 GB free, high capacity
   one_drive: 90, // 5 GB free, high reliability, Office previews
+  koofr: 89, // 10 GB free, fast European storage
   box: 85, // 10 GB free, rich preview engine (120+ formats)
   dropbox: 70, // 2 GB free
 };
@@ -56,8 +62,6 @@ export class ChunkDecisionService {
     // -------------------------------------------------------------------------
     // RULE 1: STRICT "WHOLE FILE" PRIORITY
     // Check if ANY active provider can host the entire file as a single whole object.
-    // Whole uploads are vastly faster, avoid multi-provider assembly overhead,
-    // and enable instant provider-native thumbnail generation.
     // -------------------------------------------------------------------------
     const wholeCandidates = providers.filter((p) => {
       const minAllowed = PROVIDER_MIN_FILE_LIMITS[p.provider] ?? 0;
@@ -70,12 +74,8 @@ export class ChunkDecisionService {
     });
 
     if (wholeCandidates.length > 0) {
-      // Prioritize the best provider:
-      // 1. Providers that have abundant free space relative to file size (so we don't exhaust small providers)
-      // 2. High-performance providers (Google Drive > pCloud > OneDrive > Box > Dropbox)
       wholeCandidates.sort((a, b) => {
         const spaceDiff = b.freeBytes - a.freeBytes;
-        // If one provider has substantially more space (> 1 GB difference), prioritize it
         if (Math.abs(spaceDiff) > 1024 * 1024 * 1024) {
           return spaceDiff;
         }
@@ -102,8 +102,6 @@ export class ChunkDecisionService {
 
     // -------------------------------------------------------------------------
     // RULE 2: MULTI-CLOUD CHUNKING (STRICT LAST RESORT)
-    // Only triggered when NO single provider has enough remaining space for the file.
-    // Combines free quota across all connected providers to host the file.
     // -------------------------------------------------------------------------
     const sorted = [...providers]
       .map((p) => ({ ...p }))
@@ -120,7 +118,6 @@ export class ChunkDecisionService {
       };
     }
 
-    // Allocate chunks across providers
     let remainingBytes = fileSize;
     let currentByte = 0;
     let chunkIndex = 0;
@@ -131,19 +128,16 @@ export class ChunkDecisionService {
       if (p.freeBytes <= 0) continue;
 
       const minChunkAllowed = PROVIDER_MIN_FILE_LIMITS[p.provider] ?? 0;
-      // If remainingBytes or available free space is below the provider's API minimum, skip this provider
       if (minChunkAllowed > 0 && (remainingBytes < minChunkAllowed || p.freeBytes < minChunkAllowed)) {
         continue;
       }
 
-      // Cap chunk slices to 64 MB so they upload smoothly and reliably across all cloud endpoints
-      const maxSlice = 64 * 1024 * 1024;
+      const maxSlice = 64 * 1024 * 1024; // 64 MB
 
       while (remainingBytes > 0 && p.freeBytes > 0) {
         const takeBytes = Math.min(remainingBytes, p.freeBytes, maxSlice);
         if (takeBytes <= 0) break;
 
-        // Ensure the last slice doesn't violate provider minimum chunk limit
         if (minChunkAllowed > 0 && takeBytes < minChunkAllowed) {
           break;
         }

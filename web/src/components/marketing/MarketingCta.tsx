@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { TOTAL_FREE_STORAGE_GB } from "@/lib/facts";
 
 interface MarketingCtaProps {
   title?: string;
@@ -10,7 +11,7 @@ interface MarketingCtaProps {
 
 export function MarketingCta({
   title = "Start Pooling Your Free Cloud Storage Today",
-  description = "Combine your free Google Drive, OneDrive, Dropbox, Box, and pCloud into one 42 GB personal drive. 100% free, open source, and unlimited direct browser transfers.",
+  description = `Combine your free cloud accounts across 7 providers into one unified ${TOTAL_FREE_STORAGE_GB} GB personal drive. 100% free, open source, and direct browser-to-cloud streams.`,
   buttonText = "Get Started Free",
   buttonHref = "/register",
 }: MarketingCtaProps) {

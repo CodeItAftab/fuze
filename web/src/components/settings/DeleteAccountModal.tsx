@@ -43,7 +43,7 @@ export function DeleteAccountModal({
         </div>
 
         <p className="text-xs text-slate-600 leading-relaxed mb-3">
-          Your Fuze profile, virtual file system, and linked account sessions will be permanently erased.
+          Your Fuze Drive profile, virtual file system, and linked account sessions will be permanently erased.
         </p>
 
         {/* Cloud Files Choice Checkbox */}
@@ -62,7 +62,7 @@ export function DeleteAccountModal({
               <span className="text-slate-500 text-[11px] leading-tight block mt-0.5">
                 {deleteCloudFiles
                   ? "All files and chunk parts stored in Google Drive, OneDrive, Dropbox, Box, and pCloud will be permanently erased."
-                  : "Files will remain safely in your personal cloud accounts. Only Fuze indexes and connections are deleted."}
+                  : "Files will remain safely in your personal cloud accounts. Only Fuze Drive indexes and connections are deleted."}
               </span>
             </div>
           </label>

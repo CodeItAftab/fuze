@@ -1,6 +1,6 @@
 import IORedis from "ioredis";
-import { db, providerIdentities } from "../db/index.js";
-import { eq } from "drizzle-orm";
+import { db, providerIdentities, fileChunks } from "../db/index.js";
+import { eq, sql } from "drizzle-orm";
 import { decrypt, encrypt } from "../utils/crypto.js";
 import { getStorageAdapter } from "../adapters/factory.js";
 import { socketManager } from "../websocket/socket-manager.js";
@@ -30,6 +30,7 @@ export class ProviderAuthExpiredError extends Error {
 export class TokenService {
   static async getValidAccessToken(
     providerIdentityId: string,
+    forceRefresh = false,
   ): Promise<string> {
     const [identity] = await db
       .select()
@@ -42,7 +43,7 @@ export class TokenService {
 
     const now = new Date();
     // Return existing token if valid (with 2-minute safety buffer)
-    if (new Date(identity.tokenExpiresAt.getTime() - 120000) > now) {
+    if (!forceRefresh && new Date(identity.tokenExpiresAt.getTime() - 120000) > now) {
       return decrypt(identity.encryptedAccessToken);
     }
 
@@ -196,11 +197,21 @@ export class TokenService {
       const adapter = getStorageAdapter(identity.provider);
       const quota = await adapter.fetchQuota(accessToken);
 
+      const [chunkStat] = await db
+        .select({
+          totalBytes: sql<string>`COALESCE(SUM(${fileChunks.byteEnd} - ${fileChunks.byteStart} + 1), 0)`,
+        })
+        .from(fileChunks)
+        .where(eq(fileChunks.providerIdentityId, providerIdentityId));
+      const dbBytes = Number(chunkStat?.totalBytes || 0);
+      const finalUsed = Math.max(dbBytes, quota.usedBytes);
+      const finalTotal = Math.max(quota.totalBytes, finalUsed);
+
       await db
         .update(providerIdentities)
         .set({
-          quotaTotal: quota.totalBytes,
-          quotaUsed: quota.usedBytes,
+          quotaTotal: finalTotal,
+          quotaUsed: finalUsed,
           isRevoked: false,
           lastSyncedAt: new Date(),
         })

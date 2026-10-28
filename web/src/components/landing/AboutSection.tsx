@@ -1,5 +1,6 @@
 import { ExternalLink } from "lucide-react";
 import { GithubIcon } from "@/components/icons/GithubIcon";
+import { TOTAL_FREE_STORAGE_GB } from "@/lib/facts";
 
 const GITHUB_OWNER_URL = "https://github.com/CodeItAftab";
 
@@ -11,20 +12,20 @@ export function AboutSection() {
           Our Story &amp; Vision
         </span>
         <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900">
-          Why We Built Fuze
+          Why We Built Fuze Drive
         </h2>
       </div>
 
       <div className="prose prose-slate max-w-none text-slate-600 text-sm sm:text-base leading-relaxed space-y-5">
         <p>
-          Almost every major cloud company gives you free storage: Google Drive gives 15 GB, Box gives 10 GB, pCloud gives 10 GB, OneDrive gives 5 GB, and Dropbox gives 2 GB. Together, that is{" "}
-          <strong>over 42 gigabytes of high-performance cloud storage</strong> that you already own.
+          Almost every major cloud provider offers a consumer free tier: MEGA provides 20 GB, Google Drive provides 15 GB, Box provides 10 GB, Koofr provides 10 GB, pCloud provides up to 10 GB, OneDrive provides 5 GB, and Dropbox provides 2 GB. Together, that represents{" "}
+          <strong>up to {TOTAL_FREE_STORAGE_GB} gigabytes of personal cloud storage</strong> across accounts you may already own.
         </p>
         <p>
-          However, managing 5 different apps, logins, and upload UIs is a nightmare. Commercial cloud managers charge $10 to $20 every month, and worse—they proxy your sensitive files through their own private servers, introducing security vulnerabilities and bandwidth caps.
+          However, juggling 7 separate web apps, mobile clients, and logins creates friction. Traditional commercial tools often focus on enterprise migrations or charge ongoing monthly subscriptions with server-side transfer meters.
         </p>
         <p>
-          <strong>Fuze</strong> was engineered from the ground up to solve this permanently. By leveraging browser-to-cloud resumable upload sessions, Fuze eliminates the middleman entirely. Your files stream directly to provider infrastructure, your metadata remains clean and organized, and you enjoy an enterprise-grade cloud drive completely free of cost.
+          We built <strong>Fuze Drive</strong> as an independent open-source project to solve this: a unified virtual directory that lets you manage your personal storage pool from one clean interface using direct browser-to-cloud streaming.
         </p>
       </div>
 
@@ -35,7 +36,7 @@ export function AboutSection() {
           </div>
           <div>
             <div className="font-bold text-slate-900 text-sm">
-              Aftab (CodeItAftab)
+              Aftab Alam (CodeItAftab)
             </div>
             <div className="text-xs text-slate-500">
               Project Creator &amp; Maintainer
@@ -48,8 +49,7 @@ export function AboutSection() {
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 transition"
         >
-          <GithubIcon className="h-4 w-4" />
-          <span>GitHub Profile</span>
+          <span>View GitHub Profile</span>
           <ExternalLink className="h-3.5 w-3.5" />
         </a>
       </div>

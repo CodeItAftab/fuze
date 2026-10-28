@@ -24,6 +24,7 @@ const app = Fastify({
     level: process.env.NODE_ENV === "production" ? "info" : "debug",
   },
   trustProxy: true,
+  bodyLimit: 1024 * 1024 * 1024, // 1 GB body limit for cloud chunk uploads
 });
 
 async function main() {
@@ -102,7 +103,8 @@ async function main() {
     if (
       publicPaths.some((p) => request.url.startsWith(p)) ||
       request.url.includes("/share/") ||
-      request.url.includes("/callback")
+      request.url.includes("/callback") ||
+      request.url.includes("/provider-stream/")
     ) {
       return;
     }

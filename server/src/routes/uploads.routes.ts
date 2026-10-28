@@ -1,5 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { UploadSessionService } from "../services/upload-session.service.js";
+import { MegaAdapter } from "../adapters/mega.adapter.js";
+import { KoofrAdapter } from "../adapters/koofr.adapter.js";
 import { db, users } from "../db/index.js";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -12,10 +14,33 @@ const createSessionSchema = z.object({
 });
 
 export async function uploadRoutes(fastify: FastifyInstance) {
+  // Support raw stream bodies for provider proxy uploads like MEGA and Koofr
+  fastify.addContentTypeParser("*", function (request, payload, done) {
+    const ct = request.headers["content-type"] || "";
+    if (ct.includes("application/json")) {
+      let data = "";
+      payload.on("data", (chunk: any) => { data += chunk; });
+      payload.on("end", () => {
+        try {
+          done(null, data ? JSON.parse(data) : {});
+        } catch (err: any) {
+          done(err, undefined);
+        }
+      });
+      return;
+    }
+    done(null, payload);
+  });
+
   // Pre-handler hook to authenticate user and verify email
   fastify.addHook(
     "preHandler",
     async (request: FastifyRequest, reply: FastifyReply) => {
+      // If request is to /provider-stream/, bypass auth because upload token is verified in query param
+      if (request.url.includes("/provider-stream/")) {
+        return;
+      }
+
       try {
         await request.jwtVerify();
       } catch {
@@ -165,4 +190,78 @@ export async function uploadRoutes(fastify: FastifyInstance) {
 
   fastify.post("/:sessionId/abort", handleAbort);
   fastify.delete("/:sessionId", handleAbort);
+
+  // 6. Direct Provider Streaming Proxies (MEGA & Koofr)
+  fastify.post(
+    "/provider-stream/mega",
+    {
+      bodyLimit: 1024 * 1024 * 1024,
+    },
+    async (
+      request: FastifyRequest<{
+        Querystring: { token: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      const { token } = request.query || {};
+      if (!token) {
+        return reply.status(400).send({ error: "Missing stream token" });
+      }
+      try {
+        const stream = (request.body as any) || request.raw;
+        const result = await MegaAdapter.handleStreamUpload(token, stream);
+        return reply.send({ success: true, ...result });
+      } catch (err: any) {
+        return reply.status(400).send({ error: err.message });
+      }
+    },
+  );
+
+  fastify.get(
+    "/provider-stream/mega/download",
+    async (
+      request: FastifyRequest<{
+        Querystring: { token: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      const { token } = request.query || {};
+      if (!token) {
+        return reply.status(400).send({ error: "Missing download token" });
+      }
+      try {
+        const { stream, name, size } = await MegaAdapter.handleStreamDownload(token);
+        reply.header("Content-Disposition", `attachment; filename="${encodeURIComponent(name)}"`);
+        if (size) reply.header("Content-Length", size);
+        return reply.send(stream);
+      } catch (err: any) {
+        return reply.status(400).send({ error: err.message });
+      }
+    },
+  );
+
+  fastify.all(
+    "/provider-stream/koofr",
+    {
+      bodyLimit: 1024 * 1024 * 1024,
+    },
+    async (
+      request: FastifyRequest<{
+        Querystring: { token: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      const { token } = request.query || {};
+      if (!token) {
+        return reply.status(400).send({ error: "Missing stream token" });
+      }
+      try {
+        const stream = (request.body as any) || request.raw;
+        const result = await KoofrAdapter.handleStreamUpload(token, stream);
+        return reply.send({ success: true, ...result });
+      } catch (err: any) {
+        return reply.status(400).send({ error: err.message });
+      }
+    },
+  );
 }

@@ -8,6 +8,8 @@ export type ProviderType =
   | "dropbox"
   | "pcloud"
   | "box"
+  | "mega"
+  | "koofr"
   | "multi_cloud"
   | "unknown";
 
@@ -27,10 +29,8 @@ export function parseProvider(badge: string | null | undefined): ParsedProvider 
     };
   }
 
-  // Strip internal "(Whole)" jargon cleanly
   const cleaned = badge.replace(/\s*\(Whole\)/gi, "").trim();
 
-  // Multi-Cloud pattern: "Multi-Cloud (3 Providers)" or "Multi-Cloud (2)" or "Multi-Cloud"
   const multiMatch = cleaned.match(/Multi-Cloud(?:\s*\(([0-9]+)(?:\s*Providers?)?\))?/i);
   if (multiMatch || cleaned.toLowerCase().includes("multi")) {
     const count = multiMatch?.[1] ? parseInt(multiMatch[1], 10) : undefined;
@@ -84,6 +84,20 @@ export function parseProvider(badge: string | null | undefined): ParsedProvider 
       description: "Stored on Box",
     };
   }
+  if (lower.includes("mega")) {
+    return {
+      type: "mega",
+      name: "MEGA",
+      description: "Stored on MEGA",
+    };
+  }
+  if (lower.includes("koofr")) {
+    return {
+      type: "koofr",
+      name: "Koofr",
+      description: "Stored on Koofr",
+    };
+  }
 
   return {
     type: "unknown",
@@ -92,9 +106,6 @@ export function parseProvider(badge: string | null | undefined): ParsedProvider 
   };
 }
 
-/**
- * Real official brand logos loaded from downloaded vector SVGs in /public/providers/
- */
 export function ProviderIcon({
   type,
   className = "w-4 h-4",
@@ -108,6 +119,8 @@ export function ProviderIcon({
     dropbox: "/providers/dropbox.svg",
     box: "/providers/box.svg",
     pcloud: "/providers/pcloud.svg",
+    mega: "/providers/mega.svg",
+    koofr: "/providers/koofr.svg",
     multi_cloud: "/providers/multi-cloud.svg",
     unknown: "/providers/multi-cloud.svg",
   };
@@ -125,10 +138,6 @@ export function ProviderIcon({
   );
 }
 
-/**
- * Minimalist Provider Indicator:
- * Real official brand logo rendered in a neat chip with tooltip (name text omitted to eliminate redundancy).
- */
 export function ProviderLogo({
   badge,
   className = "",
@@ -171,6 +180,10 @@ function getProviderTheme(type: ProviderType) {
       return "bg-blue-50/90 text-blue-900 border-blue-200/90 hover:bg-blue-100/70";
     case "pcloud":
       return "bg-cyan-50/90 text-cyan-900 border-cyan-200/90 hover:bg-cyan-100/70";
+    case "mega":
+      return "bg-rose-50/90 text-rose-900 border-rose-200/90 hover:bg-rose-100/70";
+    case "koofr":
+      return "bg-teal-50/90 text-teal-900 border-teal-200/90 hover:bg-teal-100/70";
     case "multi_cloud":
       return "bg-gradient-to-r from-violet-50 to-indigo-50 text-indigo-950 border-indigo-200/90 shadow-2xs hover:from-violet-100 hover:to-indigo-100";
     default:

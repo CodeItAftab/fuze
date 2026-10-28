@@ -4,6 +4,10 @@ import { ForgotPasswordForm } from "@/components/auth/ForgotPasswordForm";
 export const metadata: Metadata = {
   title: "Reset Password | Fuze Drive",
   description: "Request a password reset link for your Fuze Drive account.",
+  robots: {
+    index: false,
+    follow: false,
+  },
   alternates: {
     canonical: "https://fuzedrive.tech/forgot-password",
   },

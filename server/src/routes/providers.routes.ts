@@ -25,6 +25,7 @@ import {
   ProviderAuthExpiredError,
 } from "../services/token.service.js";
 import { CacheService } from "../services/cache.service.js";
+import { QuotaService } from "../services/quota.service.js";
 
 const redis = new IORedis(process.env.REDIS_URL || "redis://localhost:6379", {
   lazyConnect: true,
@@ -129,6 +130,28 @@ export async function providerRoutes(fastify: FastifyInstance) {
 
     const activeProviderIds = items.map((p) => p.id);
 
+    // Calculate actual storage used by chunks per provider identity
+    const chunkSums = await db
+      .select({
+        providerIdentityId: fileChunks.providerIdentityId,
+        totalBytes: sql<string>`COALESCE(SUM(${fileChunks.byteEnd} - ${fileChunks.byteStart} + 1), 0)`,
+      })
+      .from(fileChunks)
+      .where(inArray(fileChunks.providerIdentityId, activeProviderIds))
+      .groupBy(fileChunks.providerIdentityId);
+
+    const chunkSumMap = new Map(
+      chunkSums.map((cs) => [cs.providerIdentityId, Number(cs.totalBytes || 0)]),
+    );
+
+    const enrichedItems = items.map((p) => {
+      const storedBytes = chunkSumMap.get(p.id) || 0;
+      return {
+        ...p,
+        quotaUsed: Math.max(p.quotaUsed, storedBytes),
+      };
+    });
+
     // Only calculate storage used by files on active, connected providers
     const activeFiles = await db
       .select({ size: vfsNodes.size })
@@ -152,12 +175,12 @@ export async function providerRoutes(fastify: FastifyInstance) {
       (sum, f) => sum + Number(f.size || 0),
       0,
     );
-    const totalPool = items.reduce((sum, p) => sum + p.quotaTotal, 0);
-    const rawUsedPool = items.reduce((sum, p) => sum + p.quotaUsed, 0);
+    const totalPool = enrichedItems.reduce((sum, p) => sum + p.quotaTotal, 0);
+    const rawUsedPool = enrichedItems.reduce((sum, p) => sum + p.quotaUsed, 0);
     const usedPool = Math.min(totalPool, Math.max(rawUsedPool, vfsUsedBytes));
 
     const responsePayload = {
-      providers: items,
+      providers: enrichedItems,
       summary: {
         totalPoolBytes: totalPool,
         usedPoolBytes: usedPool,
@@ -239,6 +262,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
     else if (provider === "dropbox") canonicalProvider = "dropbox";
     else if (provider === "box") canonicalProvider = "box";
     else if (provider === "pcloud") canonicalProvider = "pcloud";
+    else if (provider === "koofr") canonicalProvider = "koofr";
 
     // Enforce single-account per provider: Check if user already linked this provider
     const [existingProvider] = await db
@@ -386,6 +410,19 @@ export async function providerRoutes(fastify: FastifyInstance) {
           state,
         });
         authUrl = `https://my.pcloud.com/oauth2/authorize?${params.toString()}`;
+        break;
+      }
+
+      case "koofr": {
+        const params = new URLSearchParams({
+          client_id: process.env.KOOFR_CLIENT_ID || "",
+          redirect_uri:
+            process.env.KOOFR_REDIRECT_URI ||
+            "http://localhost:4000/providers/koofr/callback",
+          response_type: "code",
+          state,
+        });
+        authUrl = `https://app.koofr.net/oauth2/auth?${params.toString()}`;
         break;
       }
 
@@ -679,6 +716,37 @@ export async function providerRoutes(fastify: FastifyInstance) {
             break;
           }
 
+          case "koofr": {
+            canonicalProvider = "koofr";
+            const tokenRes = await fetch("https://app.koofr.net/oauth2/token", {
+              method: "POST",
+              headers: { "Content-Type": "application/x-www-form-urlencoded" },
+              body: new URLSearchParams({
+                grant_type: "authorization_code",
+                code,
+                client_id: process.env.KOOFR_CLIENT_ID || "",
+                client_secret: process.env.KOOFR_CLIENT_SECRET || "",
+                redirect_uri:
+                  process.env.KOOFR_REDIRECT_URI ||
+                  "http://localhost:4000/providers/koofr/callback",
+              }),
+            });
+            const tData = (await tokenRes.json()) as any;
+            if (!tokenRes.ok || tData.error) {
+              throw new Error(tData.error_description || tData.error || "Koofr token exchange failed");
+            }
+            accessToken = tData.access_token;
+            refreshToken = tData.refresh_token || tData.access_token;
+            expiresIn = tData.expires_in || 3600;
+
+            const uRes = await fetch("https://app.koofr.net/api/v2/user", {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            });
+            const uData = (await uRes.json()) as any;
+            accountEmail = uData.email || "";
+            break;
+          }
+
           default:
             throw new Error(`Unsupported callback provider: ${provider}`);
         }
@@ -767,6 +835,8 @@ export async function providerRoutes(fastify: FastifyInstance) {
               quotaTotal: quota.totalBytes,
               quotaUsed: quota.usedBytes,
               isRevoked: false,
+              isDisconnected: false,
+              pendingRestore: false,
               lastSyncedAt: new Date(),
             })
             .where(eq(providerIdentities.id, existing.id));
@@ -826,6 +896,164 @@ export async function providerRoutes(fastify: FastifyInstance) {
           `${clientOrigin}/dashboard/storage?error=${encodeURIComponent(err.message)}`,
         );
       }
+    },
+  );
+
+  // -------------------------------------------------------------
+  // 3.5 CONNECT CREDENTIALS PROVIDERS (MEGA, Koofr)
+  // -------------------------------------------------------------
+  fastify.post(
+    "/connect-credentials",
+    async (
+      request: FastifyRequest<{
+        Body: {
+          provider: "mega" | "koofr";
+          credentials: Record<string, string>;
+        };
+      }>,
+      reply: FastifyReply,
+    ) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        return reply.status(401).send({ error: "Unauthorized" });
+      }
+
+      const user = request.user as { userId: string };
+      const [dbUser] = await db
+        .select({ id: users.id, emailVerified: users.emailVerified })
+        .from(users)
+        .where(eq(users.id, user.userId));
+
+      if (!dbUser || !dbUser.emailVerified) {
+        return reply.status(403).send({
+          error: "Please verify your email address before connecting cloud storage providers.",
+        });
+      }
+
+      const { provider, credentials } = request.body || {};
+      if (!provider || !credentials) {
+        return reply.status(400).send({ error: "Provider and credentials are required." });
+      }
+
+      const allowedProviders = ["mega", "koofr"];
+      if (!allowedProviders.includes(provider)) {
+        return reply.status(400).send({ error: `Unsupported credentials provider: ${provider}` });
+      }
+
+      const canonicalProvider = provider as SupportedProvider;
+      const configStr = JSON.stringify(credentials);
+      const adapter = getStorageAdapter(canonicalProvider);
+
+      // Verify credentials live against provider
+      let quota;
+      try {
+        quota = await adapter.fetchQuota(configStr);
+      } catch (err: any) {
+        return reply.status(400).send({
+          error: `Failed to connect to ${provider}: ${err.message || "Invalid credentials"}`,
+        });
+      }
+
+      const accountEmail =
+        credentials.email || credentials.user || `${provider}-account`;
+
+      // Check for account collisions
+      const [claimedByOther] = await db
+        .select({ id: providerIdentities.id })
+        .from(providerIdentities)
+        .where(
+          and(
+            eq(providerIdentities.provider, canonicalProvider),
+            eq(providerIdentities.accountEmail, accountEmail),
+            ne(providerIdentities.userId, user.userId),
+            eq(providerIdentities.isDisconnected, false),
+          ),
+        );
+
+      if (claimedByOther) {
+        return reply.status(400).send({
+          error: `This ${provider} account is already connected to another Fuze account.`,
+        });
+      }
+
+      const [existing] = await db
+        .select()
+        .from(providerIdentities)
+        .where(
+          and(
+            eq(providerIdentities.userId, user.userId),
+            eq(providerIdentities.provider, canonicalProvider),
+          ),
+        );
+
+      const encryptedToken = encrypt(configStr);
+      // Valid for 10 years
+      const tokenExpiresAt = new Date(Date.now() + 315360000 * 1000);
+
+      let targetProviderId: string;
+
+      if (existing) {
+        await db
+          .update(providerIdentities)
+          .set({
+            encryptedAccessToken: encryptedToken,
+            encryptedRefreshToken: encryptedToken,
+            tokenExpiresAt,
+            accountEmail,
+            quotaTotal: quota.totalBytes,
+            quotaUsed: quota.usedBytes,
+            isRevoked: false,
+            isDisconnected: false,
+            pendingRestore: false,
+            lastSyncedAt: new Date(),
+          })
+          .where(eq(providerIdentities.id, existing.id));
+        targetProviderId = existing.id;
+      } else {
+        const [inserted] = await db
+          .insert(providerIdentities)
+          .values({
+            userId: user.userId,
+            provider: canonicalProvider,
+            accountEmail,
+            encryptedAccessToken: encryptedToken,
+            encryptedRefreshToken: encryptedToken,
+            tokenExpiresAt,
+            quotaTotal: quota.totalBytes,
+            quotaUsed: quota.usedBytes,
+            isRevoked: false,
+            isDisconnected: false,
+            pendingRestore: false,
+            lastSyncedAt: new Date(),
+          })
+          .returning();
+        targetProviderId = inserted!.id;
+      }
+
+      socketManager.broadcastToUser(user.userId, {
+        type: "PROVIDER_CONNECTED",
+        payload: { provider: canonicalProvider },
+      });
+
+      socketManager.broadcastToUser(user.userId, {
+        type: "QUOTA_UPDATED",
+        payload: { provider: canonicalProvider, quota },
+      });
+
+      await CacheService.invalidateUserProviders(user.userId);
+      await CacheService.invalidateUserVfs(user.userId);
+
+      try {
+        await reconcileReconnectedProvider(user.userId, targetProviderId);
+      } catch {}
+
+      return reply.send({
+        success: true,
+        provider: canonicalProvider,
+        accountEmail,
+        quota,
+      });
     },
   );
 
@@ -1354,17 +1582,12 @@ export async function providerRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: "Provider identity not found" });
 
       try {
-        const accessToken = await TokenService.getValidAccessToken(id);
-        const adapter = getStorageAdapter(identity.provider);
-        const quota = await adapter.fetchQuota(accessToken);
+        const quota = await QuotaService.syncProviderQuota(id, { forceApi: true });
 
         await db
           .update(providerIdentities)
           .set({
-            quotaTotal: quota.totalBytes,
-            quotaUsed: quota.usedBytes,
             isRevoked: false,
-            lastSyncedAt: new Date(),
           })
           .where(eq(providerIdentities.id, id));
 
@@ -1374,6 +1597,8 @@ export async function providerRoutes(fastify: FastifyInstance) {
             providerId: id,
             provider: identity.provider,
             isRevoked: false,
+            quotaUsed: quota.usedBytes,
+            quotaTotal: quota.totalBytes,
           },
         });
 
