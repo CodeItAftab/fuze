@@ -255,7 +255,14 @@ class WebSocketClient {
           });
         }
         store.setMigrationProgress(null);
-        void store.refreshProviders();
+        const providerId = (data.payload as { providerId?: string })?.providerId;
+        if (providerId) {
+          const current = store.providers;
+          useDriveStore.setState({
+            providers: current.filter((p) => p.id !== providerId),
+          });
+        }
+        void store.refreshProviders(true);
         toast.success("Storage Unlinked", "Cloud account unlinked safely.");
         break;
       }
@@ -273,7 +280,7 @@ class WebSocketClient {
           });
         }
         store.setMigrationProgress(null);
-        void store.refreshProviders();
+        void store.refreshProviders(true);
         toast.error(
           "Migration Incomplete",
           "One or more chunks failed to relocate. Original files preserved.",
@@ -295,7 +302,7 @@ class WebSocketClient {
           });
         }
         store.setMigrationProgress(null);
-        void store.refreshProviders();
+        void store.refreshProviders(true);
         toast.info(
           "Migration Cancelled",
           "Transferred files remain safe on destination clouds.",
