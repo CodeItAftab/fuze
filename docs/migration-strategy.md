@@ -38,9 +38,11 @@ flowchart TD
 ```
 
 ### Provider Ceilings & Priority Weights:
+- **MEGA**: Ceiling: 20 GB | Priority: 105 *(Highest capacity free tier)*
 - **Google Drive**: Ceiling: 5 TB | Priority: 100 *(Primary target for large media/archives)*
 - **pCloud**: Ceiling: 10 GB | Priority: 95
 - **OneDrive**: Ceiling: 250 GB | Priority: 90
+- **Koofr**: Ceiling: 10 GB | Priority: 88
 - **Box**: Ceiling: 250 MB | Priority: 85
 - **Dropbox**: Ceiling: 140 MB | Priority: 70
 

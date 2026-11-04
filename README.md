@@ -128,7 +128,7 @@ In Fuze, **the server orchestrates metadata only**:
 Rather than blindly fragmenting every file across multiple clouds, Fuze's allocation engine enforces **strict whole-file prioritization**:
 * When a file is uploaded, the engine scans all active, unrevoked providers to see if **any single provider** has sufficient free space and supports the file size.
 * If a fit exists, the file is designated strategy `"whole"`, weighted by provider speed:
-  $$\text{Google Drive (100)} > \text{pCloud (95)} > \text{OneDrive (90)} > \text{Box (85)} > \text{Dropbox (70)}$$
+  $\\text{MEGA (105)} > \\text{Google Drive (100)} > \\text{pCloud (95)} > \\text{OneDrive (90)} > \\text{Koofr (88)} > \\text{Box (85)} > \\text{Dropbox (70)}$
 * **Benefits**: 0 chunking overhead, maximum download throughput, and instant cloud-native preview availability.
 
 ### Rule 2: Multi-Cloud Dynamic Chunking & Merkle Trees
@@ -163,6 +163,22 @@ When a user performs multiple parallel uploads or downloads, multiple chunks may
 ### Real-Time WebSocket State Synchronization
 All Virtual File System actions (file creation, folder nesting, renaming, moving, trash restoration, and storage quota adjustments) broadcast user-scoped WebSocket events (`FILE_CREATED`, `FILE_RENAMED`, `QUOTA_UPDATED`, `SESSION_REVOKED`) ensuring instant multi-tab and multi-device state consistency.
 
+### Zero-Proxy Direct CDN Streaming & Client-Side In-Memory Assembly
+To deliver high-speed, zero-buffering media playback and file previews:
+* **Single Whole Files**: Stream directly via **HTTP 307 Temporary Redirects** straight to pre-authenticated cloud CDN URLs (Dropbox `dl.dropboxusercontent.com`, Microsoft Azure CDN for OneDrive, Box Akamai CDN, and pCloud CDN) with **0 MB server bandwidth transit**.
+* **Zero-Buffering In-Memory Playback (`downloadAndAssembleChunks`)**: For multi-cloud chunked files and media files $\le 80$ MB, chunks are downloaded concurrently in parallel into browser memory and assembled into a local `blob:` URL. Playback begins in 1–2 seconds with **zero buffering** and **instantaneous 0 ms scrubbing/seeking**.
+* **Strict CORS Compliance**: All media players omit `crossOrigin="use-credentials"`, completely eliminating cross-origin credential wildcard errors when requesting ranges from global storage CDNs.
+* **Signed Short-Lived Stream Tokens**: The Fastify control plane generates secure 6-hour JWT stream tokens (`?token=...`), allowing HTML5 `<video>` and `<audio>` players to stream authenticated files without cross-origin cookie blockers.
+* **Full HTTP Range Support**: Fastify's CORS engine explicitly whitelists the `Range` request header and exposes `Content-Range`, `Accept-Ranges`, and `Content-Length` response headers.
+
+### Per-Account Identity Isolation & Non-Destructive File Reconciliation
+* **Multi-Account Identity Isolation**: Users can connect multiple cloud accounts across providers. Identity checks are scoped strictly to active accounts (`is_disconnected = false AND is_revoked = false`), allowing an email previously disconnected from one account to be freely attached to another without collision blocks.
+* **Non-Destructive VFS Index Reconciliation**: When a previously disconnected provider is re-attached, a background worker runs lightweight existence checks (`adapter.verifyFileExists`) against remote storage. Files and chunks are reconciled non-destructively, preserving existing VFS records and restoring instant access without risk of accidental data purging.
+
+### Cross-Cloud Zero-Data-Loss Migration Worker
+When moving files between clouds or safely disconnecting a provider:
+* The background migration engine relocates chunks across connected clouds using parallel transfer channels.
+* **Zero-Loss Guarantee**: If any individual chunk cannot be relocated due to provider capacity or network timeouts, the original chunks and database records are strictly preserved on the source cloud to guarantee zero data loss.
 ---
 
 ## 4. Supported Cloud Providers
@@ -498,8 +514,9 @@ Fuze Drive is designed for **zero-cost, 24/7 deployment** with no credit card re
      * `NEXT_PUBLIC_WS_URL=wss://api.fuzedrive.tech`
      * `NEXT_PUBLIC_APP_URL=https://fuzedrive.tech`
 2. **Backend (`server`)**:
-   * Deploy to **Render** (Free Web Service) or a container host.
-   * Add a free keep-alive monitor via [cron-job.org](https://cron-job.org) hitting `/health` every 10 minutes to prevent sleeping.
+   * Deploy to an **Oracle Cloud Infrastructure (OCI) Free Tier ARM Ampere VM** (4 OCPU, 24 GB RAM, 200 GB SSD — 100% free forever) or Render/Railway/Fly.io.
+   * Run the production server under **PM2** (`pm2 start dist/index.js --name fuze-api`) behind a reverse proxy (Caddy / Nginx) with automated Let's Encrypt SSL on `api.fuzedrive.tech`.
+   * Add a free keep-alive monitor via [cron-job.org](https://cron-job.org) hitting `/health` every 10 minutes to ensure 99.99% uptime.
 3. **Database**:
    * Deploy to **Supabase** or **Neon** (Free 500 MB PostgreSQL).
 4. **Cache & Queue**:

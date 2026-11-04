@@ -1,6 +1,6 @@
 # Fuze Architecture & Technical Specification 🏗️
 
-> **Comprehensive architectural blueprint for Fuze** — the zero-proxy, decentralized multi-cloud storage aggregator that pools free tiers across Google Drive, Box, pCloud, OneDrive, and Dropbox into a unified virtual filesystem.
+> **Comprehensive architectural blueprint for Fuze** — the zero-proxy, decentralized multi-cloud storage aggregator that pools free tiers across **MEGA, Google Drive, Box, pCloud, Koofr, OneDrive, and Dropbox** into a unified 72 GB virtual filesystem.
 
 ---
 
@@ -273,17 +273,26 @@ Each cloud provider uses a specialized protocol adapter (`server/src/adapters/`)
 5. **pCloud Adapter (`pcloud.adapter.ts`)**:
    - Calls `getuploadserver` to acquire optimal regional endpoint IP.
    - Uploads binary payload directly via `uploadfile` endpoint with authentication tokens.
+6. **MEGA Adapter (`mega.adapter.ts`)**:
+   - Authenticates directly against MEGA's client API using user credentials encrypted via AES-256-GCM.
+   - Generates direct upload nodes with end-to-end encrypted storage keys (+20 GB free tier).
+7. **Koofr Adapter (`koofr.adapter.ts`)**:
+   - Connects via secure WebDAV protocol using dedicated Koofr App Passwords with automated credential sanitization.
+   - Streams file chunks directly over WebDAV endpoints with atomic upload verification (+10 GB free tier).
 
 ### Zero-Proxy Download & Stream Assembly
 
-1. **Whole-File Downloads (Rule 1)**:
-   - Control plane requests a temporary presigned download redirect URL from the provider adapter.
-   - Browser client receives an HTTP 302 redirect directly to the cloud provider's high-speed CDN.
-   - Direct download with zero server transit.
-2. **Chunked File Downloads (Rule 2)**:
-   - Client requests presigned download links for each chunk: `GET /api/files/:id/download-plan`.
-   - Client issues parallel range-based HTTP `fetch()` requests directly to the cloud providers.
-   - Browser assembles the chunks sequentially in memory using the **Streams API** (`ReadableStream`) or concatenates `Blob` instances before triggering a native file save dialog.
+1. **Whole-File Downloads & Direct CDN Streaming (Rule 1)**:
+   - For providers supporting pre-authenticated direct links (**Dropbox**, **OneDrive**, **pCloud**, **Box**), the server issues an **HTTP 307 Temporary Redirect** straight to the global CDN endpoint (`dl.dropboxusercontent.com`, Azure CDN, Akamai CDN, pCloud CDN).
+   - The browser streams bytes directly from the CDN with **0 MB server bandwidth transit** and full native HTTP range request support.
+2. **Zero-Buffering Client-Side In-Memory Assembly (`downloadAndAssembleChunks`)**:
+   - For multi-cloud chunked files and media files $\le 80$ MB, Fuze bypasses sequential server pipes and downloads all chunks concurrently in parallel via browser `fetch()`.
+   - Chunks are assembled directly into memory into a local `blob:` URL.
+   - When loaded into HTML5 `<video>` and `<audio>` elements, playback is **100% instant (0 ms seek latency)**, eliminating buffering completely.
+3. **CORS Protocol Compliance for Media Elements**:
+   - All media elements omit `crossOrigin="use-credentials"`, preventing browsers from rejecting cross-origin CDN range requests that return `Access-Control-Allow-Origin: *`.
+   - The server issues signed 6-hour JWT stream tokens (`?token=...`) so media elements can stream authenticated files without cross-origin cookie blockers.
+   - Fastify's CORS engine explicitly allows `Range` requests and exposes `Content-Range`, `Accept-Ranges`, and `Content-Length` headers.
 
 ---
 
@@ -410,17 +419,17 @@ Browser Tab 1 (Desktop)          Browser Tab 2 (Mobile)          Fuze Server (Fa
 
 ## 9. Security, Privacy & Collision Protection
 
-### Cross-User Account Collision Protection
+### Cross-User Account Collision Protection & Identity Isolation
 
-To prevent cross-user account hijacking or double-accounting of cloud drives:
-- During OAuth2 callback handling (`server/src/routes/providers.routes.ts`), the server extracts the authenticated account email.
-- The server checks if another user (`ne(providerIdentities.userId, currentUserId)`) has already linked this specific cloud account email.
-- If a collision is detected, the OAuth handshake is aborted with `ACCOUNT_ALREADY_LINKED` and descriptive guidance is returned to the user.
+To prevent cross-user account collisions while supporting flexible multi-account workflows:
+- **Active Account Scoping**: During connection handshakes (`server/src/routes/providers.routes.ts`), collision detection is strictly scoped to active connections (`isDisconnected = false AND isRevoked = false`).
+- **Disconnected Account Re-linking**: If a cloud account email was previously connected by another user but is now disconnected, it can be freely linked to a different account.
+- **Non-Destructive VFS Index Reconciliation**: When an account is reconnected, an intelligent background reconciliation worker runs `adapter.verifyFileExists` against remote cloud endpoints. Files and chunks are reconciled non-destructively, preserving existing VFS records and restoring instant access without risk of accidental data purging.
 
 ### Selective Cloud Purge on Account Deletion
 
 When a user deletes their account (`DELETE /api/auth/account`), Fuze provides user-controlled data handling:
-- **Option A (Preserve Cloud Files)**: Purges all metadata, credentials, and session records from Fuze databases while leaving the user's files safely intact inside their Google Drive, OneDrive, Box, pCloud, and Dropbox accounts.
+- **Option A (Preserve Cloud Files)**: Purges all metadata, credentials, and session records from Fuze databases while leaving the user's files safely intact inside their Google Drive, MEGA, OneDrive, Box, pCloud, Koofr, and Dropbox accounts.
 - **Option B (Wipe Remote Files)**: The server queries all `fileChunks` and executes parallel `deleteFile` API requests across all connected cloud providers before cascading database record removal.
 
 ---
@@ -437,25 +446,25 @@ When a user deletes their account (`DELETE /api/auth/account`), Fuze provides us
                                              │
                       ┌──────────────────────┴──────────────────────┐
                       ▼                                             ▼
-           [ Vercel Edge Network ]                       [ Render / Koyeb Web Service ]
-        Frontend: Next.js 16 Web App                    Backend: Fastify Node.js API
-          (https://fuze.aftabalam.me)                    (https://api.fuze.aftabalam.me)
+           [ Vercel Edge Network ]                       [ Oracle Cloud (OCI) ARM VM ]
+        Frontend: Next.js 16 Web App                    Backend: Fastify 5 Node.js API
+          (https://fuzedrive.tech)                        (https://api.fuzedrive.tech)
                       │                                             │
                       │                                             ▼
                       │                               ┌───────────────────────────┐
-                      │                               │  PostgreSQL Database      │
-                      │                               │  (Supabase / Neon DB)     │
+                      │                               │  Neon Serverless Postgres │
+                      │                               │  (PostgreSQL 16 Pooler)   │
                       │                               ├───────────────────────────┤
                       │                               │  Upstash Redis            │
-                      │                               │  (Locks, PubSub, Sessions)│
+                      │                               │  (Locks, BullMQ, Sessions)│
                       │                               └───────────────────────────┘
                       │                                             │
                       └═══════════════ Direct Data Plane ═══════════┘
                                              ▼
-                      [ Google Drive • Box • pCloud • OneDrive • Dropbox ]
+               [ MEGA • Google Drive • Box • pCloud • Koofr • OneDrive • Dropbox ]
 ```
 
-### Zero-Cost High-Availability Stack
+### High-Availability Production Stack
 
 Fuze is architected to run permanently within generous free-tier limits:
 

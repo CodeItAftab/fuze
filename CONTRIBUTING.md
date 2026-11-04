@@ -47,7 +47,7 @@ npm run dev          # Starts Next.js on port 3000
 
 ## 🔌 Adding a New Cloud Storage Adapter
 
-One of the highest-impact ways to contribute is implementing support for new free cloud providers (e.g. Mega, MediaFire, Proton Drive, IceDrive, Yandex Disk, Cloudflare R2, MinIO, Nextcloud).
+One of the highest-impact ways to contribute is implementing support for new free cloud providers (e.g. MediaFire, Proton Drive, IceDrive, Yandex Disk, Cloudflare R2, MinIO, Nextcloud).
 
 1. Open `server/src/adapters/base.adapter.ts` and inspect the `StorageAdapter` interface.
 2. Implement your new adapter in `server/src/adapters/<provider>.adapter.ts`.
@@ -61,7 +61,7 @@ One of the highest-impact ways to contribute is implementing support for new fre
 
 1. **Create a Topic Branch**:
    ```bash
-   git checkout -b feature/mega-adapter
+   git checkout -b feature/mediafire-adapter
    # or
    git checkout -b fix/upload-progress-bar
    ```
