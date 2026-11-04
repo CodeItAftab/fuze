@@ -1064,57 +1064,73 @@ export async function reconcileReconnectedProvider(
 
   if (!provider) return { restoredCount: 0, purgedCount: 0 };
 
+  // 1. Immediately activate identity so files become available in VFS without delay
+  await db
+    .update(providerIdentities)
+    .set({ isDisconnected: false, pendingRestore: false, isRevoked: false, lastSyncedAt: new Date() })
+    .where(eq(providerIdentities.id, providerIdentityId));
+
   const chunks = await db
     .select()
     .from(fileChunks)
     .where(eq(fileChunks.providerIdentityId, providerIdentityId));
 
   if (chunks.length === 0) {
-    await db
-      .update(providerIdentities)
-      .set({ isDisconnected: false, pendingRestore: false, isRevoked: false })
-      .where(eq(providerIdentities.id, providerIdentityId));
     return { restoredCount: 0, purgedCount: 0 };
   }
 
   let token = "";
   try {
     token = await TokenService.getValidAccessToken(providerIdentityId);
-  } catch {
-    return { restoredCount: 0, purgedCount: 0 };
+  } catch (err: any) {
+    console.warn(`[Reconnection] Token unavailable for validation, preserving ${chunks.length} chunks: ${err?.message}`);
+    return { restoredCount: chunks.length, purgedCount: 0 };
   }
 
   const adapter = getStorageAdapter(provider.provider);
   let restoredCount = 0;
   let purgedCount = 0;
 
-  for (const chunk of chunks) {
-    try {
-      await adapter.getDownloadUrl({
-        providerFileId: chunk.providerFileId,
-        accessToken: token,
-      });
-      restoredCount++;
-    } catch {
-      // File was deleted in cloud provider while disconnected -> purge DB record
-      await db.delete(fileChunks).where(eq(fileChunks.id, chunk.id));
-      purgedCount++;
+  // 2. Validate chunks with non-destructive error handling in concurrent batches
+  const BATCH_SIZE = 5;
+  for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+    const batch = chunks.slice(i, i + BATCH_SIZE);
+    await Promise.all(
+      batch.map(async (chunk) => {
+        try {
+          await adapter.getDownloadUrl({
+            providerFileId: chunk.providerFileId,
+            accessToken: token,
+          });
+          restoredCount++;
+        } catch (err: any) {
+          // ONLY purge if the cloud provider explicitly confirmed 404 Not Found.
+          // Transient network errors, rate limits (429), or 5xx issues must NEVER delete user records.
+          const isExplicitNotFound =
+            err?.message?.includes("404") ||
+            err?.message?.toLowerCase().includes("not_found") ||
+            err?.message?.toLowerCase().includes("not found");
 
-      const remainingSiblings = await db
-        .select({ id: fileChunks.id })
-        .from(fileChunks)
-        .where(eq(fileChunks.vfsNodeId, chunk.vfsNodeId));
+          if (isExplicitNotFound) {
+            await db.delete(fileChunks).where(eq(fileChunks.id, chunk.id));
+            purgedCount++;
 
-      if (remainingSiblings.length === 0) {
-        await db.delete(vfsNodes).where(eq(vfsNodes.id, chunk.vfsNodeId));
-      }
-    }
+            const remainingSiblings = await db
+              .select({ id: fileChunks.id })
+              .from(fileChunks)
+              .where(eq(fileChunks.vfsNodeId, chunk.vfsNodeId));
+
+            if (remainingSiblings.length === 0) {
+              await db.delete(vfsNodes).where(eq(vfsNodes.id, chunk.vfsNodeId));
+            }
+          } else {
+            console.warn(`[Reconnection] Preserving chunk ${chunk.id} on non-404 warning: ${err?.message}`);
+            restoredCount++;
+          }
+        }
+      }),
+    );
   }
-
-  await db
-    .update(providerIdentities)
-    .set({ isDisconnected: false, pendingRestore: false, isRevoked: false })
-    .where(eq(providerIdentities.id, providerIdentityId));
 
   console.log(
     `[Reconnection] ✅ Reconciliation complete: ${restoredCount} file(s) restored, ${purgedCount} missing file(s) cleaned up.`,

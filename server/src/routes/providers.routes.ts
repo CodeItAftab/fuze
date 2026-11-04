@@ -377,9 +377,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
             "account_info.read files.content.write files.content.read files.metadata.write files.metadata.read",
           state,
         });
-        if (existingProvider?.accountEmail) {
-          params.set("force_reapprove", "true");
-        }
+        params.set("force_reapprove", "true");
         authUrl = `https://www.dropbox.com/oauth2/authorize?${params.toString()}`;
         break;
       }
@@ -939,6 +937,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
           } catch (e: any) {
             request.log.warn(`[Reconnection] Error reconciling provider: ${e?.message}`);
           }
+          void QuotaService.syncProviderQuota(targetProviderId, { forceApi: true }).catch(() => {});
         }
 
         const targetPath = stateObj.returnUrl || "/dashboard/storage";
