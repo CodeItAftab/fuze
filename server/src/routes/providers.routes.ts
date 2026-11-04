@@ -967,13 +967,19 @@ export async function providerRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: "Provider and credentials are required." });
       }
 
+      // Sanitize input credentials (trim leading/trailing whitespace)
+      const sanitizedCreds: Record<string, string> = {};
+      for (const [k, v] of Object.entries(credentials)) {
+        sanitizedCreds[k] = typeof v === "string" ? v.trim() : String(v || "");
+      }
+
       const allowedProviders = ["mega", "koofr"];
       if (!allowedProviders.includes(provider)) {
         return reply.status(400).send({ error: `Unsupported credentials provider: ${provider}` });
       }
 
       const canonicalProvider = provider as SupportedProvider;
-      const configStr = JSON.stringify(credentials);
+      const configStr = JSON.stringify(sanitizedCreds);
       const adapter = getStorageAdapter(canonicalProvider);
 
       // Verify credentials live against provider
@@ -987,7 +993,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
       }
 
       const accountEmail =
-        credentials.email || credentials.user || `${provider}-account`;
+        sanitizedCreds.email || sanitizedCreds.user || `${provider}-account`;
 
       const normalizedEmail = accountEmail.trim().toLowerCase();
 

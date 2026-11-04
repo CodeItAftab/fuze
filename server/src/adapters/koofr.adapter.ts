@@ -37,8 +37,8 @@ export class KoofrAdapter implements StorageAdapter {
   public static getAuthHeader(accessToken: string): string {
     try {
       const parsed = JSON.parse(accessToken);
-      const user = parsed.user || parsed.email;
-      const pass = parsed.pass || parsed.password;
+      const user = String(parsed.user || parsed.email || "").trim();
+      const pass = String(parsed.pass || parsed.password || "").trim();
       if (user && pass) {
         return "Basic " + Buffer.from(`${user}:${pass}`).toString("base64");
       }
@@ -279,6 +279,12 @@ export class KoofrAdapter implements StorageAdapter {
     const res = await fetch("https://app.koofr.net/api/v2/mounts", {
       headers: { Authorization: KoofrAdapter.getAuthHeader(accessToken) },
     });
+
+    if (res.status === 401) {
+      throw new Error(
+        "Invalid Koofr credentials (401). Please verify your Koofr email and make sure you use an App Password generated in Koofr Preferences -> Password -> App Passwords (do NOT use your main Koofr login password).",
+      );
+    }
 
     if (!res.ok) {
       throw new Error(`Failed to fetch Koofr mounts info (${res.status})`);
