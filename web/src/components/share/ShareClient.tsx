@@ -163,7 +163,13 @@ export function ShareClient() {
       fileMime.includes("spreadsheetml") ||
       fileMime.includes("ms-excel");
 
-    if ((!src && filePlan.strategy === "chunked") || docDocx || docExcel) {
+    const isVid = fileMime.startsWith("video/") || ["mp4", "webm", "ogg", "mov", "mkv", "m4v"].includes(fileExt);
+    const isAud = fileMime.startsWith("audio/") || ["mp3", "wav", "ogg", "m4a", "flac", "aac"].includes(fileExt);
+    const isChunked = filePlan.strategy === "chunked";
+    const isSmallMedia = (isVid || isAud) && (filePlan.file?.size || 0) <= 80 * 1024 * 1024;
+    const shouldAssemble = (!src && isChunked) || docDocx || docExcel || isChunked || (!isDirectCdn && isSmallMedia);
+
+    if (shouldAssemble) {
       try {
         setIsDownloading(true);
         const assembled = await downloadAndAssembleChunks(filePlan, {
@@ -412,7 +418,7 @@ export function ShareClient() {
               )}
 
               {isVideo && (
-                <VideoPreview src={streamSrc} mimeType={plan.file.mimeType} />
+                <VideoPreview src={streamSrc} fileName={plan.file.name} mimeType={plan.file.mimeType} />
               )}
 
               {isAudio && (

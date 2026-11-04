@@ -502,7 +502,11 @@ export async function fileRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: "File chunks missing" });
       }
 
-      const streamUrl = `/files/${file.id}/download?inline=true`;
+      const streamToken = fastify.jwt.sign(
+        { userId: user.userId, fileId: file.id, type: "stream" },
+        { expiresIn: "6h" },
+      );
+      const streamUrl = `/files/${file.id}/download?inline=true&token=${encodeURIComponent(streamToken)}`;
 
       // If single chunk (whole file)
       if (chunks.length === 1) {

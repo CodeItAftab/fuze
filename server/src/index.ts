@@ -62,8 +62,14 @@ async function main() {
       "Accept",
       "Authorization",
       "Cookie",
+      "Range",
     ],
-    exposedHeaders: ["Set-Cookie"],
+    exposedHeaders: [
+      "Set-Cookie",
+      "Content-Range",
+      "Accept-Ranges",
+      "Content-Length",
+    ],
   });
 
   // 2. Cookie parser for signed HttpOnly session cookies

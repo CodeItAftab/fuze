@@ -329,7 +329,6 @@ export function ImagePreview({ src, fileName }: ImagePreviewProps) {
             ref={imgRef}
             src={src}
             alt={fileName}
-            crossOrigin="use-credentials"
             draggable={false}
             className="max-h-[calc(100vh-160px)] max-w-[90vw] object-contain rounded-none shadow-xl select-none"
           />
@@ -338,5 +337,6 @@ export function ImagePreview({ src, fileName }: ImagePreviewProps) {
     </div>
   );
 }
+
 
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { Music } from "lucide-react";
 
 interface AudioPreviewProps {
@@ -10,6 +10,14 @@ interface AudioPreviewProps {
 }
 
 export function AudioPreview({ src, fileName, mimeType }: AudioPreviewProps) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.load();
+    }
+  }, [src]);
+
   return (
     <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center select-none font-sans">
       <div className="h-32 w-32 rounded-3xl bg-linear-to-tr from-purple-600 via-indigo-600 to-blue-600 text-white flex items-center justify-center mb-6 shadow-2xl shadow-indigo-500/25">
@@ -24,10 +32,11 @@ export function AudioPreview({ src, fileName, mimeType }: AudioPreviewProps) {
       </p>
 
       <audio
+        ref={audioRef}
         src={src}
         controls
         controlsList="nodownload"
-        crossOrigin="use-credentials"
+        preload="metadata"
         onContextMenu={(e) => e.preventDefault()}
         className="w-full max-w-md shadow-2xl rounded-full outline-none"
       >

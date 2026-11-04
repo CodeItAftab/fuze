@@ -166,9 +166,17 @@ export function FilePreviewClient() {
           data.downloadUrl;
         let activeBlob: Blob | null = null;
 
-        // When chunked across multiple clouds or for DOCX/Excel/PDF, assemble chunks
+        // When chunked across multiple clouds, DOCX/Excel, or non-direct-CDN media <= 80MB, assemble client-side
         const isDocOrSheet = isDocx || isExcel;
-        if (!previewUrl || isDocOrSheet || data.strategy === "chunked") {
+        const fileExt = (data.file?.name || "").split(".").pop()?.toLowerCase() || "";
+        const fileMime = (data.file?.mimeType || "").toLowerCase();
+        const isVid = fileMime.startsWith("video/") || ["mp4", "webm", "ogg", "mov", "mkv", "m4v"].includes(fileExt);
+        const isAud = fileMime.startsWith("audio/") || ["mp3", "wav", "ogg", "m4a", "flac", "aac"].includes(fileExt);
+        const isChunked = data.strategy === "chunked";
+        const isSmallMedia = (isVid || isAud) && (data.file?.size || 0) <= 80 * 1024 * 1024;
+        const shouldAssemble = !previewUrl || isDocOrSheet || isChunked || (!isDirectCdn && isSmallMedia);
+
+        if (shouldAssemble) {
           try {
             const { blob: assembledBlob, objectUrl: assembledUrl } =
               await downloadAndAssembleChunks(data);
@@ -188,11 +196,7 @@ export function FilePreviewClient() {
           setStreamSrc(previewUrl);
         }
 
-        const fileNameLower = data.file.name.toLowerCase();
-        const fileExt = fileNameLower.includes(".")
-          ? fileNameLower.split(".").pop() || ""
-          : "";
-        const fileMime = (data.file.mimeType || "").toLowerCase();
+        
 
         const shouldFetchText =
           fileMime.startsWith("text/") ||
@@ -425,7 +429,7 @@ export function FilePreviewClient() {
               )}
 
               {isVideo && (
-                <VideoPreview src={streamSrc} mimeType={plan.file.mimeType} />
+                <VideoPreview src={streamSrc} fileName={plan.file.name} mimeType={plan.file.mimeType} />
               )}
 
               {isAudio && (

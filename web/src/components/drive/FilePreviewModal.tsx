@@ -210,8 +210,14 @@ export function FilePreviewModal({
           plan.streamUrl ||
           plan.downloadUrl;
 
-        // Direct streams for audio/video/image
-        if ((isImage || isVideo || isAudio) && targetStream) {
+        // For multi-cloud chunked files or non-direct-CDN media <= 80MB, assemble client-side
+        // for zero-buffering instant seeking
+        const isChunked = plan.strategy === "chunked";
+        const isSmallMedia = (isVideo || isAudio) && (plan.file?.size || 0) <= 80 * 1024 * 1024;
+        const canDirectStream = (isDirectCdn || !isSmallMedia) && !isChunked;
+
+        // Direct streams for image, or direct-CDN / large media
+        if ((isImage || canDirectStream) && targetStream) {
           if (isMounted) {
             setObjectUrl(targetStream);
             setLoading(false);
@@ -483,6 +489,7 @@ export function FilePreviewModal({
             {isVideo && objectUrl && (
               <VideoPreview
                 src={objectUrl}
+                fileName={item.name}
                 mimeType={item.mimeType || undefined}
               />
             )}
