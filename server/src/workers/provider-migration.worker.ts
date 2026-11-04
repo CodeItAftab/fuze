@@ -441,10 +441,17 @@ async function transferChunk(
   } else {
     // Raw binary octet-stream upload (Dropbox, Google Drive, OneDrive)
     // Sending a raw Buffer body guarantees exact Content-Length without chunked transfer issues
-    const upHeaders: Record<string, string> = {
-      ...(uploadSession.headers || {}),
-      "Content-Length": String(actualSize),
-    };
+    const upHeaders: Record<string, string> = {};
+    if (uploadSession.headers) {
+      for (const [k, v] of Object.entries(uploadSession.headers)) {
+        // Universal ByteString header guard: escape any non-ASCII characters (> 255)
+        // to standard \uXXXX so fetch() never throws ByteString conversion errors
+        upHeaders[k] = [...v].some((c) => c.charCodeAt(0) > 255)
+          ? v.replace(/[\u007f-\uffff]/g, (c) => "\\u" + ("0000" + c.charCodeAt(0).toString(16)).slice(-4))
+          : v;
+      }
+    }
+    upHeaders["Content-Length"] = String(actualSize);
     const upRes = await fetch(uploadSession.sessionUrl, {
       method: uploadSession.httpMethod || "POST",
       headers: upHeaders,

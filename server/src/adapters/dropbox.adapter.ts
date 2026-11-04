@@ -25,6 +25,17 @@ interface DropboxTokenResponse {
   expires_in?: number;
 }
 
+/**
+ * Encodes an object as an ASCII-safe JSON string for Dropbox-API-Arg HTTP header.
+ * Dropbox requires all non-ASCII characters (including emojis and unicode) to be escaped
+ * using standard JSON unicode escapes (\uXXXX) to comply with HTTP header ByteString specs.
+ */
+function escapeDropboxArg(obj: any): string {
+  return JSON.stringify(obj).replace(/[\u007f-\uffff]/g, (c) => {
+    return "\\u" + ("0000" + c.charCodeAt(0).toString(16)).slice(-4);
+  });
+}
+
 export class DropboxAdapter implements StorageAdapter {
   private resolveDropboxPath(providerFileId: string): string {
     if (
@@ -53,7 +64,7 @@ export class DropboxAdapter implements StorageAdapter {
       httpMethod: "POST",
       headers: {
         Authorization: `Bearer ${params.accessToken}`,
-        "Dropbox-API-Arg": JSON.stringify({
+        "Dropbox-API-Arg": escapeDropboxArg({
           path: cleanPath,
           mode: "overwrite",
           autorename: false,
@@ -106,7 +117,7 @@ export class DropboxAdapter implements StorageAdapter {
           method: "POST",
           headers: {
             Authorization: `Bearer ${params.accessToken}`,
-            "Dropbox-API-Arg": JSON.stringify({
+            "Dropbox-API-Arg": escapeDropboxArg({
               resource: { ".tag": "path", path: cleanPath },
               format: "jpeg",
               size: "w256h256",
