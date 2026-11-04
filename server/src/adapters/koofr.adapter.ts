@@ -244,6 +244,37 @@ export class KoofrAdapter implements StorageAdapter {
     }
   }
 
+
+  async verifyFileExists(params: {
+    providerFileId: string;
+    accessToken: string;
+  }): Promise<boolean> {
+    const safeId = KoofrAdapter.sanitizeKoofrFileName(params.providerFileId);
+    const encodedId = encodeURIComponent(safeId);
+    const res = await fetch(`https://app.koofr.net/dav/Koofr/Fuze/${encodedId}`, {
+      method: "HEAD",
+      headers: {
+        Authorization: KoofrAdapter.getAuthHeader(params.accessToken),
+      },
+    });
+    if (res.status === 200 || res.status === 204) return true;
+    if (res.status === 404) {
+      if (safeId !== params.providerFileId) {
+        const rawRes = await fetch(
+          `https://app.koofr.net/dav/Koofr/Fuze/${encodeURIComponent(params.providerFileId)}`,
+          {
+            method: "HEAD",
+            headers: { Authorization: KoofrAdapter.getAuthHeader(params.accessToken) },
+          },
+        );
+        if (rawRes.status === 200 || rawRes.status === 204) return true;
+        if (rawRes.status === 404) return false;
+      }
+      return false;
+    }
+    throw new Error(`Koofr verify status ${res.status}`);
+  }
+
   async fetchQuota(accessToken: string): Promise<QuotaResult> {
     const res = await fetch("https://app.koofr.net/api/v2/mounts", {
       headers: { Authorization: KoofrAdapter.getAuthHeader(accessToken) },

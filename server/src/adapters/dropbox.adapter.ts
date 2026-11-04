@@ -187,6 +187,35 @@ export class DropboxAdapter implements StorageAdapter {
     }
   }
 
+
+  async verifyFileExists(params: {
+    providerFileId: string;
+    accessToken: string;
+  }): Promise<boolean> {
+    const cleanPath = this.resolveDropboxPath(params.providerFileId);
+    const res = await fetch(
+      "https://api.dropboxapi.com/2/files/get_metadata",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${params.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ path: cleanPath }),
+      },
+    );
+    if (res.ok) return true;
+    if (res.status === 409) {
+      const err = (await res.json().catch(() => ({}))) as any;
+      if (err?.error?.[".tag"] === "path" && err?.error?.path?.[".tag"] === "not_found") {
+        return false;
+      }
+    }
+    if (res.status === 404) return false;
+    const errText = await res.text().catch(() => "");
+    throw new Error(`Dropbox verify status ${res.status}: ${errText}`);
+  }
+
   async fetchQuota(accessToken: string): Promise<QuotaResult> {
     const res = await fetch(
       "https://api.dropboxapi.com/2/users/get_space_usage",

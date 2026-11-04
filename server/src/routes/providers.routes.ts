@@ -264,7 +264,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
     else if (provider === "pcloud") canonicalProvider = "pcloud";
     else if (provider === "koofr") canonicalProvider = "koofr";
 
-    // Enforce single-account per provider: Check if user already linked this provider
+    // Check if user already has an actively connected account for this provider
     const [existingProvider] = await db
       .select({
         id: providerIdentities.id,
@@ -276,6 +276,8 @@ export async function providerRoutes(fastify: FastifyInstance) {
         and(
           eq(providerIdentities.userId, userId),
           eq(providerIdentities.provider, canonicalProvider),
+          eq(providerIdentities.isDisconnected, false),
+          eq(providerIdentities.isRevoked, false),
         ),
       );
 
@@ -822,60 +824,31 @@ export async function providerRoutes(fastify: FastifyInstance) {
           }
         }
 
+        const normalizedAccountEmail = accountEmail ? accountEmail.trim().toLowerCase() : "";
+
+        // Look for an existing identity for THIS user matching THIS exact cloud account email
         const [existing] = await db
           .select({
             id: providerIdentities.id,
             accountEmail: providerIdentities.accountEmail,
             isDisconnected: providerIdentities.isDisconnected,
+            encryptedRefreshToken: providerIdentities.encryptedRefreshToken,
           })
           .from(providerIdentities)
           .where(
             and(
               eq(providerIdentities.userId, userId),
               eq(providerIdentities.provider, canonicalProvider),
+              normalizedAccountEmail
+                ? sql`LOWER(TRIM(${providerIdentities.accountEmail})) = ${normalizedAccountEmail}`
+                : undefined,
             ),
           );
 
         let linkedProviderId: string | undefined;
 
         if (existing) {
-          const expectedEmail = existing.accountEmail || stateObj.existingEmail;
-          const isEmailMismatch =
-            expectedEmail &&
-            accountEmail &&
-            expectedEmail.trim().toLowerCase() !==
-              accountEmail.trim().toLowerCase();
-
-          if (isEmailMismatch) {
-            if (!existing.isDisconnected) {
-              const displayName = canonicalProvider
-                .replace("_", " ")
-                .replace(/\b\w/g, (c) => c.toUpperCase());
-              return reply.redirect(
-                `${clientOrigin}/dashboard/storage?error=${encodeURIComponent(
-                  `Account mismatch: This ${displayName} connection is registered to ${expectedEmail}. You authenticated with ${accountEmail}. Please reconnect with ${expectedEmail} to protect your indexed files.`,
-                )}`,
-              );
-            }
-
-            const [hasChunks] = await db
-              .select({ id: fileChunks.id })
-              .from(fileChunks)
-              .where(eq(fileChunks.providerIdentityId, existing.id))
-              .limit(1);
-
-            if (hasChunks) {
-              const displayName = canonicalProvider
-                .replace("_", " ")
-                .replace(/\b\w/g, (c) => c.toUpperCase());
-              return reply.redirect(
-                `${clientOrigin}/dashboard/storage?error=${encodeURIComponent(
-                  `Account mismatch: Your unlinked ${displayName} storage contains pending files from ${expectedEmail}. Please reconnect with ${expectedEmail} to restore access.`,
-                )}`,
-              );
-            }
-          }
-
+          // Reconnecting an existing identity for this user and cloud account email
           await db
             .update(providerIdentities)
             .set({
@@ -883,7 +856,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
               encryptedAccessToken: encrypt(accessToken),
               encryptedRefreshToken: refreshToken
                 ? encrypt(refreshToken)
-                : undefined,
+                : existing.encryptedRefreshToken,
               tokenExpiresAt,
               quotaTotal: quota.totalBytes,
               quotaUsed: quota.usedBytes,
@@ -895,6 +868,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
             .where(eq(providerIdentities.id, existing.id));
           linkedProviderId = existing.id;
         } else {
+          // Connecting a new/different cloud account email for this provider
           const [newIdentity] = await db
             .insert(providerIdentities)
             .values({
@@ -907,6 +881,9 @@ export async function providerRoutes(fastify: FastifyInstance) {
               quotaTotal: quota.totalBytes,
               quotaUsed: quota.usedBytes,
               isRevoked: false,
+              isDisconnected: false,
+              pendingRestore: false,
+              lastSyncedAt: new Date(),
             })
             .returning();
           linkedProviderId = newIdentity?.id;
@@ -1041,6 +1018,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
           and(
             eq(providerIdentities.userId, user.userId),
             eq(providerIdentities.provider, canonicalProvider),
+            sql`LOWER(TRIM(${providerIdentities.accountEmail})) = ${normalizedEmail}`,
           ),
         );
 

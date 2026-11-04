@@ -207,6 +207,23 @@ export class BoxAdapter implements StorageAdapter {
     }
   }
 
+
+  async verifyFileExists(params: {
+    providerFileId: string;
+    accessToken: string;
+  }): Promise<boolean> {
+    const res = await fetch(
+      `https://api.box.com/2.0/files/${params.providerFileId}?fields=id,item_status`,
+      {
+        headers: { Authorization: `Bearer ${params.accessToken}` },
+      },
+    );
+    if (res.status === 404) return false;
+    if (!res.ok) throw new Error(`Box verify status ${res.status}`);
+    const data = (await res.json()) as { item_status?: string };
+    return data.item_status === "active";
+  }
+
   async fetchQuota(accessToken: string): Promise<QuotaResult> {
     const res = await fetch("https://api.box.com/2.0/users/me", {
       headers: { Authorization: `Bearer ${accessToken}` },

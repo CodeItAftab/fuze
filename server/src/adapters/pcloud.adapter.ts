@@ -138,6 +138,22 @@ export class PCloudAdapter implements StorageAdapter {
     }
   }
 
+
+  async verifyFileExists(params: {
+    providerFileId: string;
+    accessToken: string;
+  }): Promise<boolean> {
+    const baseApi = await PCloudAdapter.getBaseApi(params.accessToken);
+    const res = await fetch(
+      `${baseApi}/checksumfile?fileid=${params.providerFileId}&access_token=${params.accessToken}`,
+    );
+    if (!res.ok) throw new Error(`pCloud verify status ${res.status}`);
+    const data = (await res.json()) as any;
+    if (data.result === 0) return true;
+    if (data.result === 2009 || data.result === 2010) return false;
+    throw new Error(`pCloud verify result code ${data.result}: ${data.error}`);
+  }
+
   async fetchQuota(accessToken: string): Promise<QuotaResult> {
     const baseApi = await PCloudAdapter.getBaseApi(accessToken);
     const res = await fetch(

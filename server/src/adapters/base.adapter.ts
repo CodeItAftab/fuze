@@ -62,6 +62,12 @@ export interface StorageAdapter {
     Array<{ providerFileId: string; fileName: string; size: number }>
   >;
 
+  verifyFileExists?(params: {
+    providerFileId: string;
+    accessToken: string;
+    fileName?: string;
+  }): Promise<boolean>;
+
   refreshAccessToken(refreshToken: string): Promise<{
     accessToken: string;
     refreshToken?: string;

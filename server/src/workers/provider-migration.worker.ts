@@ -1105,20 +1105,23 @@ export async function reconcileReconnectedProvider(
     await Promise.all(
       batch.map(async (chunk) => {
         try {
-          await adapter.getDownloadUrl({
-            providerFileId: chunk.providerFileId,
-            accessToken: token,
-          });
-          restoredCount++;
-        } catch (err: any) {
-          // ONLY purge if the cloud provider explicitly confirmed 404 Not Found.
-          // Transient network errors, rate limits (429), or 5xx issues must NEVER delete user records.
-          const isExplicitNotFound =
-            err?.message?.includes("404") ||
-            err?.message?.toLowerCase().includes("not_found") ||
-            err?.message?.toLowerCase().includes("not found");
+          let exists = true;
+          if (adapter.verifyFileExists) {
+            exists = await adapter.verifyFileExists({
+              providerFileId: chunk.providerFileId,
+              accessToken: token,
+              fileName: (chunk as any).targetFileName,
+            });
+          } else {
+            await adapter.getDownloadUrl({
+              providerFileId: chunk.providerFileId,
+              accessToken: token,
+            });
+          }
 
-          if (isExplicitNotFound) {
+          if (exists) {
+            restoredCount++;
+          } else {
             await db.delete(fileChunks).where(eq(fileChunks.id, chunk.id));
             purgedCount++;
 
@@ -1130,10 +1133,12 @@ export async function reconcileReconnectedProvider(
             if (remainingSiblings.length === 0) {
               await db.delete(vfsNodes).where(eq(vfsNodes.id, chunk.vfsNodeId));
             }
-          } else {
-            console.warn(`[Reconnection] Preserving chunk ${chunk.id} on non-404 warning: ${err?.message}`);
-            restoredCount++;
           }
+        } catch (err: any) {
+          // Non-destructive fallback: If network times out, rate limits (429), or 5xx,
+          // ALWAYS PRESERVE user chunks (zero data loss guarantee).
+          console.warn(`[Reconnection] Preserving chunk ${chunk.id} on check warning: ${err?.message}`);
+          restoredCount++;
         }
       }),
     );

@@ -242,6 +242,20 @@ export class MegaAdapter implements StorageAdapter {
     }
   }
 
+
+  async verifyFileExists(params: {
+    providerFileId: string;
+    accessToken: string;
+  }): Promise<boolean> {
+    const config = MegaAdapter.parseConfig(params.accessToken);
+    const storage = await this.getStorage(config);
+    const fuzeFolder = await this.ensureFuzeFolder(storage);
+    const file = fuzeFolder.children?.find(
+      (f) => f.name === params.providerFileId || f.nodeId === params.providerFileId,
+    );
+    return !!file;
+  }
+
   async fetchQuota(accessToken: string): Promise<QuotaResult> {
     try {
       const config = MegaAdapter.parseConfig(accessToken);

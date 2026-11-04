@@ -171,6 +171,34 @@ export class OneDriveAdapter implements StorageAdapter {
     }
   }
 
+
+  async verifyFileExists(params: {
+    providerFileId: string;
+    accessToken: string;
+    fileName?: string;
+  }): Promise<boolean> {
+    let res = await fetch(
+      `https://graph.microsoft.com/v1.0/me/drive/items/${params.providerFileId}`,
+      {
+        headers: { Authorization: `Bearer ${params.accessToken}` },
+      },
+    );
+    if (res.ok) return true;
+    if (res.status === 404) {
+      if (params.fileName) {
+        const cleanName = params.fileName.replace(/^\/+Fuze\/+/i, '');
+        const pathRes = await fetch(
+          `https://graph.microsoft.com/v1.0/me/drive/root:/Fuze/${encodeURIComponent(cleanName)}:`,
+          { headers: { Authorization: `Bearer ${params.accessToken}` } },
+        );
+        if (pathRes.ok) return true;
+        if (pathRes.status === 404) return false;
+      }
+      return false;
+    }
+    throw new Error(`OneDrive verify status ${res.status}`);
+  }
+
   async fetchQuota(accessToken: string): Promise<QuotaResult> {
     let res = await fetch("https://graph.microsoft.com/v1.0/me/drive", {
       headers: { Authorization: `Bearer ${accessToken}` },

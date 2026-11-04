@@ -215,6 +215,25 @@ export class GoogleDriveAdapter implements StorageAdapter {
     }
   }
 
+
+  async verifyFileExists(params: {
+    providerFileId: string;
+    accessToken: string;
+  }): Promise<boolean> {
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${params.providerFileId}?fields=id,trashed`,
+      {
+        headers: { Authorization: `Bearer ${params.accessToken}` },
+      },
+    );
+    if (res.status === 404) return false;
+    if (!res.ok) {
+      throw new Error(`Google Drive verify status ${res.status}`);
+    }
+    const data = (await res.json()) as { trashed?: boolean };
+    return !data.trashed;
+  }
+
   async fetchQuota(accessToken: string): Promise<QuotaResult> {
     const res = await fetch(
       "https://www.googleapis.com/drive/v3/about?fields=storageQuota",
