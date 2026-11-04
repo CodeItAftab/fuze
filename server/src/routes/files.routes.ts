@@ -535,6 +535,15 @@ export async function fileRoutes(fastify: FastifyInstance) {
           });
         }
 
+        // Direct Client Streaming: For providers offering pre-authenticated direct CDN links
+        // (Dropbox, OneDrive, pCloud, Box), redirect the client directly (307) so bytes stream
+        // straight from the global CDN to the user's browser with ZERO server transit & instant seeking
+        const directCdnProviders = new Set(["dropbox", "one_drive", "pcloud", "box"]);
+        if (directCdnProviders.has(single.provider) && directUrl.startsWith("http")) {
+          return reply.redirect(directUrl, 307);
+        }
+
+        // Fallback for providers requiring Bearer Authorization headers (e.g. Google Drive)
         // Stream bytes to client with proper Content-Disposition to ensure exact file size and name
         const cdnHeaders: Record<string, string> = {
           ...getProviderAuthHeaders(single.provider, token),
@@ -1382,6 +1391,11 @@ export async function fileRoutes(fastify: FastifyInstance) {
             size: file.size,
             downloadUrl: directUrl,
           });
+        }
+
+        const directCdnProviders = new Set(["dropbox", "one_drive", "pcloud", "box"]);
+        if (directCdnProviders.has(single.provider) && directUrl.startsWith("http")) {
+          return reply.redirect(directUrl, 307);
         }
 
         const cdnRes = await fetch(directUrl, {

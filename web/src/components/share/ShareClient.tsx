@@ -135,7 +135,22 @@ export function ShareClient() {
   };
 
   const setupPreview = async (filePlan: DownloadPlan, password?: string) => {
-    let src = filePlan.streamUrl || filePlan.downloadUrl;
+    const directCdnHosts = [
+      "dl.dropboxusercontent.com",
+      "1drv.ms",
+      "onedrive.live.com",
+      "pcloud.com",
+      "box.com",
+      "boxcdn.net",
+    ];
+    const isDirectCdn =
+      filePlan.downloadUrl &&
+      directCdnHosts.some((h) => filePlan.downloadUrl!.includes(h));
+
+    let src =
+      (isDirectCdn ? filePlan.downloadUrl : null) ||
+      filePlan.streamUrl ||
+      filePlan.downloadUrl;
 
     const fileExt = filePlan.file.name.split(".").pop()?.toLowerCase() || "";
     const fileMime = filePlan.file.mimeType?.toLowerCase() || "";

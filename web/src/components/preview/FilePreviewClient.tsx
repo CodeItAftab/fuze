@@ -147,7 +147,23 @@ export function FilePreviewClient() {
         if (!isMounted) return;
         setPlan(data);
 
-        let previewUrl = data.streamUrl || data.downloadUrl;
+        const directCdnHosts = [
+          "dl.dropboxusercontent.com",
+          "1drv.ms",
+          "onedrive.live.com",
+          "pcloud.com",
+          "box.com",
+          "boxcdn.net",
+        ];
+        const isDirectCdn =
+          data.downloadUrl &&
+          directCdnHosts.some((h) => data.downloadUrl!.includes(h));
+
+        // Prefer direct high-speed CDN URL for zero-proxy client-side streaming
+        let previewUrl =
+          (isDirectCdn ? data.downloadUrl : null) ||
+          data.streamUrl ||
+          data.downloadUrl;
         let activeBlob: Blob | null = null;
 
         // When chunked across multiple clouds or for DOCX/Excel/PDF, assemble chunks

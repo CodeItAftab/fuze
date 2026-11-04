@@ -192,7 +192,23 @@ export function FilePreviewModal({
 
         if (controller.signal.aborted) return;
 
-        const targetStream = plan.streamUrl || plan.downloadUrl;
+        const directCdnHosts = [
+          "dl.dropboxusercontent.com",
+          "1drv.ms",
+          "onedrive.live.com",
+          "pcloud.com",
+          "box.com",
+          "boxcdn.net",
+        ];
+        const isDirectCdn =
+          plan.downloadUrl &&
+          directCdnHosts.some((h) => plan.downloadUrl!.includes(h));
+
+        // Prefer direct high-speed CDN URL for zero-proxy client-side streaming
+        const targetStream =
+          (isDirectCdn ? plan.downloadUrl : null) ||
+          plan.streamUrl ||
+          plan.downloadUrl;
 
         // Direct streams for audio/video/image
         if ((isImage || isVideo || isAudio) && targetStream) {
