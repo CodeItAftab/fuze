@@ -290,8 +290,15 @@ export function StorageView() {
           provider={disconnectingProvider}
           onClose={() => setDisconnectingProvider(null)}
           onSuccess={() => {
+            const disconnectedId = disconnectingProvider?.id;
             setDisconnectingProvider(null);
-            void refreshProviders();
+            if (disconnectedId) {
+              const currentProviders = useDriveStore.getState().providers;
+              useDriveStore.setState({
+                providers: currentProviders.filter((p) => p.id !== disconnectedId),
+              });
+            }
+            void refreshProviders(true);
           }}
         />
       )}

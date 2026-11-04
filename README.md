@@ -1,6 +1,6 @@
 # Fuze Drive ⚡📁
 
-> **Open-Source, Direct-to-Cloud Personal Storage Aggregator** — Pool free storage tiers across **Google Drive, Box, pCloud, OneDrive, and Dropbox** into a unified **42 GB** high-speed virtual drive with **direct client-to-cloud transfers** and zero server bandwidth proxying.
+> **Open-Source, Direct-to-Cloud Personal Storage Aggregator** — Pool free storage tiers across **Google Drive, MEGA, Box, pCloud, Koofr, OneDrive, and Dropbox** into a unified **72 GB** high-speed virtual drive with **direct client-to-cloud transfers** and zero server bandwidth proxying.
 
 🌐 **Live Demo & Web App**: [https://fuzedrive.tech](https://fuzedrive.tech)
 
@@ -46,20 +46,22 @@
 
 ## 1. Executive Summary
 
-Every major cloud provider offers a modest free storage tier:
+Every major cloud provider offers a modest consumer free tier:
+* **MEGA**: 20 GB
 * **Google Drive**: 15 GB
-* **Box**: 10 GB
-* **pCloud**: 10 GB
+* **Box**: 10 GB (250 MB single-file upload limit)
+* **pCloud**: 10 GB (starts at 2 GB, unlock up to 10 GB via onboarding)
+* **Koofr**: 10 GB (connects via secure WebDAV App Password)
 * **Microsoft OneDrive**: 5 GB
 * **Dropbox**: 2 GB
 
-Individually, these quotas are easily exhausted. Managing files scattered across 5 distinct logins and interfaces creates fragmentation. Worse, commercial multi-cloud aggregators charge $10–$25/month and proxy all your private files through their proprietary servers.
+Individually, these quotas are easily exhausted. Managing files scattered across 7 distinct logins and interfaces creates fragmentation. Worse, commercial multi-cloud aggregators charge $10–$25/month, impose monthly data traffic caps (e.g. 5 GB/month), or proxy all your private files through their proprietary servers.
 
-**Fuze** solves this permanently:
-* **Combines Free Quotas**: Connect accounts via standard OAuth2 to instantly aggregate **42 GB** of free personal storage (15 GB + 10 GB + 10 GB + 5 GB + 2 GB = 42 GB).
-* **Zero-Proxy Architecture**: Files stream **directly** between your browser and cloud provider endpoints via presigned resumable URLs. The Fuze server never touches, buffers, or hosts your raw data.
-* **Smart Allocation**: Files are prioritized to upload intact as single objects to the fastest provider. Multi-cloud chunking is strictly reserved as a fallback when individual quotas are exceeded.
-* **100% Free & Open Source**: Released under the MIT license with zero commercial lock-in.
+**Fuze Drive** solves this permanently:
+* **Combines Free Quotas**: Connect accounts via standard OAuth2 or secure credentials to instantly aggregate up to **72 GB** of free personal storage (20 GB + 15 GB + 10 GB + 10 GB + 10 GB + 5 GB + 2 GB = 72 GB).
+* **Zero-Proxy Architecture**: File uploads and standard downloads stream **directly** between your browser and cloud provider REST endpoints. The Fuze Drive server never touches, buffers, or hosts your raw data library.
+* **Smart Whole-File Priority**: Files are prioritized to upload intact as single objects to the fastest available provider. Multi-cloud chunking is strictly reserved as an intelligent fallback when individual quotas or file size ceilings are exceeded.
+* **100% Free & Open Source**: Released under the MIT license with zero commercial lock-in, credit cards, or recurring fees.
 
 ---
 
@@ -87,8 +89,8 @@ In Fuze, **the server orchestrates metadata only**:
 
 #### Why Zero-Proxy Matters:
 1. **Zero Bandwidth Costs**: The server handles only lightweight JSON metadata. It can comfortably run on a free-tier hosting instance without network saturation.
-2. **Maximum Throughput**: Transfers saturate your connection directly against Google, Microsoft, Box, Dropbox, and pCloud CDNs.
-3. **True Privacy**: Your unencrypted bytes never touch our compute instances or database.
+2. **Maximum Throughput**: Transfers saturate your connection directly against Google, MEGA, Microsoft, Box, Dropbox, Koofr, and pCloud CDNs.
+3. **True Privacy**: Your raw file payloads stream directly between your browser and cloud provider endpoints.
 
 ### High-Level Architecture Diagram
 
@@ -106,15 +108,15 @@ In Fuze, **the server orchestrates metadata only**:
                         │                                          │ (Direct HTTP Binary Stream)
                         ▼                                          ▼
 ┌────────────────────────────────────────────────┐┌──────────────────────────────────────┐
-│             Fuze Backend (Fastify)             ││        Connected Cloud Providers     │
+│          Fuze Drive Backend (Fastify)          ││        Connected Cloud Providers     │
 │                                                ││                                      │
-│  • Fastify REST API & Auth (JWT + Cookies)     ││  • Google Drive (Resumable Sessions) │
-│  • Virtual File System (VFS Subtree Trees)     ││  • Box (Upload API / 120+ Previews)  │
-│  • Chunk Decision Engine (Whole vs Chunked)    ││  • pCloud (Direct REST API / EU & US)│
-│  • Native Thumbnail Engine (Atomic LRU Cache)  ││  • Microsoft OneDrive (Graph API)    │
-│  • Redis Token Refresh Lock (Redlock pattern)  ││  • Dropbox (Upload Sessions v2)      │
-│  • Drizzle ORM + PostgreSQL Database           ││                                      │
-│  • WebSocket Manager (Real-time Broadcasts)    ││                                      │
+│  • Fastify REST API & Auth (JWT + Cookies)     ││  • MEGA (Encrypted Storage / 20 GB)  │
+│  • Virtual File System (VFS Subtree Trees)     ││  • Google Drive (Resumable Sessions) │
+│  • Chunk Decision Engine (Whole vs Chunked)    ││  • Box (Upload API / 120+ Previews)  │
+│  • Native Thumbnail Engine (Atomic LRU Cache)  ││  • Koofr (WebDAV App Password / 10 GB│
+│  • Safe Token Refresh Management               ││  • pCloud (Direct REST API / EU & US)│
+│  • Drizzle ORM + PostgreSQL Database           ││  • Microsoft OneDrive (Graph API)    │
+│  • WebSocket Manager (Real-time Broadcasts)    ││  • Dropbox (Upload Sessions v2)      │
 └────────────────────────────────────────────────┘└──────────────────────────────────────┘
 ```
 
@@ -165,14 +167,16 @@ All Virtual File System actions (file creation, folder nesting, renaming, moving
 
 ## 4. Supported Cloud Providers
 
-| Provider | Free Tier | Single-File Limit | Native Previews | Upload API Protocol |
+| Provider | Free Tier | Single-File Limit | Native Previews | Auth & Upload Protocol |
 | :--- | :---: | :---: | :---: | :--- |
-| **Google Drive** | **15 GB** | 5 TB | Images, Videos, PDFs, Docs | Google Resumable Upload Session |
-| **Box** | **10 GB** | 250 MB | 120+ Formats (Images, Office, Code) | Box Chunked Upload API |
-| **pCloud** | **10 GB** | 10 GB | Images, Videos, PDFs, Audio | pCloud Direct REST Multipart (EU & US) |
-| **Microsoft OneDrive** | **5 GB** | 250 GB | Images, Videos, Office 365 Previews | Graph API Resumable Upload Session |
-| **Dropbox** | **2 GB** | 2 GB (Free quota limit; 350 GB via API) | Images, Videos, Docs | Dropbox Upload Sessions v2 |
-| **Total Unified Pool** | **42 GB** | — | **Universal** | **Direct Browser-to-Cloud Uploads** |
+| **MEGA** | **20 GB** | 20 GB (Quota Limit) | Images, Audio, Media | End-to-End Encrypted MEGA API |
+| **Google Drive** | **15 GB** | 5 TB | Images, Videos, PDFs, Docs | Google Resumable Upload Session (OAuth 2.0) |
+| **Box** | **10 GB** | 250 MB | 120+ Formats (Images, Office, Code) | Box Chunked Upload API (OAuth 2.0) |
+| **pCloud** | **10 GB** | 10 GB | Images, Videos, PDFs, Audio | pCloud Direct REST Multipart (EU & US OAuth 2.0) |
+| **Koofr** | **10 GB** | 10 GB | Images, Documents, Media | Secure WebDAV App Password Connection |
+| **Microsoft OneDrive** | **5 GB** | 250 GB | Images, Videos, Office 365 Previews | Graph API Resumable Upload Session (OAuth 2.0) |
+| **Dropbox** | **2 GB** | 2 GB (Free quota limit; 350 GB via API) | Images, Videos, Docs | Dropbox Upload Sessions v2 (OAuth 2.0) |
+| **Total Unified Pool** | **72 GB** | — | **Universal** | **Direct Browser-to-Cloud Uploads** |
 
 ---
 
@@ -187,6 +191,8 @@ fuze/
 │   │   │   ├── box.adapter.ts      # Box API Integration
 │   │   │   ├── dropbox.adapter.ts  # Dropbox API Integration
 │   │   │   ├── gdrive.adapter.ts   # Google Drive v3 Integration
+│   │   │   ├── koofr.adapter.ts    # Koofr WebDAV Integration
+│   │   │   ├── mega.adapter.ts     # MEGA API Integration
 │   │   │   ├── onedrive.adapter.ts # Microsoft Graph Integration
 │   │   │   ├── pcloud.adapter.ts   # pCloud REST Integration
 │   │   │   └── factory.ts          # Adapter Factory
@@ -196,11 +202,12 @@ fuze/
 │   │   │   ├── auth.routes.ts      # Auth, Sessions & Account Deletion
 │   │   │   ├── files.routes.ts     # VFS File Operations & Thumbnails
 │   │   │   ├── providers.routes.ts # OAuth Connect, Sync & Collision Check
-│   │   │   └── upload.routes.ts    # Resumable Upload Sessions
+│   │   │   └── uploads.routes.ts   # Resumable Upload Sessions
 │   │   ├── services/               # Core Business Logic
 │   │   │   ├── chunk-decision.service.ts # Whole-File Priority & Chunking Engine
+│   │   │   ├── quota.service.ts    # Cloud Quota Calculation & Refresh
 │   │   │   ├── thumbnail-cache.service.ts# Atomic LRU Thumbnail Disk Cache
-│   │   │   ├── token.service.ts    # Token Refresh with Distributed Locking
+│   │   │   ├── token.service.ts    # Token Refresh with Safe Key Management
 │   │   │   ├── upload-session.service.ts # Upload Session Lifecycle
 │   │   │   └── vfs.service.ts      # Virtual File System Tree Engine
 │   │   ├── websocket/              # Real-Time Event Broadcasting
@@ -209,25 +216,34 @@ fuze/
 │   ├── package.json
 │   └── tsconfig.json
 │
-├── web/                            # Next.js 16 Web Dashboard
+├── web/                            # Next.js 16 Web Dashboard & Marketing
 │   ├── src/
 │   │   ├── app/                    # App Router Pages
 │   │   │   ├── (auth)/             # Login, Register, Verify Email
+│   │   │   ├── compare/            # Neutral MultCloud Alternative Comparison
 │   │   │   ├── dashboard/          # Drive Explorer, Storage, Settings, Trash
+│   │   │   ├── faq/                # SEO Structured FAQ & Knowledge Base
+│   │   │   ├── guides/             # 4 In-Depth Storage & Provider Guides
+│   │   │   ├── how-it-works/       # Technical Architecture Walkthrough
 │   │   │   ├── layout.tsx          # Root Layout & SEO Schema.org Generators
-│   │   │   ├── page.tsx            # High-Conversion Landing Page & Calculator
+│   │   │   ├── page.tsx            # Interactive 7-Cloud Storage Calculator & Landing
+│   │   │   ├── privacy/            # GDPR/CCPA Privacy Policy
+│   │   │   ├── terms/              # Terms of Service
 │   │   │   ├── robots.ts           # Dynamic robots.txt
-│   │   │   └── sitemap.ts          # Dynamic sitemap.xml
+│   │   │   └── sitemap.ts          # Dynamic sitemap.xml (29 verified routes)
 │   │   ├── components/             # Reusable UI Components
-│   │   │   ├── brand/              # Fuze Vector Logos & Assets
-│   │   │   └── drive/              # DriveView, Sidebar, Modals, Lightbox
-│   │   ├── lib/                    # Client Upload Queue & WebSocket Clients
+│   │   │   ├── brand/              # Fuze Drive Vector Logos & Assets
+│   │   │   ├── drive/              # DriveView, Sidebar, ProviderBadge, Previews
+│   │   │   ├── landing/            # LandingNavbar, Calculator, DriveMockup
+│   │   │   └── storage/            # AvailableCloudCard, ConnectCredentialsModal
+│   │   ├── lib/                    # facts.ts Single-Source-of-Truth, Upload Queue
 │   │   └── stores/                 # Zustand Global State Stores
 │   ├── package.json
 │   └── tsconfig.json
 │
 ├── ARCHITECTURE.md                 # Deep Technical Architecture Documentation
 ├── LICENSE                         # MIT License
+├── SECURITY.md                     # Vulnerability Reporting & Security Policy
 └── README.md                       # Main Documentation (This File)
 ```
 
@@ -355,20 +371,22 @@ openssl rand -hex 32
 
 ---
 
-### Cloud Provider OAuth App Setup
+### Cloud Provider Credentials & OAuth Setup
 
-To link cloud drives, create free developer apps in each provider's portal:
+To link cloud drives, configure the connection methods below (or review our step-by-step [Connect Cloud Providers Guide](https://fuzedrive.tech/guides/connect-cloud-providers)):
 
-| Provider | Developer Portal | Required Scopes / Permissions | Authorized Redirect URI |
+| Provider | Connection Type | Setup Requirements | Authorized Redirect / Details |
 | :--- | :--- | :--- | :--- |
-| **Google Drive** | [Google Cloud Console](https://console.cloud.google.com/apis/credentials) | `.../auth/drive.file` | `http://localhost:4000/providers/google/callback` |
-| **OneDrive** | [Microsoft Azure Portal](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps) | `Files.ReadWrite.All`, `offline_access` | `http://localhost:4000/providers/onedrive/callback` |
-| **Dropbox** | [Dropbox App Console](https://www.dropbox.com/developers/apps) | `files.content.write`, `files.content.read` | `http://localhost:4000/providers/dropbox/callback` |
-| **Box** | [Box Developer Console](https://app.box.com/developers/console) | `Manage an enterprise`, `Read/write all files` | `http://localhost:4000/providers/box/callback` |
-| **pCloud** | [pCloud App Portal](https://docs.pcloud.com/my_apps/) | Default file permissions | `http://localhost:4000/providers/pcloud/callback` |
+| **MEGA** | Direct API Credentials | Free account on [mega.io](https://mega.io/register) | User credentials encrypted at rest via AES-256-GCM |
+| **Google Drive** | OAuth 2.0 | [Google Cloud Console](https://console.cloud.google.com/apis/credentials) (`drive.file` scope) | `http://localhost:4000/providers/google/callback` |
+| **Box** | OAuth 2.0 | [Box Developer Console](https://app.box.com/developers/console) (`Read/write all files`) | `http://localhost:4000/providers/box/callback` |
+| **pCloud** | OAuth 2.0 | [pCloud App Portal](https://docs.pcloud.com/my_apps/) | `http://localhost:4000/providers/pcloud/callback` |
+| **Koofr** | WebDAV App Password | [Koofr Preferences](https://app.koofr.net/app/admin/preferences/password) | Generated App Password encrypted via AES-256-GCM |
+| **OneDrive** | OAuth 2.0 | [Microsoft Azure Portal](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps) (`Files.ReadWrite`) | `http://localhost:4000/providers/onedrive/callback` |
+| **Dropbox** | OAuth 2.0 PKCE | [Dropbox App Console](https://www.dropbox.com/developers/apps) (`files.content.write/read`) | `http://localhost:4000/providers/dropbox/callback` |
 
 > [!TIP]
-> You do **not** need to configure all 5 providers to start development. You can configure just one (e.g. Google Drive) and add others later.
+> You do **not** need to configure all 7 providers to start development. You can configure just one (e.g. Google Drive, MEGA, or Koofr) and link others anytime.
 
 ---
 
@@ -464,13 +482,13 @@ npm install
 npm run dev
 ```
 
-Visit **`http://localhost:3000`** in your browser. Create an account, connect your cloud drives in **Settings**, and start managing your pooled 42 GB personal drive!
+Visit **`http://localhost:3000`** in your browser. Create an account, connect your cloud drives in **Settings**, and start managing your pooled 72 GB personal drive!
 
 ---
 
 ## 8. Production Deployment Guide
 
-Fuze is designed for **zero-cost, 24/7 deployment** with no credit card required:
+Fuze Drive is designed for **zero-cost, 24/7 deployment** with no credit card required:
 
 1. **Frontend (`web`)**:
    * Deploy to **Vercel** (Hobby plan, 100% free forever).
@@ -495,15 +513,17 @@ We welcome contributions from developers worldwide!
 
 ### How to Contribute:
 1. **Fork** the repository.
-2. **Create a branch** for your feature (`git checkout -b feature/mega-adapter`).
-3. **Commit** your changes (`git commit -m 'Add Mega storage adapter'`).
-4. **Push** to your branch (`git push origin feature/mega-adapter`).
+2. **Create a branch** for your feature (`git checkout -b feature/mediafire-adapter`).
+3. **Commit** your changes (`git commit -m 'Add MediaFire storage adapter'`).
+4. **Push** to your branch (`git push origin feature/mediafire-adapter`).
 5. Open a **Pull Request**.
 
 ### Roadmap:
-* **Priority 1: Expanding Free Cloud Storage Adapters (Target: 97+ GB Free Pool)**
-  - [ ] **Mega.nz Adapter** (+20 GB free tier, pushing unified pool to 62 GB)
-  - [ ] **MediaFire Adapter** (+10 GB free tier)
+* **Priority 1: Expanding Free Cloud Storage Adapters (Current: 72 GB Pool | Target: 100+ GB)**
+  - [x] **Google Drive, Box, pCloud, OneDrive, Dropbox** (Initial 42 GB Base)
+  - [x] **MEGA Adapter** (+20 GB free tier, pushing pool to 62 GB)
+  - [x] **Koofr WebDAV Adapter** (+10 GB free tier, pushing pool to 72 GB)
+  - [ ] **MediaFire Adapter** (+10 GB free tier, pushing pool to 82 GB)
   - [ ] **Proton Drive Adapter** (+5 GB free tier, Swiss zero-knowledge privacy)
   - [ ] **IceDrive & Yandex Disk Adapters** (+20 GB combined free tiers)
 * **Priority 2: Client Encryption & Privacy**

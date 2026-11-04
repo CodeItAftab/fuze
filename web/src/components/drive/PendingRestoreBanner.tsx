@@ -39,7 +39,7 @@ function PendingRestoreBannerContent() {
           : "Previous file records cleared. Starting fresh.",
       );
 
-      await refreshProviders();
+      await refreshProviders(true);
       setPending(null);
       router.replace("/dashboard");
     } catch {

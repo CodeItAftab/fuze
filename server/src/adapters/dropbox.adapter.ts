@@ -181,18 +181,31 @@ export class DropboxAdapter implements StorageAdapter {
       "https://api.dropboxapi.com/2/users/get_space_usage",
       {
         method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: "null",
       },
     );
 
     if (!res.ok) {
-      throw new Error("Failed to fetch Dropbox quota");
+      const errText = await res.text();
+      console.warn(`[Dropbox] Quota warning (${res.status}): ${errText}`);
+      throw new Error(`Failed to fetch Dropbox quota (${res.status}): ${errText}`);
     }
 
-    const data = (await res.json()) as DropboxSpaceResponse;
+    const data = (await res.json()) as any;
+    const totalBytes = Number(
+      data.allocation?.allocated ||
+      data.allocation?.team?.allocated ||
+      2147483648, // Default 2 GB
+    );
+    const usedBytes = Number(data.used || 0);
+
     return {
-      totalBytes: Number(data.allocation?.allocated || 2147483648), // Default 2 GB
-      usedBytes: Number(data.used || 0),
+      totalBytes,
+      usedBytes,
     };
   }
 

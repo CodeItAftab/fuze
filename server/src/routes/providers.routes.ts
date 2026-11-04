@@ -626,11 +626,23 @@ export async function providerRoutes(fastify: FastifyInstance) {
               "https://api.dropboxapi.com/2/users/get_current_account",
               {
                 method: "POST",
-                headers: { Authorization: `Bearer ${accessToken}` },
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  "Content-Type": "application/json",
+                },
+                body: "null",
               },
             );
-            const uData = (await uRes.json()) as any;
-            accountEmail = uData.email || "";
+            if (uRes.ok) {
+              const uData = (await uRes.json()) as any;
+              accountEmail = uData.email || "";
+            } else {
+              const errBody = await uRes.text();
+              request.log.warn(
+                `[Dropbox] Failed to fetch current account profile (${uRes.status}): ${errBody}`,
+              );
+              accountEmail = tData.account_id ? `dropbox-${tData.account_id}` : "";
+            }
             break;
           }
 
@@ -751,9 +763,30 @@ export async function providerRoutes(fastify: FastifyInstance) {
             throw new Error(`Unsupported callback provider: ${provider}`);
         }
 
-        // Fetch live storage quota
+        // Fetch live storage quota with resilient fallback
+        const fallbackQuotas: Record<SupportedProvider, number> = {
+          google_drive: 15 * 1024 * 1024 * 1024,
+          one_drive: 5 * 1024 * 1024 * 1024,
+          dropbox: 2 * 1024 * 1024 * 1024,
+          box: 10 * 1024 * 1024 * 1024,
+          pcloud: 10 * 1024 * 1024 * 1024,
+          mega: 20 * 1024 * 1024 * 1024,
+          koofr: 10 * 1024 * 1024 * 1024,
+        };
+
         const adapter = getStorageAdapter(canonicalProvider);
-        const quota = await adapter.fetchQuota(accessToken);
+        let quota: { totalBytes: number; usedBytes: number };
+        try {
+          quota = await adapter.fetchQuota(accessToken);
+        } catch (qErr: any) {
+          request.log.warn(
+            `[OAuth] Quota fetch failed for ${canonicalProvider}: ${qErr.message}. Using default tier.`,
+          );
+          quota = {
+            totalBytes: fallbackQuotas[canonicalProvider] || 2 * 1024 * 1024 * 1024,
+            usedBytes: 0,
+          };
+        }
 
         const tokenExpiresAt = new Date(Date.now() + expiresIn * 1000);
 
@@ -774,6 +807,8 @@ export async function providerRoutes(fastify: FastifyInstance) {
                 ne(providerIdentities.userId, userId),
                 eq(providerIdentities.provider, canonicalProvider),
                 sql`LOWER(TRIM(${providerIdentities.accountEmail})) = ${normalizedEmail}`,
+                eq(providerIdentities.isDisconnected, false),
+                eq(providerIdentities.isRevoked, false),
               ),
             );
 
@@ -783,7 +818,7 @@ export async function providerRoutes(fastify: FastifyInstance) {
               .replace(/\b\w/g, (c) => c.toUpperCase());
             return reply.redirect(
               `${clientOrigin}/dashboard/storage?error=${encodeURIComponent(
-                `This ${displayName} account (${accountEmail}) is already connected by another Fuze user. A cloud account can only be linked to one Fuze profile at a time to prevent data collisions and unauthorized access.`,
+                `This ${displayName} account (${accountEmail}) is currently connected by another Fuze user. A cloud account can only be linked to one active Fuze profile at a time to prevent data collisions and unauthorized access.`,
               )}`,
             );
           }
@@ -807,20 +842,40 @@ export async function providerRoutes(fastify: FastifyInstance) {
 
         if (existing) {
           const expectedEmail = existing.accountEmail || stateObj.existingEmail;
-          if (
+          const isEmailMismatch =
             expectedEmail &&
             accountEmail &&
             expectedEmail.trim().toLowerCase() !==
-              accountEmail.trim().toLowerCase()
-          ) {
-            const displayName = canonicalProvider
-              .replace("_", " ")
-              .replace(/\b\w/g, (c) => c.toUpperCase());
-            return reply.redirect(
-              `${clientOrigin}/dashboard/storage?error=${encodeURIComponent(
-                `Account mismatch: This ${displayName} connection is registered to ${expectedEmail}. You authenticated with ${accountEmail}. Please reconnect with ${expectedEmail} to protect your indexed files.`,
-              )}`,
-            );
+              accountEmail.trim().toLowerCase();
+
+          if (isEmailMismatch) {
+            if (!existing.isDisconnected) {
+              const displayName = canonicalProvider
+                .replace("_", " ")
+                .replace(/\b\w/g, (c) => c.toUpperCase());
+              return reply.redirect(
+                `${clientOrigin}/dashboard/storage?error=${encodeURIComponent(
+                  `Account mismatch: This ${displayName} connection is registered to ${expectedEmail}. You authenticated with ${accountEmail}. Please reconnect with ${expectedEmail} to protect your indexed files.`,
+                )}`,
+              );
+            }
+
+            const [hasChunks] = await db
+              .select({ id: fileChunks.id })
+              .from(fileChunks)
+              .where(eq(fileChunks.providerIdentityId, existing.id))
+              .limit(1);
+
+            if (hasChunks) {
+              const displayName = canonicalProvider
+                .replace("_", " ")
+                .replace(/\b\w/g, (c) => c.toUpperCase());
+              return reply.redirect(
+                `${clientOrigin}/dashboard/storage?error=${encodeURIComponent(
+                  `Account mismatch: Your unlinked ${displayName} storage contains pending files from ${expectedEmail}. Please reconnect with ${expectedEmail} to restore access.`,
+                )}`,
+              );
+            }
           }
 
           await db
@@ -958,6 +1013,8 @@ export async function providerRoutes(fastify: FastifyInstance) {
       const accountEmail =
         credentials.email || credentials.user || `${provider}-account`;
 
+      const normalizedEmail = accountEmail.trim().toLowerCase();
+
       // Check for account collisions
       const [claimedByOther] = await db
         .select({ id: providerIdentities.id })
@@ -965,9 +1022,10 @@ export async function providerRoutes(fastify: FastifyInstance) {
         .where(
           and(
             eq(providerIdentities.provider, canonicalProvider),
-            eq(providerIdentities.accountEmail, accountEmail),
+            sql`LOWER(TRIM(${providerIdentities.accountEmail})) = ${normalizedEmail}`,
             ne(providerIdentities.userId, user.userId),
             eq(providerIdentities.isDisconnected, false),
+            eq(providerIdentities.isRevoked, false),
           ),
         );
 
