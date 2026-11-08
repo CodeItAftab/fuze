@@ -113,7 +113,7 @@ export class KoofrAdapter implements StorageAdapter {
       expiresAt: Date.now() + 2 * 3600 * 1000,
     });
 
-    const apiBase = process.env.API_URL || "http://localhost:4000";
+    const apiBase = process.env.API_URL || "https://api.fuzedrive.tech";
     const sessionUrl = `${apiBase}/uploads/provider-stream/koofr?token=${token}`;
 
     return {

@@ -31,7 +31,7 @@ export class UploadSessionService {
       params.fileName,
     );
 
-    // 1. Fetch connected providers and their quotas
+    // 1. Fetch connected providers and their quotas (strictly exclude disconnected or pending restore accounts)
     const identities = await db
       .select()
       .from(providerIdentities)
@@ -39,6 +39,8 @@ export class UploadSessionService {
         and(
           eq(providerIdentities.userId, params.userId),
           eq(providerIdentities.isRevoked, false),
+          eq(providerIdentities.isDisconnected, false),
+          eq(providerIdentities.pendingRestore, false),
         ),
       );
 

@@ -100,7 +100,7 @@ export class MegaAdapter implements StorageAdapter {
       expiresAt: Date.now() + 2 * 3600 * 1000,
     });
 
-    const apiBase = process.env.API_URL || "http://localhost:4000";
+    const apiBase = process.env.API_URL || "https://api.fuzedrive.tech";
     const sessionUrl = `${apiBase}/uploads/provider-stream/mega?token=${token}`;
 
     return {
@@ -257,21 +257,14 @@ export class MegaAdapter implements StorageAdapter {
   }
 
   async fetchQuota(accessToken: string): Promise<QuotaResult> {
-    try {
-      const config = MegaAdapter.parseConfig(accessToken);
-      const storage = await this.getStorage(config);
-      const info = await storage.getAccountInfo();
+    const config = MegaAdapter.parseConfig(accessToken);
+    const storage = await this.getStorage(config);
+    const info = await storage.getAccountInfo();
 
-      return {
-        totalBytes: Number(info.spaceTotal || 20 * 1024 * 1024 * 1024),
-        usedBytes: Number(info.spaceUsed || 0),
-      };
-    } catch {
-      return {
-        totalBytes: 20 * 1024 * 1024 * 1024,
-        usedBytes: 0,
-      };
-    }
+    return {
+      totalBytes: Number(info.spaceTotal || 20 * 1024 * 1024 * 1024),
+      usedBytes: Number(info.spaceUsed || 0),
+    };
   }
 
   async refreshAccessToken(refreshToken: string): Promise<{
