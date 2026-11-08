@@ -232,7 +232,7 @@ export default function OpenSourceAggregatorGuidePage() {
             </p>
             <div className="space-y-4">
               <div className="p-5 rounded-xl bg-slate-900 text-slate-200 font-mono text-xs space-y-2">
-                <div className="text-emerald-400 font-bold">// 1. Control Plane vs Data Plane Separation</div>
+                <div className="text-emerald-400 font-bold">{"// 1. Control Plane vs Data Plane Separation"}</div>
                 <div>Frontend (Next.js 16) ──[Metadata JSON / WebSockets]──► Backend (Fastify)</div>
                 <div>Frontend (Next.js 16) ════[Direct Binary Streams (PUT/POST)]════► Cloud Providers</div>
               </div>

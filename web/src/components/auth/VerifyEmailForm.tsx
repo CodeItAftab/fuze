@@ -21,12 +21,6 @@ export function VerifyEmailForm() {
   const [resendStatus, setResendStatus] = useState<string | null>(null);
   const [isResending, setIsResending] = useState(false);
 
-  useEffect(() => {
-    if (token) {
-      handleVerify(token);
-    }
-  }, [token]);
-
   const handleVerify = async (verificationToken: string) => {
     setIsLoading(true);
     setError(null);
@@ -45,28 +39,22 @@ export function VerifyEmailForm() {
         throw new Error(data.error || "Email verification failed");
       }
 
-      setIsSuccess(true);
-      if (data.token) {
-        localStorage.setItem("fuze_token", data.token);
-        document.cookie = `fuze_session=${encodeURIComponent(data.token)}; path=/; max-age=604800; SameSite=Lax; Secure`;
-      }
       if (data.user) {
         setAuth(data.user);
       }
-      setTimeout(() => {
-        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-        window.location.href = "/dashboard";
-      }, 2000);
-    } catch (err: unknown) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Verification link is invalid or has expired. Please request a new one.",
-      );
+      setIsSuccess(true);
+    } catch (err: any) {
+      setError(err.message || "Failed to verify email");
     } finally {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (token) {
+      handleVerify(token);
+    }
+  }, [token]);
 
   const handleResend = async () => {
     if (!email.trim()) {
