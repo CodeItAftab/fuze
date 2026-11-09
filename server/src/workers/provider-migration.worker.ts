@@ -23,6 +23,20 @@ import { RecoveryKitService } from "../services/recovery-kit.service.js";
 import { CacheService } from "../services/cache.service.js";
 import { QuotaService } from "../services/quota.service.js";
 
+/**
+ * Cloud provider throughput weights for background migration.
+ * Prioritizes high-speed global CDNs over CPU-encrypted, rate-limited providers.
+ */
+export const MIGRATION_PROVIDER_PRIORITY: Record<string, number> = {
+  google_drive: 100, // Multi-gigabit global CDN (1-2s per 25MB)
+  one_drive: 95,     // High-speed Microsoft graph CDN
+  dropbox: 90,       // Fast Dropbox content API
+  pcloud: 85,        // Direct US/EU storage
+  box: 80,           // Fast enterprise storage
+  koofr: 75,         // Fast WebDAV
+  mega: 40,          // Client-side AES CPU encryption in JS & rate-limited API
+};
+
 export interface ProviderMigrationJobData {
   userId: string;
   providerIdentityId: string;
@@ -699,9 +713,12 @@ export async function executeProviderMigration(
           const limit = PROVIDER_MAX_FILE_LIMITS[p.provider] ?? Infinity;
           return p.quotaTotal - p.quotaUsed >= chunkSize && chunkSize <= limit;
         })
-        .sort(
-          (a, b) => b.quotaTotal - b.quotaUsed - (a.quotaTotal - a.quotaUsed),
-        );
+        .sort((a, b) => {
+          const weightA = MIGRATION_PROVIDER_PRIORITY[a.provider] || 50;
+          const weightB = MIGRATION_PROVIDER_PRIORITY[b.provider] || 50;
+          if (weightA !== weightB) return weightB - weightA;
+          return (b.quotaTotal - b.quotaUsed) - (a.quotaTotal - a.quotaUsed);
+        });
 
       let chunkMoved = false;
       const targetFileName = `${node?.name || "chunk"}.part${chunkOnThisCloud.chunkIndex}`;
@@ -827,35 +844,40 @@ export async function executeProviderMigration(
     const failedChunks: typeof localChunks = [];
     let successfulChunks = 0;
 
-    for (const chunk of localChunks) {
-      // Check cancellation request before processing next chunk
+    // High-performance pipelined transfer with Concurrency = 2
+    const CONCURRENCY = 2;
+    let isCancelled = false;
+    let nextIndex = 0;
+
+    const processSingleChunk = async (chunk: (typeof localChunks)[0], chunkIndex: number) => {
+      if (isCancelled) return { cancelled: true };
+
       if (effectiveJobId) {
         const [currentJob] = await db
           .select({ status: migrationJobs.status })
           .from(migrationJobs)
           .where(eq(migrationJobs.id, effectiveJobId));
         if (currentJob?.status === "cancelled") {
-          await logger.log(
-            "warn",
-            "Migration cancelled by user. Halting remaining transfers. Already migrated files remain in destination clouds.",
-          );
-          await logger.finish("cancelled");
-          return;
+          isCancelled = true;
+          return { cancelled: true };
         }
       }
 
       const chunkSize = Number(chunk.byteEnd) - Number(chunk.byteStart);
       const node = nodeMap.get(chunk.vfsNodeId);
 
-      // Prioritize clouds that can accept whole files under provider limits
+      // Prioritize high-speed global CDN providers (Google Drive, OneDrive, Dropbox) over CPU-intensive ones
       const eligible = otherProviders
         .filter((p) => {
           const limit = PROVIDER_MAX_FILE_LIMITS[p.provider] ?? Infinity;
           return p.quotaTotal - p.quotaUsed >= chunkSize && chunkSize <= limit;
         })
-        .sort(
-          (a, b) => b.quotaTotal - b.quotaUsed - (a.quotaTotal - a.quotaUsed),
-        );
+        .sort((a, b) => {
+          const weightA = MIGRATION_PROVIDER_PRIORITY[a.provider] || 50;
+          const weightB = MIGRATION_PROVIDER_PRIORITY[b.provider] || 50;
+          if (weightA !== weightB) return weightB - weightA;
+          return (b.quotaTotal - b.quotaUsed) - (a.quotaTotal - a.quotaUsed);
+        });
 
       const totalParts = localChunks.filter(
         (c) => c.vfsNodeId === chunk.vfsNodeId,
@@ -872,12 +894,13 @@ export async function executeProviderMigration(
         try {
           await logger.log(
             "info",
-            `Transferring (${processed + 1}/${totalChunks}) "${targetFileName}" (${(chunkSize / (1024 * 1024)).toFixed(2)} MB) to ${dest.provider.toUpperCase()}...`,
+            `Transferring (${chunkIndex + 1}/${totalChunks}) "${targetFileName}" (${(chunkSize / (1024 * 1024)).toFixed(2)} MB) to ${dest.provider.toUpperCase()}...`,
           );
+          const currentSourceToken = await TokenService.getValidAccessToken(targetProvider.id);
           const destToken = await TokenService.getValidAccessToken(dest.id);
           const newFileId = await transferChunkWithRetry(
             targetProvider,
-            targetToken,
+            currentSourceToken,
             dest,
             destToken,
             chunk,
@@ -964,6 +987,35 @@ export async function executeProviderMigration(
         statusText: `Relocating "${targetFileName}" (${currentPercent}%)`,
         action,
       });
+
+      return { success: chunkMoved };
+    };
+
+    const runWorker = async () => {
+      while (nextIndex < localChunks.length && !isCancelled) {
+        const currentIndex = nextIndex++;
+        const chunk = localChunks[currentIndex];
+        const res = await processSingleChunk(chunk, currentIndex);
+        if (res?.cancelled) {
+          isCancelled = true;
+          break;
+        }
+      }
+    };
+
+    const workers = Array.from(
+      { length: Math.min(CONCURRENCY, localChunks.length) },
+      () => runWorker(),
+    );
+    await Promise.all(workers);
+
+    if (isCancelled) {
+      await logger.log(
+        "warn",
+        "Migration cancelled by user. Halting remaining transfers. Already migrated files remain in destination clouds.",
+      );
+      await logger.finish("cancelled");
+      return;
     }
 
     if (failedChunks.length > 0) {
