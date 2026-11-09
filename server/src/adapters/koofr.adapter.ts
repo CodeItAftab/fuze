@@ -4,6 +4,107 @@ import {
   QuotaResult,
 } from "./base.adapter.js";
 import { randomUUID } from "node:crypto";
+import https from "node:https";
+
+export interface KoofrFetchOptions {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: Buffer | string | NodeJS.ReadableStream | URLSearchParams;
+  timeout?: number;
+}
+
+export interface KoofrFetchResponse {
+  status: number;
+  statusText: string;
+  ok: boolean;
+  headers: {
+    get: (name: string) => string | null;
+  };
+  text: () => Promise<string>;
+  json: <T = any>() => Promise<T>;
+}
+
+/**
+ * High-reliability HTTPS client for Koofr API & WebDAV.
+ * Uses native node:https to prevent Node 20/22 Undici connect timeouts and handle TLS renegotiation.
+ */
+export async function koofrFetch(
+  url: string,
+  options: KoofrFetchOptions = {},
+): Promise<KoofrFetchResponse> {
+  return new Promise((resolve, reject) => {
+    try {
+      const u = new URL(url);
+      const reqHeaders: Record<string, string> = {
+        "User-Agent": "FuzeDrive/1.0 (https://fuzedrive.tech)",
+        ...(options.headers || {}),
+      };
+
+      let bodyData: any = options.body;
+      if (
+        bodyData &&
+        typeof bodyData.toString === "function" &&
+        !Buffer.isBuffer(bodyData) &&
+        typeof bodyData !== "string"
+      ) {
+        bodyData = bodyData.toString();
+      }
+
+      if (bodyData) {
+        if (Buffer.isBuffer(bodyData)) {
+          reqHeaders["Content-Length"] = String(bodyData.length);
+        } else if (typeof bodyData === "string") {
+          reqHeaders["Content-Length"] = String(Buffer.byteLength(bodyData));
+        }
+      }
+
+      const req = https.request(
+        u,
+        {
+          method: (options.method || "GET").toUpperCase(),
+          headers: reqHeaders,
+          timeout: options.timeout || 30000,
+        },
+        (res) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (c) => chunks.push(c));
+          res.on("end", () => {
+            const bodyBuf = Buffer.concat(chunks);
+            const bodyText = bodyBuf.toString("utf8");
+            resolve({
+              status: res.statusCode || 500,
+              statusText: res.statusMessage || "",
+              ok: (res.statusCode || 500) >= 200 && (res.statusCode || 500) < 300,
+              headers: {
+                get: (k) => {
+                  const val = res.headers[k.toLowerCase()];
+                  return Array.isArray(val) ? val.join(", ") : val || null;
+                },
+              },
+              text: async () => bodyText,
+              json: async () => JSON.parse(bodyText),
+            });
+          });
+        },
+      );
+
+      req.on("timeout", () => {
+        req.destroy(new Error("Koofr request timed out (30s)"));
+      });
+
+      req.on("error", (err) => {
+        reject(err);
+      });
+
+      if (bodyData) {
+        req.write(bodyData);
+      }
+      req.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
 
 interface KoofrUserResponse {
   email: string;
@@ -51,7 +152,7 @@ export class KoofrAdapter implements StorageAdapter {
       return KoofrAdapter.mountCache.get(accessToken)!;
     }
     try {
-      const res = await fetch("https://app.koofr.net/api/v2/mounts", {
+      const res = await koofrFetch("https://app.koofr.net/api/v2/mounts", {
         headers: { Authorization: KoofrAdapter.getAuthHeader(accessToken) },
       });
       if (res.ok) {
@@ -70,7 +171,7 @@ export class KoofrAdapter implements StorageAdapter {
   async ensureFuzeFolder(accessToken: string): Promise<void> {
     if (KoofrAdapter.folderCache.get(accessToken)) return;
     try {
-      const res = await fetch("https://app.koofr.net/dav/Koofr/Fuze/", {
+      const res = await koofrFetch("https://app.koofr.net/dav/Koofr/Fuze/", {
         method: "MKCOL",
         headers: {
           Authorization: KoofrAdapter.getAuthHeader(accessToken),
@@ -156,7 +257,7 @@ export class KoofrAdapter implements StorageAdapter {
       "Content-Length": String(bodyBuffer.length),
     };
 
-    const res = await fetch(targetUrl, {
+    const res = await koofrFetch(targetUrl, {
       method: "PUT",
       headers,
       body: bodyBuffer,
@@ -182,7 +283,7 @@ export class KoofrAdapter implements StorageAdapter {
     const encodedName = encodeURIComponent(safeName);
     const authHeader = KoofrAdapter.getAuthHeader(params.accessToken);
 
-    const res = await fetch(`https://app.koofr.net/dav/Koofr/Fuze/${encodedName}`, {
+    const res = await koofrFetch(`https://app.koofr.net/dav/Koofr/Fuze/${encodedName}`, {
       method: "PUT",
       headers: {
         Authorization: authHeader,
@@ -221,7 +322,7 @@ export class KoofrAdapter implements StorageAdapter {
   }): Promise<void> {
     const safeId = KoofrAdapter.sanitizeKoofrFileName(params.providerFileId);
     const encodedId = encodeURIComponent(safeId);
-    const res = await fetch(`https://app.koofr.net/dav/Koofr/Fuze/${encodedId}`, {
+    const res = await koofrFetch(`https://app.koofr.net/dav/Koofr/Fuze/${encodedId}`, {
       method: "DELETE",
       headers: {
         Authorization: KoofrAdapter.getAuthHeader(params.accessToken),
@@ -231,7 +332,7 @@ export class KoofrAdapter implements StorageAdapter {
     if (safeId !== params.providerFileId) {
       // Also clean up un-suffixed file if it existed
       const rawEncoded = encodeURIComponent(params.providerFileId);
-      await fetch(`https://app.koofr.net/dav/Koofr/Fuze/${rawEncoded}`, {
+      await koofrFetch(`https://app.koofr.net/dav/Koofr/Fuze/${rawEncoded}`, {
         method: "DELETE",
         headers: {
           Authorization: KoofrAdapter.getAuthHeader(params.accessToken),
@@ -251,7 +352,7 @@ export class KoofrAdapter implements StorageAdapter {
   }): Promise<boolean> {
     const safeId = KoofrAdapter.sanitizeKoofrFileName(params.providerFileId);
     const encodedId = encodeURIComponent(safeId);
-    const res = await fetch(`https://app.koofr.net/dav/Koofr/Fuze/${encodedId}`, {
+    const res = await koofrFetch(`https://app.koofr.net/dav/Koofr/Fuze/${encodedId}`, {
       method: "HEAD",
       headers: {
         Authorization: KoofrAdapter.getAuthHeader(params.accessToken),
@@ -276,7 +377,7 @@ export class KoofrAdapter implements StorageAdapter {
   }
 
   async fetchQuota(accessToken: string): Promise<QuotaResult> {
-    const res = await fetch("https://app.koofr.net/api/v2/mounts", {
+    const res = await koofrFetch("https://app.koofr.net/api/v2/mounts", {
       headers: { Authorization: KoofrAdapter.getAuthHeader(accessToken) },
     });
 
@@ -327,7 +428,7 @@ export class KoofrAdapter implements StorageAdapter {
       throw new Error("Koofr client credentials are not configured in environment");
     }
 
-    const res = await fetch("https://app.koofr.net/oauth2/token", {
+    const res = await koofrFetch("https://app.koofr.net/oauth2/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({

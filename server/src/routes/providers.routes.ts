@@ -987,8 +987,9 @@ export async function providerRoutes(fastify: FastifyInstance) {
       try {
         quota = await adapter.fetchQuota(configStr);
       } catch (err: any) {
+        const detail = err?.message || (err?.cause ? String(err.cause) : "Invalid credentials");
         return reply.status(400).send({
-          error: `Failed to connect to ${provider}: ${err.message || "Invalid credentials"}`,
+          error: `Failed to connect to ${provider}: ${detail}`,
         });
       }
 
