@@ -1,4 +1,5 @@
 import { db, providerIdentities } from "../db/index.js";
+import { eq, and } from "drizzle-orm";
 import { QuotaService } from "../services/quota.service.js";
 
 function formatBytes(bytes: number) {
@@ -22,7 +23,16 @@ export async function runQuotaSyncTask(): Promise<{
   console.log(`[Worker: QuotaSync] 📊 Scanning connected cloud providers...`);
 
   try {
-    const identities = await db.select().from(providerIdentities);
+    const identities = await db
+      .select()
+      .from(providerIdentities)
+      .where(
+        and(
+          eq(providerIdentities.isDisconnected, false),
+          eq(providerIdentities.pendingRestore, false),
+          eq(providerIdentities.isRevoked, false),
+        ),
+      );
 
     if (identities.length === 0) {
       console.log(

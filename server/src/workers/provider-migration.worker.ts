@@ -466,6 +466,9 @@ async function transferChunk(
       }
     }
     upHeaders["Content-Length"] = String(actualSize);
+    if (destProvider.provider === "one_drive" || destProvider.provider === "google_drive") {
+      upHeaders["Content-Range"] = `bytes 0-${actualSize - 1}/${actualSize}`;
+    }
     const upRes = await fetch(uploadSession.sessionUrl, {
       method: uploadSession.httpMethod || "POST",
       headers: upHeaders,

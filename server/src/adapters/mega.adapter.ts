@@ -53,7 +53,12 @@ export class MegaAdapter implements StorageAdapter {
     if (config.password) options.password = config.password;
     if (config.session) options.session = config.session;
 
-    const storage = await new Storage(options).ready;
+    const storageInstance = new Storage(options);
+    // Attach error listener immediately to prevent unhandled EventEmitter error
+    (storageInstance as any).on?.("error", (err: any) => {
+      console.warn(`[MegaAdapter] Storage warning for ${config.email}:`, err?.message || err);
+    });
+    const storage = await storageInstance.ready;
     MegaAdapter.storageCache.set(key, {
       storage,
       expiresAt: Date.now() + 30 * 60 * 1000, // 30 min cache

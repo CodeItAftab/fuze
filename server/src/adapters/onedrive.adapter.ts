@@ -62,6 +62,7 @@ export class OneDriveAdapter implements StorageAdapter {
       httpMethod: "PUT",
       headers: {
         "Content-Type": "application/octet-stream",
+        "Content-Range": `bytes 0-${params.size - 1}/${params.size}`,
       },
     };
   }

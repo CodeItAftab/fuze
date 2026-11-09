@@ -1,5 +1,5 @@
 import { db, providerIdentities, fileChunks } from "../db/index.js";
-import { eq, sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { TokenService } from "./token.service.js";
 import { getStorageAdapter } from "../adapters/factory.js";
 import { socketManager } from "../websocket/socket-manager.js";
@@ -37,7 +37,7 @@ export class QuotaService {
     let apiUsedBytes = 0;
     let apiTotalBytes = identity.quotaTotal || 10 * 1024 * 1024 * 1024;
 
-    if (options.forceApi) {
+    if (options.forceApi && !identity.isDisconnected && !identity.pendingRestore && !identity.isRevoked) {
       try {
         const accessToken = await TokenService.getValidAccessToken(providerIdentityId);
         const adapter = getStorageAdapter(identity.provider);
@@ -104,7 +104,14 @@ export class QuotaService {
     const identities = await db
       .select({ id: providerIdentities.id })
       .from(providerIdentities)
-      .where(eq(providerIdentities.userId, userId));
+      .where(
+        and(
+          eq(providerIdentities.userId, userId),
+          eq(providerIdentities.isDisconnected, false),
+          eq(providerIdentities.pendingRestore, false),
+          eq(providerIdentities.isRevoked, false),
+        ),
+      );
 
     for (const identity of identities) {
       await this.syncProviderQuota(identity.id, options);

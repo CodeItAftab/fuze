@@ -390,11 +390,16 @@ export class VfsService {
     const fileIds = nodes.filter((n) => n.type === "file").map((n) => n.id);
     const chunksByFile = new Map<string, Array<{ provider: string }>>();
 
+    const activeFileIds = new Set<string>();
+    const trackedFileIds = new Set<string>();
+
     if (fileIds.length > 0) {
       const chunks = await db
         .select({
           vfsNodeId: fileChunks.vfsNodeId,
           provider: providerIdentities.provider,
+          isDisconnected: providerIdentities.isDisconnected,
+          pendingRestore: providerIdentities.pendingRestore,
         })
         .from(fileChunks)
         .innerJoin(
@@ -404,6 +409,10 @@ export class VfsService {
         .where(inArray(fileChunks.vfsNodeId, fileIds));
 
       for (const c of chunks) {
+        trackedFileIds.add(c.vfsNodeId);
+        if (!c.isDisconnected && !c.pendingRestore) {
+          activeFileIds.add(c.vfsNodeId);
+        }
         if (!chunksByFile.has(c.vfsNodeId)) {
           chunksByFile.set(c.vfsNodeId, []);
         }
@@ -411,7 +420,15 @@ export class VfsService {
       }
     }
 
-    const items = nodes.map((node) => {
+    // Filter out files whose storage providers are currently disconnected
+    const visibleNodes = nodes.filter(
+      (n) =>
+        n.type === "folder" ||
+        activeFileIds.has(n.id) ||
+        !trackedFileIds.has(n.id),
+    );
+
+    const items = visibleNodes.map((node) => {
       if (node.type === "folder") {
         return { ...node, providerBadge: null };
       }
