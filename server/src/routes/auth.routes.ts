@@ -1,8 +1,20 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
-import { db, users, userSessions } from "../db/index.js";
-import { eq, and, gt, ne, lte } from "drizzle-orm";
+import {
+  db,
+  users,
+  userSessions,
+  providerIdentities,
+  vfsNodes,
+  fileChunks,
+  uploadSessions,
+  uploadChunks,
+  shares,
+  migrationJobs,
+} from "../db/index.js";
+import { eq, and, gt, ne, lte, inArray } from "drizzle-orm";
+import { CacheService } from "../services/cache.service.js";
 import { z } from "zod";
 import { EmailService } from "../services/email.service.js";
 import { VfsService } from "../services/vfs.service.js";
@@ -773,8 +785,50 @@ export async function authRoutes(fastify: FastifyInstance) {
         payload: { reason: "Account permanently deleted" },
       });
 
-      // 3. Deleting user cascades to sessions, identities, vfs_nodes, and chunks
-      await db.delete(users).where(eq(users.id, userId));
+      // 3. Robust child-to-parent deletion sequence to guarantee clean purge without FK blocks:
+      try {
+        // 3a. Delete file chunks & share links via user VFS nodes
+        const userNodeRows = await db
+          .select({ id: vfsNodes.id })
+          .from(vfsNodes)
+          .where(eq(vfsNodes.userId, userId));
+        const userNodeIds = userNodeRows.map((n) => n.id);
+        if (userNodeIds.length > 0) {
+          await db.delete(shares).where(inArray(shares.vfsNodeId, userNodeIds)).catch(() => {});
+          await db.delete(fileChunks).where(inArray(fileChunks.vfsNodeId, userNodeIds)).catch(() => {});
+        }
+
+        // 3b. Delete upload chunks via user upload sessions
+        const userSessionRows = await db
+          .select({ id: uploadSessions.id })
+          .from(uploadSessions)
+          .where(eq(uploadSessions.userId, userId));
+        const userSessionIds = userSessionRows.map((s) => s.id);
+        if (userSessionIds.length > 0) {
+          await db.delete(uploadChunks).where(inArray(uploadChunks.uploadSessionId, userSessionIds)).catch(() => {});
+        }
+
+        // 3c. Delete VFS nodes, upload sessions, and migration jobs
+        await db.delete(vfsNodes).where(eq(vfsNodes.userId, userId)).catch(() => {});
+        await db.delete(uploadSessions).where(eq(uploadSessions.userId, userId)).catch(() => {});
+        await db.delete(migrationJobs).where(eq(migrationJobs.userId, userId)).catch(() => {});
+
+        // 3d. Delete provider identities
+        await db.delete(providerIdentities).where(eq(providerIdentities.userId, userId)).catch(() => {});
+
+        // 3e. Delete sessions and user row
+        await db.delete(userSessions).where(eq(userSessions.userId, userId)).catch(() => {});
+        await db.delete(users).where(eq(users.id, userId));
+
+        // 3f. Invalidate Redis caches
+        await CacheService.invalidateUserVfs(userId);
+        await CacheService.invalidateUserProviders(userId);
+      } catch (dbErr: any) {
+        request.log.error(dbErr, `Error deleting user account ${userId}`);
+        return reply.status(500).send({
+          error: "Failed to delete account. Please try again or contact support.",
+        });
+      }
 
       reply.clearCookie(COOKIE_NAME, {
         path: "/",

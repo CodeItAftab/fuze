@@ -209,7 +209,7 @@ export const fileChunks = pgTable(
       .references(() => vfsNodes.id, { onDelete: "cascade" })
       .notNull(),
     providerIdentityId: uuid("provider_identity_id")
-      .references(() => providerIdentities.id)
+      .references(() => providerIdentities.id, { onDelete: "cascade" })
       .notNull(),
     providerFileId: text("provider_file_id").notNull(),
     byteStart: bigint("byte_start", { mode: "number" }).notNull(),
