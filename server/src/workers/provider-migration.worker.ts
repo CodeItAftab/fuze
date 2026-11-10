@@ -260,75 +260,85 @@ async function transferChunk(
   const sourceAdapter = getStorageAdapter(sourceProvider.provider);
   const destAdapter = getStorageAdapter(destProvider.provider);
 
-  // 1. Get source download stream URL with auto-refresh on 401
+  // 1. Obtain source chunk Buffer (via direct adapter downloadBuffer or CDN stream)
   let currentSourceToken = sourceToken;
-  let downloadUrl: string;
-  try {
-    downloadUrl = await sourceAdapter.getDownloadUrl({
+  let fileBuffer: Buffer;
+
+  if (sourceAdapter.downloadBuffer) {
+    // Direct in-memory buffer download (e.g. MEGA: zero HTTP loopback overhead, immune to process isolation)
+    fileBuffer = await sourceAdapter.downloadBuffer({
       providerFileId: chunk.providerFileId,
       accessToken: currentSourceToken,
-      fileName: targetFileName,
     });
-  } catch (err: any) {
-    if (err?.message?.includes("401") || err?.message?.includes("Location")) {
-      currentSourceToken = await TokenService.getValidAccessToken(sourceProvider.id, true);
+  } else {
+    let downloadUrl: string;
+    try {
       downloadUrl = await sourceAdapter.getDownloadUrl({
         providerFileId: chunk.providerFileId,
         accessToken: currentSourceToken,
         fileName: targetFileName,
       });
-    } else {
-      throw err;
+    } catch (err: any) {
+      if (err?.message?.includes("401") || err?.message?.includes("Location")) {
+        currentSourceToken = await TokenService.getValidAccessToken(sourceProvider.id, true);
+        downloadUrl = await sourceAdapter.getDownloadUrl({
+          providerFileId: chunk.providerFileId,
+          accessToken: currentSourceToken,
+          fileName: targetFileName,
+        });
+      } else {
+        throw err;
+      }
     }
-  }
 
-  let downloadHeaders: Record<string, string> = {
-    ...(sourceAdapter.getDownloadHeaders ? sourceAdapter.getDownloadHeaders(currentSourceToken) : {}),
-  };
-  if (sourceProvider.provider === "google_drive" && !downloadHeaders["Authorization"]) {
-    downloadHeaders["Authorization"] = `Bearer ${currentSourceToken}`;
-  }
-
-  // 2-minute connection timeout on download
-  let dlRes = await fetch(downloadUrl, {
-    headers: downloadHeaders,
-    signal: AbortSignal.timeout(120_000),
-  });
-
-  if (dlRes.status === 401) {
-    currentSourceToken = await TokenService.getValidAccessToken(sourceProvider.id, true);
-    downloadHeaders = {
+    let downloadHeaders: Record<string, string> = {
       ...(sourceAdapter.getDownloadHeaders ? sourceAdapter.getDownloadHeaders(currentSourceToken) : {}),
     };
     if (sourceProvider.provider === "google_drive" && !downloadHeaders["Authorization"]) {
       downloadHeaders["Authorization"] = `Bearer ${currentSourceToken}`;
     }
-    const freshUrl = await sourceAdapter.getDownloadUrl({
-      providerFileId: chunk.providerFileId,
-      accessToken: currentSourceToken,
-      fileName: targetFileName,
-    });
-    dlRes = await fetch(freshUrl, {
+
+    // 2-minute connection timeout on download
+    let dlRes = await fetch(downloadUrl, {
       headers: downloadHeaders,
       signal: AbortSignal.timeout(120_000),
     });
+
+    if (dlRes.status === 401) {
+      currentSourceToken = await TokenService.getValidAccessToken(sourceProvider.id, true);
+      downloadHeaders = {
+        ...(sourceAdapter.getDownloadHeaders ? sourceAdapter.getDownloadHeaders(currentSourceToken) : {}),
+      };
+      if (sourceProvider.provider === "google_drive" && !downloadHeaders["Authorization"]) {
+        downloadHeaders["Authorization"] = `Bearer ${currentSourceToken}`;
+      }
+      const freshUrl = await sourceAdapter.getDownloadUrl({
+        providerFileId: chunk.providerFileId,
+        accessToken: currentSourceToken,
+        fileName: targetFileName,
+      });
+      dlRes = await fetch(freshUrl, {
+        headers: downloadHeaders,
+        signal: AbortSignal.timeout(120_000),
+      });
+    }
+
+    if (!dlRes.ok || !dlRes.body) {
+      const errText = await dlRes.text().catch(() => "");
+      throw new Error(
+        `Failed to download from ${sourceProvider.provider} (HTTP ${dlRes.status}): ${errText}`,
+      );
+    }
+
+    // Buffer the chunk stream into memory (25-50 MB max)
+    const chunks: Buffer[] = [];
+    const nodeReadableStream = Readable.fromWeb(dlRes.body as any);
+    for await (const chunkData of nodeReadableStream) {
+      chunks.push(Buffer.from(chunkData));
+    }
+    fileBuffer = Buffer.concat(chunks);
   }
 
-  if (!dlRes.ok || !dlRes.body) {
-    const errText = await dlRes.text().catch(() => "");
-    throw new Error(
-      `Failed to download from ${sourceProvider.provider} (HTTP ${dlRes.status}): ${errText}`,
-    );
-  }
-
-  // 2. Buffer the chunk stream into memory (25-50 MB max)
-  // This guarantees exact byte length and eliminates undici streaming deadlocks
-  const chunks: Buffer[] = [];
-  const nodeReadableStream = Readable.fromWeb(dlRes.body as any);
-  for await (const chunkData of nodeReadableStream) {
-    chunks.push(Buffer.from(chunkData));
-  }
-  const fileBuffer = Buffer.concat(chunks);
   const actualSize = fileBuffer.length;
 
   if (actualSize === 0) {

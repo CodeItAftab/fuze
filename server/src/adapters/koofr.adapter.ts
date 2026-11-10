@@ -4,6 +4,7 @@ import {
   QuotaResult,
 } from "./base.adapter.js";
 import { randomUUID } from "node:crypto";
+import { CacheService } from "../services/cache.service.js";
 import https from "node:https";
 
 export interface KoofrFetchOptions {
@@ -207,12 +208,14 @@ export class KoofrAdapter implements StorageAdapter {
     const safeName = KoofrAdapter.sanitizeKoofrFileName(params.fileName);
     const token = randomUUID();
     const authHeader = KoofrAdapter.getAuthHeader(params.accessToken);
-    KoofrAdapter.streamTokens.set(token, {
+    const tokenData = {
       authHeader,
       fileName: safeName,
       size: params.size,
       expiresAt: Date.now() + 2 * 3600 * 1000,
-    });
+    };
+    KoofrAdapter.streamTokens.set(token, tokenData);
+    await CacheService.set(`koofr_stream_token:${token}`, tokenData, 7200);
 
     const apiBase = process.env.API_URL || "https://api.fuzedrive.tech";
     const sessionUrl = `${apiBase}/uploads/provider-stream/koofr?token=${token}`;
@@ -232,7 +235,15 @@ export class KoofrAdapter implements StorageAdapter {
     token: string,
     stream: NodeJS.ReadableStream | Buffer,
   ): Promise<{ id: string; name: string }> {
-    const entry = KoofrAdapter.streamTokens.get(token);
+    let entry = KoofrAdapter.streamTokens.get(token);
+    if (!entry) {
+      entry = (await CacheService.get<{
+        authHeader: string;
+        fileName: string;
+        size: number;
+        expiresAt: number;
+      }>(`koofr_stream_token:${token}`)) || undefined;
+    }
     if (!entry || Date.now() > entry.expiresAt) {
       throw new Error("Invalid or expired Koofr upload stream token");
     }

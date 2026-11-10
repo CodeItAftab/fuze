@@ -58,6 +58,11 @@ export interface StorageAdapter {
     mimeType?: string;
   }): Promise<{ id: string; name: string }>;
 
+  downloadBuffer?(params: {
+    providerFileId: string;
+    accessToken: string;
+  }): Promise<Buffer>;
+
   listFiles?(accessToken: string): Promise<
     Array<{ providerFileId: string; fileName: string; size: number }>
   >;

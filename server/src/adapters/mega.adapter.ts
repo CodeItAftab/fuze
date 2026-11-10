@@ -5,6 +5,7 @@ import {
 } from "./base.adapter.js";
 import { Storage, File as MegaFile } from "megajs";
 import { randomUUID } from "node:crypto";
+import { CacheService } from "../services/cache.service.js";
 
 export interface MegaConfig {
   email: string;
@@ -193,19 +194,29 @@ export class MegaAdapter implements StorageAdapter {
     // Stream file contents directly through proxy to prevent HTML webpage download errors
 
     const token = randomUUID();
-    MegaAdapter.downloadTokens.set(token, {
+    const tokenData = {
       config,
       providerFileId: params.providerFileId,
       expiresAt: Date.now() + 2 * 3600 * 1000,
-    });
+    };
+    MegaAdapter.downloadTokens.set(token, tokenData);
+    await CacheService.set(`mega_dl_token:${token}`, tokenData, 7200);
 
-    return `${process.env.API_URL || "http://localhost:4000"}/uploads/provider-stream/mega/download?token=${token}`;
+    const apiBase = process.env.API_URL || "https://api.fuzedrive.tech";
+    return `${apiBase}/uploads/provider-stream/mega/download?token=${token}`;
   }
 
   static async handleStreamDownload(
     token: string,
   ): Promise<{ stream: NodeJS.ReadableStream; name: string; size?: number }> {
-    const entry = MegaAdapter.downloadTokens.get(token);
+    let entry = MegaAdapter.downloadTokens.get(token);
+    if (!entry) {
+      entry = (await CacheService.get<{
+        config: MegaConfig;
+        providerFileId: string;
+        expiresAt: number;
+      }>(`mega_dl_token:${token}`)) || undefined;
+    }
     if (!entry || Date.now() > entry.expiresAt) {
       throw new Error("Invalid or expired MEGA download token");
     }
@@ -224,6 +235,35 @@ export class MegaAdapter implements StorageAdapter {
 
     const stream = (file as any).download({});
     return { stream, name: file.name || 'chunk', size: file.size };
+  }
+
+  async downloadBuffer(params: {
+    providerFileId: string;
+    accessToken: string;
+  }): Promise<Buffer> {
+    const config = MegaAdapter.parseConfig(params.accessToken);
+    const storage = await this.getStorage(config);
+    const fuzeFolder = await this.ensureFuzeFolder(storage);
+
+    const file =
+      fuzeFolder.children?.find(
+        (f) => f.name === params.providerFileId || f.nodeId === params.providerFileId,
+      ) ||
+      storage.root?.children?.find(
+        (f) => f.name === params.providerFileId || f.nodeId === params.providerFileId,
+      );
+
+    if (!file) {
+      throw new Error(`File not found on MEGA: ${params.providerFileId}`);
+    }
+
+    return new Promise<Buffer>((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      const stream = (file as any).download({});
+      stream.on("data", (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+      stream.on("end", () => resolve(Buffer.concat(chunks)));
+      stream.on("error", (err: any) => reject(err));
+    });
   }
 
   async deleteFile(params: {
