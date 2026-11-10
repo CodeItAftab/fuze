@@ -25,13 +25,13 @@ import { ProviderLogo } from "@/components/drive/ProviderBadge";
 export function DriveMockup() {
   const files = [
     {
-      name: "Form9_1792990641812.pdf",
+      name: "Product_Roadmap_2026.pdf",
       size: "34.6 KB",
       providerBadge: "mega",
       icon: <FileText className="h-4 w-4 text-blue-500" />,
     },
     {
-      name: "tsconfig.json",
+      name: "docker-compose.yml",
       size: "670 B",
       providerBadge: "koofr",
       icon: <FileCode className="h-4 w-4 text-emerald-500" />,
@@ -49,25 +49,25 @@ export function DriveMockup() {
       icon: <Code2 className="h-4 w-4 text-slate-500" />,
     },
     {
-      name: "SPMP_Template-2.docx",
+      name: "Client_Proposal_v2.docx",
       size: "569.5 KB",
       providerBadge: "box",
       icon: <FileText className="h-4 w-4 text-blue-600" />,
     },
     {
-      name: "COCOMO template.xlsx",
+      name: "Financial_Forecast_Q4.xlsx",
       size: "11.9 KB",
       providerBadge: "one_drive",
       icon: <FileSpreadsheet className="h-4 w-4 text-emerald-600" />,
     },
     {
-      name: "topscore.awk",
+      name: "deploy-pipeline.yaml",
       size: "265 B",
       providerBadge: "box",
       icon: <FileCode className="h-4 w-4 text-indigo-500" />,
     },
     {
-      name: "Nam1793184655270.pdf",
+      name: "Brand_Guidelines_2026.pdf",
       size: "55 KB",
       providerBadge: "box",
       icon: <FileText className="h-4 w-4 text-blue-500" />,
