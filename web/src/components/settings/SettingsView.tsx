@@ -97,7 +97,11 @@ export function SettingsView() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ oldPassword: currentPw, newPassword: newPw }),
+        body: JSON.stringify({
+          currentPassword: currentPw,
+          oldPassword: currentPw,
+          newPassword: newPw,
+        }),
       });
       const data = await res.json();
       if (!res.ok) return { success: false, error: data.error || "Failed to update password" };

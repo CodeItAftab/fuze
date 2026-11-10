@@ -635,7 +635,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     "/change-password",
     async (
       request: FastifyRequest<{
-        Body: { currentPassword: string; newPassword: string };
+        Body: { currentPassword?: string; oldPassword?: string; newPassword: string };
       }>,
       reply: FastifyReply,
     ) => {
@@ -645,8 +645,13 @@ export async function authRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({ error: "Unauthorized" });
       }
       const { userId } = request.user as { userId: string };
-      const { currentPassword, newPassword } = request.body || {};
-      if (!currentPassword || !newPassword || newPassword.length < 8) {
+      const body = request.body || {};
+      const currentPassword = (body.currentPassword || body.oldPassword || "").trim();
+      const newPassword = (body.newPassword || "").trim();
+      if (!currentPassword) {
+        return reply.status(400).send({ error: "Current password is required." });
+      }
+      if (!newPassword || newPassword.length < 8) {
         return reply
           .status(400)
           .send({ error: "New password must be at least 8 characters long." });
